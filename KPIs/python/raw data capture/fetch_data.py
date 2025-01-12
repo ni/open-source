@@ -3,17 +3,18 @@
 
 import os
 import re
+import json
 import requests
 import mysql.connector
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from time import sleep
 
 ############################
 # MySQL Credentials
 ############################
 DB_HOST = "localhost"
-DB_USER = "root"    # as requested
-DB_PASS = "root"    # as requested
+DB_USER = "root"
+DB_PASS = "root"
 DB_NAME = "my_kpis_db"
 
 ############################
@@ -38,12 +39,12 @@ def get_github_token():
     token = input("Enter your GitHub Personal Access Token: ").strip()
     return token
 
-def handle_rate_limit(response):
+def handle_rate_limit(resp):
     """
     If 403, tries to sleep until GitHub resets the limit. Return True if we should retry.
     """
-    if response.status_code == 403:
-        reset_time = response.headers.get("X-RateLimit-Reset")
+    if resp.status_code == 403:
+        reset_time = resp.headers.get("X-RateLimit-Reset")
         if reset_time:
             reset_ts = int(reset_time)
             now_ts = int(datetime.now().timestamp())
@@ -69,6 +70,10 @@ def connect_db():
 # Safe index creation
 ############################
 def create_index_safely(cursor, table, idx_name, columns):
+    """
+    Checks if 'idx_name' exists on 'table'. If not, create it (no IF NOT EXISTS).
+    Avoids MySQL syntax errors if CREATE INDEX IF NOT EXISTS isn't supported.
+    """
     try:
         cursor.execute(f"SHOW INDEX FROM {table}")
         all_idx = cursor.fetchall()
@@ -88,6 +93,7 @@ def create_index_safely(cursor, table, idx_name, columns):
 def create_tables():
     """
     Creates forks, pulls, issues, stars with columns for 'creator_login', 'title', etc.
+    Then calls create_index_safely(...) to avoid MySQL syntax errors.
     """
     conn = connect_db()
     cursor = conn.cursor()
@@ -149,7 +155,159 @@ def create_tables():
     conn.close()
 
 ############################
-# Date utilities
+# last_known_dates.json logic
+############################
+def ensure_last_known_dates_json():
+    """
+    If 'last_known_dates.json' doesn't exist, we create it by scanning the DB for each enabled repo
+    to avoid re-fetching older data. We also won't skip data if DB coverage is older than the start_date.
+    We'll do a minimal approach: store the "effective start" date for each resource.
+
+    The 'effective start' date is:
+      - if DB is empty => use repo_list's start_date
+      - if DB date < repo_list's start_date => use repo_list's start_date
+      - if DB date >= start_date => use that DB date (meaning we can skip older data up to db date)
+    
+    This ensures no data is lost, but we skip older pages if we truly have them in DB.
+    We'll also print a message if we decide to skip or not.
+    """
+    fname = "last_known_dates.json"
+    if os.path.isfile(fname):
+        print(f"{fname} already exists, not recreating.")
+        return
+
+    # We'll import 'repo_list' here to see which repos are enabled
+    try:
+        from repo_list import repo_list
+    except ImportError:
+        print("repo_list.py not found or can't be imported! Creating an empty JSON.")
+        basic_data = {"forks": {}, "pulls": {}, "issues": {}, "stars": {}}
+        with open(fname, "w", encoding="utf-8") as f:
+            json.dump(basic_data, f, indent=2)
+        return
+
+    print(f"'{fname}' not found => creating by analyzing DB + repo_list.py ...")
+
+    lkd = {
+        "forks": {},
+        "pulls": {},
+        "issues": {},
+        "stars": {}
+    }
+
+    # Helper to convert DB datetime -> iso8601Z
+    def dt_to_iso_z(dt):
+        dt_utc = dt.replace(tzinfo=timezone.utc)
+        return dt_utc.isoformat().replace("+00:00", "Z")
+
+    # We'll define functions to get the DB's max date
+    def get_db_max_for_forks(repo_name):
+        conn = connect_db()
+        c = conn.cursor()
+        c.execute("SELECT MAX(forked_at) FROM forks WHERE repo_name=%s", (repo_name,))
+        row = c.fetchone()
+        c.close()
+        conn.close()
+        return row[0] if row and row[0] else None
+
+    def get_db_max_for_pulls(repo_name):
+        conn = connect_db()
+        c = conn.cursor()
+        c.execute("SELECT MAX(created_at) FROM pulls WHERE repo_name=%s", (repo_name,))
+        row = c.fetchone()
+        c.close()
+        conn.close()
+        return row[0] if row and row[0] else None
+
+    def get_db_max_for_issues(repo_name):
+        conn = connect_db()
+        c = conn.cursor()
+        c.execute("SELECT MAX(created_at) FROM issues WHERE repo_name=%s", (repo_name,))
+        row = c.fetchone()
+        c.close()
+        conn.close()
+        return row[0] if row and row[0] else None
+
+    def get_db_max_for_stars(repo_name):
+        conn = connect_db()
+        c = conn.cursor()
+        c.execute("SELECT MAX(starred_at) FROM stars WHERE repo_name=%s", (repo_name,))
+        row = c.fetchone()
+        c.close()
+        conn.close()
+        return row[0] if row and row[0] else None
+
+    for r in repo_list:
+        if not r.get("enabled", False):
+            continue
+        owner = r["owner"]
+        repo = r["repo"]
+        db_key = f"{owner}/{repo}"
+        start_date_str = r["start_date"]
+        code_start_dt = datetime.strptime(start_date_str, "%Y-%m-%d")
+
+        # 1) forks
+        db_dt_forks = get_db_max_for_forks(db_key)
+        if db_dt_forks is None:
+            # no DB => fallback to code_start_dt
+            print(f"[forks] {db_key}: DB empty => using repo_list start_date={start_date_str}")
+            lkd["forks"][db_key] = dt_to_iso_z(code_start_dt)
+        else:
+            if db_dt_forks < code_start_dt:
+                # DB is older => we might be missing data from db_dt_forks to code_start_dt => don't skip
+                print(f"[forks] {db_key}: DB date={db_dt_forks} < {code_start_dt} => using start_date => no skip")
+                lkd["forks"][db_key] = dt_to_iso_z(code_start_dt)
+            else:
+                # DB is newer => skip older data up to db_dt_forks
+                print(f"[forks] {db_key}: DB date={db_dt_forks} >= start_date => skipping older than DB date")
+                lkd["forks"][db_key] = dt_to_iso_z(db_dt_forks)
+
+        # 2) pulls
+        db_dt_pulls = get_db_max_for_pulls(db_key)
+        if db_dt_pulls is None:
+            print(f"[pulls] {db_key}: DB empty => using repo_list start_date={start_date_str}")
+            lkd["pulls"][db_key] = dt_to_iso_z(code_start_dt)
+        else:
+            if db_dt_pulls < code_start_dt:
+                print(f"[pulls] {db_key}: DB date={db_dt_pulls} < {code_start_dt} => using start_date => no skip")
+                lkd["pulls"][db_key] = dt_to_iso_z(code_start_dt)
+            else:
+                print(f"[pulls] {db_key}: DB date={db_dt_pulls} >= start_date => skipping older than DB date")
+                lkd["pulls"][db_key] = dt_to_iso_z(db_dt_pulls)
+
+        # 3) issues
+        db_dt_issues = get_db_max_for_issues(db_key)
+        if db_dt_issues is None:
+            print(f"[issues] {db_key}: DB empty => using repo_list start_date={start_date_str}")
+            lkd["issues"][db_key] = dt_to_iso_z(code_start_dt)
+        else:
+            if db_dt_issues < code_start_dt:
+                print(f"[issues] {db_key}: DB date={db_dt_issues} < {code_start_dt} => using start_date => no skip")
+                lkd["issues"][db_key] = dt_to_iso_z(code_start_dt)
+            else:
+                print(f"[issues] {db_key}: DB date={db_dt_issues} >= start_date => skipping older than DB date")
+                lkd["issues"][db_key] = dt_to_iso_z(db_dt_issues)
+
+        # 4) stars
+        db_dt_stars = get_db_max_for_stars(db_key)
+        if db_dt_stars is None:
+            print(f"[stars] {db_key}: DB empty => using repo_list start_date={start_date_str}")
+            lkd["stars"][db_key] = dt_to_iso_z(code_start_dt)
+        else:
+            if db_dt_stars < code_start_dt:
+                print(f"[stars] {db_key}: DB date={db_dt_stars} < {code_start_dt} => using start_date => no skip")
+                lkd["stars"][db_key] = dt_to_iso_z(code_start_dt)
+            else:
+                print(f"[stars] {db_key}: DB date={db_dt_stars} >= start_date => skipping older than DB date")
+                lkd["stars"][db_key] = dt_to_iso_z(db_dt_stars)
+
+    # Write the file
+    with open(fname, "w", encoding="utf-8") as f:
+        json.dump(lkd, f, indent=2)
+    print(f"Created '{fname}' based on DB max dates + repo_list. Potential skipping is now recognized.\n")
+
+############################
+# Date utilities (continued)
 ############################
 def parse_date(s):
     if not s:
@@ -276,7 +434,7 @@ def db_insert_stars(rows):
         print(f"DB insert error (stars): {e}")
 
 ############################
-# Max date queries (we no longer skip older data in these fetchers, but we keep them if needed)
+# Max date queries
 ############################
 def db_get_max_forked_at(repo_name):
     conn = connect_db()
@@ -317,7 +475,6 @@ def db_get_max_starred_at(repo_name):
 ############################
 # Link header + progress bar
 ############################
-
 def get_last_page(resp):
     link_header = resp.headers.get("Link")
     if not link_header:
@@ -351,48 +508,45 @@ def show_progress_bar(current_page, last_page, bar_length=20):
     print(f"    [{bar}] {percent:.2f}% (Page {current_page} / {last_page})")
 
 ############################
-# fetch functions (without stop_early)
+# fetch functions
 ############################
 
 def fetch_fork_data(owner, repo, start_str, end_str, session, months_per_chunk=12):
     """
-    Updated: removed 'stop_early' logic => we read the entire page, relying on
-    len(data)<per_page or empty data to stop. We also chunk by date if needed.
-    'creator_login' => who created the fork.
+    Fetch forks chunk-by-chunk, reading entire pages. If DB has a bigger date, we skip older chunk windows,
+    printing a message that we skip them. If DB is older, we re-fetch so we don't lose any data.
     """
-    start_dt = parse_date(start_str)
-    end_dt   = parse_date(end_str) if end_str else datetime.now()
-    date_chunks = chunk_date_ranges(start_dt, end_dt, months_per_chunk)
+    effective_start_dt = get_effective_start_dt("forks", owner, repo, start_str)
+    if not effective_start_dt:
+        print("No valid start date, skipping forks.")
+        return
+
+    end_dt = parse_date(end_str) if end_str else datetime.now()
+    if effective_start_dt > end_dt:
+        print(f"[forks] For {owner}/{repo}: effective start > end => no fetch.")
+        return
+
+    date_chunks = chunk_date_ranges(effective_start_dt, end_dt, months_per_chunk)
     repo_name = f"{owner}/{repo}"
 
-    print(f"\n--- fetch_fork_data for {repo_name} from {start_str} to {end_str or 'NOW'} ---")
+    print(f"\n=== fetch_fork_data for {repo_name} from {effective_start_dt.date()} to {end_str or 'NOW'} ===")
 
     for (chunk_start, chunk_end) in date_chunks:
         print(f"\n[Forks] Chunk: {chunk_start.isoformat()} -> {chunk_end.isoformat()} for {repo_name}")
-        # We no longer skip older data, but we log max_known_dt if needed
-        max_known_dt = db_get_max_forked_at(repo_name)
-        print(f"    (Note) max_known_dt in DB: {max_known_dt or 'None'} (not used to skip)")
-
         page = 1
         per_page = 100
         last_page = None
 
         while True:
             url = f"https://api.github.com/repos/{owner}/{repo}/forks"
-            params = {
-                "page": page,
-                "per_page": per_page,
-                "sort": "newest",
-                "direction": "desc"
-            }
+            params = {"page": page, "per_page": per_page, "sort": "newest", "direction": "desc"}
             resp = session.get(url, params=params)
 
             if handle_rate_limit(resp):
-                print(f"    Page {page}: rate-limited => retry.")
                 continue
 
             if resp.status_code != 200:
-                print(f"[Forks] HTTP {resp.status_code} => stop. repo={repo_name}, page={page}.")
+                print(f"[Forks] HTTP {resp.status_code}, stopping. page={page}")
                 break
 
             try:
@@ -402,10 +556,9 @@ def fetch_fork_data(owner, repo, start_str, end_str, session, months_per_chunk=1
                 break
 
             if not data:
-                print(f"    Page {page}: no data => done chunk.")
+                print(f"    page={page}: no data => end of chunk.")
                 break
 
-            # Link-based progress bar
             if last_page is None:
                 possible_last = get_last_page(resp)
                 if possible_last:
@@ -427,10 +580,9 @@ def fetch_fork_data(owner, repo, start_str, end_str, session, months_per_chunk=1
                 if not forked_str:
                     continue
                 forked_dt = datetime.strptime(forked_str, "%Y-%m-%dT%H:%M:%SZ")
-
-                # who created the fork => fork_repo["owner"]["login"]
                 creator_login = fork_repo.get("owner", {}).get("login", "")
 
+                # We rely on DB skip at chunk-level, so we just store all found
                 new_rows.append({
                     "repo_name": repo_name,
                     "creator_login": creator_login,
@@ -438,12 +590,10 @@ def fetch_fork_data(owner, repo, start_str, end_str, session, months_per_chunk=1
                 })
 
             db_insert_forks(new_rows)
+            print(f"    page={page}: inserted={len(new_rows)} forks.")
 
-            print(f"    Page={page}: len(data)={len(data)}, inserted={len(new_rows)} new forks.")
-
-            # We'll only break if fewer than per_page => last page
             if len(data) < per_page:
-                print("    <= last page => break.")
+                print("    last page => break.")
                 break
 
             page += 1
@@ -451,42 +601,39 @@ def fetch_fork_data(owner, repo, start_str, end_str, session, months_per_chunk=1
 
 def fetch_pull_data(owner, repo, start_str, end_str, session, months_per_chunk=12):
     """
-    'creator_login' => pr["user"]["login"], 'title' => pr["title"].
-    No stop_early => we fetch all pages fully.
+    Fetch pulls chunk by chunk. Skips older chunk windows if DB date is bigger, logs it.
     """
-    start_dt = parse_date(start_str)
-    end_dt   = parse_date(end_str) if end_str else datetime.now()
-    date_chunks = chunk_date_ranges(start_dt, end_dt, months_per_chunk)
+    effective_start_dt = get_effective_start_dt("pulls", owner, repo, start_str)
+    if not effective_start_dt:
+        print("No valid start date, skipping pulls.")
+        return
+
+    end_dt = parse_date(end_str) if end_str else datetime.now()
+    if effective_start_dt > end_dt:
+        print(f"[pulls] For {owner}/{repo}: effective start > end => no fetch.")
+        return
+
+    date_chunks = chunk_date_ranges(effective_start_dt, end_dt, months_per_chunk)
     repo_name = f"{owner}/{repo}"
 
-    print(f"\n--- fetch_pull_data for {repo_name} from {start_str} to {end_str or 'NOW'} ---")
+    print(f"\n=== fetch_pull_data for {repo_name} from {effective_start_dt.date()} to {end_str or 'NOW'} ===")
 
     for (chunk_start, chunk_end) in date_chunks:
         print(f"\n[Pulls] Chunk: {chunk_start.isoformat()} -> {chunk_end.isoformat()} for {repo_name}")
-        max_known_dt = db_get_max_created_at_pulls(repo_name)
-        print(f"    (Note) max_known_dt in DB: {max_known_dt or 'None'} (not used to skip)")
-
         page = 1
         per_page = 50
         last_page = None
 
         while True:
             url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
-            params = {
-                "state": "all",
-                "page": page,
-                "per_page": per_page,
-                "sort": "created",
-                "direction": "desc"
-            }
+            params = {"state": "all", "page": page, "per_page": per_page,
+                      "sort": "created", "direction": "desc"}
             resp = session.get(url, params=params)
 
             if handle_rate_limit(resp):
-                print(f"    Page {page}: rate-limited => retry.")
                 continue
-
             if resp.status_code != 200:
-                print(f"[Pulls] HTTP {resp.status_code} => stop. repo={repo_name}, page={page}.")
+                print(f"[Pulls] HTTP {resp.status_code}, stopping. page={page}")
                 break
 
             try:
@@ -496,14 +643,14 @@ def fetch_pull_data(owner, repo, start_str, end_str, session, months_per_chunk=1
                 break
 
             if not data:
-                print(f"    Page {page}: no data => done chunk.")
+                print(f"    page={page}: no data => end of chunk.")
                 break
 
             if last_page is None:
                 possible_last = get_last_page(resp)
                 if possible_last:
-                    print(f"    Found last_page={possible_last}.")
                     last_page = possible_last
+                    print(f"    Found last_page={last_page}.")
                 else:
                     if len(data) < per_page:
                         last_page = 1
@@ -521,27 +668,27 @@ def fetch_pull_data(owner, repo, start_str, end_str, session, months_per_chunk=1
                 merged_str  = pr["merged_at"]
                 created_dt  = datetime.strptime(created_str, "%Y-%m-%dT%H:%M:%SZ")
 
-                # who created the PR => pr["user"]["login"]
                 creator_login = pr.get("user", {}).get("login", "")
-                # PR title => pr["title"]
                 pr_title = pr.get("title", "")
 
-                # first review => optional call
+                # optional first review
                 first_review_dt = None
                 rev_url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/reviews"
                 rev_resp = session.get(rev_url)
                 if handle_rate_limit(rev_resp):
-                    print(f"      rate-limit inside PR reviews => page={page}. skip or retry.")
+                    pass
                 else:
                     if rev_resp.status_code == 200:
                         rev_data = rev_resp.json()
                         if rev_data:
-                            sorted_revs = sorted(rev_data, key=lambda r: r["submitted_at"])
+                            sorted_revs = sorted(rev_data, key=lambda x: x["submitted_at"])
                             fr_str = sorted_revs[0].get("submitted_at")
                             if fr_str:
                                 first_review_dt = datetime.strptime(fr_str, "%Y-%m-%dT%H:%M:%SZ")
 
-                merged_dt = datetime.strptime(merged_str, "%Y-%m-%dT%H:%M:%SZ") if merged_str else None
+                merged_dt = None
+                if merged_str:
+                    merged_dt = datetime.strptime(merged_str, "%Y-%m-%dT%H:%M:%SZ")
 
                 new_rows.append({
                     "repo_name": repo_name,
@@ -554,8 +701,7 @@ def fetch_pull_data(owner, repo, start_str, end_str, session, months_per_chunk=1
                 })
 
             db_insert_pulls(new_rows)
-
-            print(f"    Page={page}: len(data)={len(data)}, inserted={len(new_rows)} new pulls.")
+            print(f"    page={page}: inserted={len(new_rows)} pulls.")
 
             if len(data) < per_page:
                 print("    last page => break.")
@@ -566,21 +712,25 @@ def fetch_pull_data(owner, repo, start_str, end_str, session, months_per_chunk=1
 
 def fetch_issue_data(owner, repo, start_str, end_str, session, months_per_chunk=12):
     """
-    'creator_login' => issue["user"]["login"].
-    No stop_early => we fetch all pages fully.
+    Fetch issues chunk by chunk, skipping older windows if DB is bigger. No data lost.
     """
-    start_dt = parse_date(start_str)
-    end_dt   = parse_date(end_str) if end_str else datetime.now()
-    date_chunks = chunk_date_ranges(start_dt, end_dt, months_per_chunk)
+    effective_start_dt = get_effective_start_dt("issues", owner, repo, start_str)
+    if not effective_start_dt:
+        print("No valid start date, skipping issues.")
+        return
+
+    end_dt = parse_date(end_str) if end_str else datetime.now()
+    if effective_start_dt > end_dt:
+        print(f"[issues] For {owner}/{repo}: effective start > end => no fetch.")
+        return
+
+    date_chunks = chunk_date_ranges(effective_start_dt, end_dt, months_per_chunk)
     repo_name = f"{owner}/{repo}"
 
-    print(f"\n--- fetch_issue_data for {repo_name} from {start_str} to {end_str or 'NOW'} ---")
+    print(f"\n=== fetch_issue_data for {repo_name} from {effective_start_dt.date()} to {end_str or 'NOW'} ===")
 
     for (chunk_start, chunk_end) in date_chunks:
         print(f"\n[Issues] Chunk: {chunk_start.isoformat()} -> {chunk_end.isoformat()} for {repo_name}")
-        max_known_dt = db_get_max_created_at_issues(repo_name)
-        print(f"    (Note) max_known_dt in DB: {max_known_dt or 'None'} (not used to skip)")
-
         page = 1
         per_page = 50
         last_page = None
@@ -597,11 +747,10 @@ def fetch_issue_data(owner, repo, start_str, end_str, session, months_per_chunk=
             resp = session.get(url, params=params)
 
             if handle_rate_limit(resp):
-                print(f"    Page {page}: rate-limited => retry.")
                 continue
 
             if resp.status_code != 200:
-                print(f"[Issues] HTTP {resp.status_code} => stop. repo={repo_name}, page={page}.")
+                print(f"[Issues] HTTP {resp.status_code}, stopping. page={page}")
                 break
 
             try:
@@ -611,14 +760,14 @@ def fetch_issue_data(owner, repo, start_str, end_str, session, months_per_chunk=
                 break
 
             if not data:
-                print(f"    Page {page}: no data => done chunk.")
+                print(f"    page={page}: no data => end of chunk.")
                 break
 
             if last_page is None:
                 possible_last = get_last_page(resp)
                 if possible_last:
-                    print(f"    Found last_page={possible_last}.")
                     last_page = possible_last
+                    print(f"    Found last_page={last_page}.")
                 else:
                     if len(data) < per_page:
                         last_page = 1
@@ -631,7 +780,7 @@ def fetch_issue_data(owner, repo, start_str, end_str, session, months_per_chunk=
 
             new_rows = []
             for issue in data:
-                # skip pull-request crossovers
+                # skip PR crossovers
                 if "pull_request" in issue:
                     continue
                 issue_num = issue["number"]
@@ -640,9 +789,7 @@ def fetch_issue_data(owner, repo, start_str, end_str, session, months_per_chunk=
                 ccount      = issue["comments"]
                 created_dt  = datetime.strptime(created_str, "%Y-%m-%dT%H:%M:%SZ")
 
-                # who opened => issue["user"]["login"]
                 creator_login = issue.get("user", {}).get("login", "")
-
                 closed_dt = datetime.strptime(closed_str, "%Y-%m-%dT%H:%M:%SZ") if closed_str else None
 
                 first_comment_dt = None
@@ -650,7 +797,7 @@ def fetch_issue_data(owner, repo, start_str, end_str, session, months_per_chunk=
                     com_url = f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_num}/comments"
                     com_resp = session.get(com_url)
                     if handle_rate_limit(com_resp):
-                        print(f"      rate-limit inside issue comments => page={page}. skip or retry.")
+                        pass
                     else:
                         if com_resp.status_code == 200:
                             com_data = com_resp.json()
@@ -671,8 +818,7 @@ def fetch_issue_data(owner, repo, start_str, end_str, session, months_per_chunk=
                 })
 
             db_insert_issues(new_rows)
-
-            print(f"    Page={page}: len(data)={len(data)}, inserted={len(new_rows)} new issues.")
+            print(f"    page={page}: inserted={len(new_rows)} issues.")
 
             if len(data) < per_page:
                 print("    last page => break.")
@@ -683,20 +829,27 @@ def fetch_issue_data(owner, repo, start_str, end_str, session, months_per_chunk=
 
 def fetch_star_data(owner, repo, start_str, end_str, session, months_per_chunk=12):
     """
-    star growth over time => 'user_login' and 'starred_at'.
-    No stop_early => fetch all pages fully, rely on len(data)<per_page to break.
+    Fetch stargazers chunk by chunk, skipping older windows if DB date is bigger.
     """
-    start_dt = parse_date(start_str)
-    end_dt   = parse_date(end_str) if end_str else datetime.now()
-    date_chunks = chunk_date_ranges(start_dt, end_dt, months_per_chunk)
+    effective_start_dt = get_effective_start_dt("stars", owner, repo, start_str)
+    if not effective_start_dt:
+        print("No valid start date, skipping stars.")
+        return
+
+    end_dt = parse_date(end_str) if end_str else datetime.now()
+    if effective_start_dt > end_dt:
+        print(f"[stars] For {owner}/{repo}: effective start > end => no fetch.")
+        return
+
+    date_chunks = chunk_date_ranges(effective_start_dt, end_dt, months_per_chunk)
     repo_name = f"{owner}/{repo}"
 
-    print(f"\n--- fetch_star_data for {repo_name} from {start_str} to {end_str or 'NOW'} ---")
+    print(f"\n=== fetch_star_data for {repo_name} from {effective_start_dt.date()} to {end_str or 'NOW'} ===")
 
     for (chunk_start, chunk_end) in date_chunks:
         print(f"\n[Stars] Chunk: {chunk_start.isoformat()} -> {chunk_end.isoformat()} for {repo_name}")
         max_known_dt = db_get_max_starred_at(repo_name)
-        print(f"    (Note) max_known_dt in DB: {max_known_dt or 'None'} (not used to skip)")
+        print(f"    (Note) max_known_dt in DB: {max_known_dt or 'None'} (not used to partial skip in-chunk)")
 
         page = 1
         per_page = 100
@@ -705,15 +858,15 @@ def fetch_star_data(owner, repo, start_str, end_str, session, months_per_chunk=1
         while True:
             url = f"https://api.github.com/repos/{owner}/{repo}/stargazers"
             params = {"page": page, "per_page": per_page}
+            # Must use star+json to get "starred_at"
             session.headers['Accept'] = 'application/vnd.github.v3.star+json'
-
             resp = session.get(url, params=params)
+
             if handle_rate_limit(resp):
-                print(f"    Page {page}: rate-limited => retry.")
                 continue
 
             if resp.status_code != 200:
-                print(f"[Stars] HTTP {resp.status_code} => stop. repo={repo_name}, page={page}.")
+                print(f"[Stars] HTTP {resp.status_code}, stopping. page={page}")
                 break
 
             try:
@@ -723,14 +876,14 @@ def fetch_star_data(owner, repo, start_str, end_str, session, months_per_chunk=1
                 break
 
             if not data:
-                print(f"    Page {page}: no data => done chunk.")
+                print(f"    page={page}: no data => end of chunk.")
                 break
 
             if last_page is None:
                 possible_last = get_last_page(resp)
                 if possible_last:
-                    print(f"    Found last_page={possible_last}.")
                     last_page = possible_last
+                    print(f"    Found last_page={last_page}.")
                 else:
                     if len(data) < per_page:
                         last_page = 1
@@ -743,10 +896,10 @@ def fetch_star_data(owner, repo, start_str, end_str, session, months_per_chunk=1
 
             new_rows = []
             for star_info in data:
-                starred_at_str = star_info.get("starred_at")
-                if not starred_at_str:
+                starred_str = star_info.get("starred_at")
+                if not starred_str:
                     continue
-                starred_dt = datetime.strptime(starred_at_str, "%Y-%m-%dT%H:%M:%SZ")
+                starred_dt = datetime.strptime(starred_str, "%Y-%m-%dT%H:%M:%SZ")
 
                 user_login = star_info.get("user", {}).get("login", "")
                 new_rows.append({
@@ -756,8 +909,7 @@ def fetch_star_data(owner, repo, start_str, end_str, session, months_per_chunk=1
                 })
 
             db_insert_stars(new_rows)
-
-            print(f"    Page={page}: len(data)={len(data)}, inserted={len(new_rows)} stars.")
+            print(f"    page={page}: inserted={len(new_rows)} stars.")
 
             if len(data) < per_page:
                 print("    last page => break.")
@@ -765,3 +917,43 @@ def fetch_star_data(owner, repo, start_str, end_str, session, months_per_chunk=1
 
             page += 1
             print(f"    next page => {page}")
+
+############################
+# Logic to pick effective start date to skip older data or not
+############################
+
+def get_effective_start_dt(resource, owner, repo, config_start_str):
+    """
+    Decide the 'effective start date' for chunking:
+      - We fetch the DB max date for this resource & (owner/repo).
+      - Compare to the config's start_date from repo_list.
+      - If DB is None => fallback to config's start_date => no skip
+      - If DB < config => pick config => no skip
+      - If DB >= config => skip older data => pick DB date
+    We'll print a message if we skip or if we fallback to ensure you see what's happening.
+
+    resource in ("forks", "pulls", "issues", "stars").
+    """
+    config_dt = parse_date(config_start_str)
+    db_key = f"{owner}/{repo}"
+    
+    if resource == "forks":
+        db_dt = db_get_max_forked_at(db_key)
+    elif resource == "pulls":
+        db_dt = db_get_max_created_at_pulls(db_key)
+    elif resource == "issues":
+        db_dt = db_get_max_created_at_issues(db_key)
+    else:
+        # "stars"
+        db_dt = db_get_max_starred_at(db_key)
+
+    if not db_dt:
+        print(f"[{resource}] {db_key}: No DB data => not skipping => use config start_date: {config_dt}")
+        return config_dt
+
+    if db_dt < config_dt:
+        print(f"[{resource}] {db_key}: DB date={db_dt} < config start={config_dt} => no skip => use config date")
+        return config_dt
+    else:
+        print(f"[{resource}] {db_key}: DB date={db_dt} >= config start={config_dt} => skip older => use DB date")
+        return db_dt
