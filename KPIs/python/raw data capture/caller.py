@@ -2,6 +2,7 @@
 # caller.py
 
 import requests
+from repo_list import repo_list
 from fetch_data import (
     get_github_token,
     create_tables,
@@ -11,29 +12,28 @@ from fetch_data import (
     fetch_issue_data,
     fetch_star_data
 )
-from repo_list import repo_list
 
 def main():
-    # 1) Obtain GitHub token
+    # 1) Get GitHub token
     token = get_github_token()
 
-    # 2) Create/Update MySQL tables (forks, pulls, issues, stars), plus safe indexes
+    # 2) Create DB tables (safe index creation, etc.)
     create_tables()
 
-    # 3) Ensure the last_known_dates.json file is created/updated based on DB coverage
+    # 3) If last_known_dates.json doesn't exist, auto-populate from DB coverage
     ensure_last_known_dates_json()
 
-    # 4) Prepare a requests.Session with your GitHub token
+    # 4) Prepare a single session for all requests
     session = requests.Session()
     session.headers.update({
-        "Accept": "application/vnd.github.v3+json",
-        "Authorization": f"token {token}"
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json"
     })
 
-    # 5) Loop over each repo in repo_list
-    #    We'll skip disabled ones, and run chunk-based fetch for each resource
+    # How many months per chunk
     months_per_chunk = 12
 
+    # 5) Iterate over each repo in repo_list.py
     for repo_cfg in repo_list:
         if not repo_cfg.get("enabled", False):
             print(f"Skipping disabled repo: {repo_cfg['owner']}/{repo_cfg['repo']}")
@@ -42,11 +42,11 @@ def main():
         owner = repo_cfg["owner"]
         repo = repo_cfg["repo"]
         start_date_str = repo_cfg["start_date"]
-        end_date_str   = repo_cfg["end_date"]
+        end_date_str = repo_cfg.get("end_date", "")
 
-        print(f"\n=== Processing {owner}/{repo} from {start_date_str} to {end_date_str or 'NOW'} ===")
+        print(f"\n=== Fetching for {owner}/{repo} from {start_date_str} to {end_date_str or 'NOW'} ===")
 
-        # 6) For each resource, call the relevant fetch function
+        # 6) Call each fetch function (forks, pulls, issues, stars)
         fetch_fork_data(owner, repo, start_date_str, end_date_str, session, months_per_chunk)
         fetch_pull_data(owner, repo, start_date_str, end_date_str, session, months_per_chunk)
         fetch_issue_data(owner, repo, start_date_str, end_date_str, session, months_per_chunk)
