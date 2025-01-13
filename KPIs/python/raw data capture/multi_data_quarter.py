@@ -2,6 +2,7 @@
 # multi_data_quarters.py
 
 import os
+import sys
 import math
 import numpy as np
 import pandas as pd
@@ -13,7 +14,6 @@ from sqlalchemy import create_engine
 from calendar import monthrange
 import matplotlib.gridspec as gridspec
 import importlib.util
-import sys
 
 ############################
 # MySQL Credentials
@@ -45,7 +45,7 @@ SCALING_REPO = os.getenv("SCALING_REPO", None)
 if not SCALING_REPO:
     print("ERROR: You must set the environment variable SCALING_REPO.")
     print("Example on Windows cmd:  set SCALING_REPO=ni/actor-framework")
-    print("Or on Linux/macOS:  export SCALING_REPO=ni/actor-framework")
+    print("Or on Linux/macOS:       export SCALING_REPO=ni/actor-framework")
     sys.exit(1)
 
 ############################
@@ -139,6 +139,7 @@ def build_repo_info_map(repo_list_data):
 # 3) DB engine creation
 ################################################################
 def get_engine():
+    from sqlalchemy import create_engine
     conn_str = f"mysql+mysqlconnector://{DB_USER}:{DB_PASS}@{DB_HOST}/{DB_NAME}"
     return create_engine(conn_str)
 
@@ -203,6 +204,7 @@ def lumps_for_repo(subdf, forced_start_dt=None):
 
 ################################################################
 # 5) lumps_figure => bigger figure => 50% more area
+#    => no "earliest" table on the right
 ################################################################
 def lumps_figure(lumps_pivot_scaled, lumps_start_df, earliest_df, bar_cols, title):
     """
@@ -210,8 +212,13 @@ def lumps_figure(lumps_pivot_scaled, lumps_start_df, earliest_df, bar_cols, titl
     => We'll forcibly override earliest_df's 'EarliestDate' with the 'Q01_start' from lumps_start_df.
     Now figure size => ~1.5 times bigger area than original (15,6).
     We'll do (18.37,7.35) => ~1.2247 factor => ~50% more area.
+
+    We've REMOVED the earliest date table on the right => now we have 2 columns total:
+      col=0 => lumps top (row=0) + lumps bottom (row=1)
+      col=1 => bar chart
     """
-    # override earliest with Q01_start
+    # override earliest with Q01_start => so the lumps bottom table + lumps top table are left,
+    # but we do NOT show the earliest table as a separate figure area
     if not lumps_start_df.empty:
         q01_map= {}
         for idx, row in lumps_start_df.iterrows():
@@ -225,14 +232,16 @@ def lumps_figure(lumps_pivot_scaled, lumps_start_df, earliest_df, bar_cols, titl
                     earliest_df.loc[idx, "EarliestDate"]= q01_map[rn]
 
     fig= plt.figure(figsize=(18.37,7.35))  # ~50% bigger area
-    gs= gridspec.GridSpec(nrows=2, ncols=3, figure=fig,
-                          width_ratios=[1.8,2,1],
+    gs= gridspec.GridSpec(nrows=2, ncols=2, figure=fig,
+                          width_ratios=[1.8,2],
                           height_ratios=[3,1])
 
+    # lumps top => row=0,col=0
     ax_lumps_top= fig.add_subplot(gs[0,0])
+    # lumps bottom => row=1,col=0
     ax_lumps_bot= fig.add_subplot(gs[1,0])
+    # bar chart => row=0..1,col=1
     ax_chart=     fig.add_subplot(gs[:,1])
-    ax_earliest=  fig.add_subplot(gs[:,2])
 
     ax_lumps_top.axis("off")
     lumps_table_data= lumps_pivot_scaled.fillna(0).round(2).astype(str).replace("0.0","").values.tolist()
@@ -280,7 +289,6 @@ def lumps_figure(lumps_pivot_scaled, lumps_start_df, earliest_df, bar_cols, titl
     for _, cell in lumps_start_tab.get_celld().items():
         cell.set_facecolor("white")
 
-    # bar chart
     lumps_bar2= lumps_pivot_scaled.fillna(0).copy()
     lumps_bar2.columns= bar_cols
     lumps_bar2.plot(kind="bar", ax=ax_chart)
@@ -289,37 +297,18 @@ def lumps_figure(lumps_pivot_scaled, lumps_start_df, earliest_df, bar_cols, titl
     ax_chart.set_xlabel("")
     ax_chart.set_xticklabels(lumps_bar2.index, rotation=0, ha="center")
 
-    # earliest => if empty => minimal row
-    ax_earliest.axis("off")
-    if earliest_df.empty:
-        earliest_df= pd.DataFrame([{"repo_name":"N/A", "EarliestDate":"N/A"}])
-    earliest_df= earliest_df.rename(columns={"repo_name":"Repo"})
-    e_data= earliest_df.values.tolist()
-    e_cols= earliest_df.columns.tolist()
-    e_tab= ax_earliest.table(cellText=e_data,
-                             colLabels=e_cols,
-                             loc="center",
-                             cellLoc="center")
-    e_tab.auto_set_font_size(False)
-    e_tab.set_fontsize(12)
-    e_tab.scale(1.2,1.2)
-    for _, cell in e_tab.get_celld().items():
-        cell.set_facecolor("white")
-
     plt.tight_layout()
     if SHOW_POPUPS:
         plt.show()
     else:
         print(f"[No popup] => lumps_figure: {title}")
+
     return lumps_bar2
 
 ################################################################
 # lumps_closeness_figure => bigger figure => ~1.5 times area
 ################################################################
 def lumps_closeness_figure(lumps_bar2, scaling_repo, dataset_name="Stars"):
-    """
-    Original was (8,5) => let's do ~ (9.8,6.1) => ~ sqrt(1.5)* each dimension => ~1.5 area
-    """
     scaling_col= None
     for c in lumps_bar2.columns:
         if c.startswith(scaling_repo+"(") or c.startswith(scaling_repo+"\n("):
@@ -434,9 +423,9 @@ def main():
     else:
         print("Popups are DISABLED => skipping plt.show().\n")
 
-    #####################################################
+    ############################
     # A) STARS lumps => monthly_count
-    #####################################################
+    ############################
     df_stars= pd.read_sql("""
       SELECT
         repo_name         AS full_repo,
@@ -453,7 +442,6 @@ def main():
     earliest_rows_st= []
     if not df_stars.empty:
         for (repo_name), subdf in df_stars.groupby("full_repo"):
-            # skip if repos.txt says enabled=0 or if repo_list says not enabled
             if repo_name not in repos_txt_map or not repos_txt_map[repo_name]:
                 continue
             if repo_name not in repo_info_map or not repo_info_map[repo_name]["enabled"]:
@@ -465,8 +453,8 @@ def main():
                 row_dict= {"repo_name": repo_name}
                 q01_dt= lumps_info["Q01"][0] if "Q01" in lumps_info else None
                 if q01_dt:
+                    # earliest date => Q01_start
                     earliest_rows_st.append({"repo_name": repo_name, "EarliestDate": q01_dt})
-
                 for lbl,(startdt, val) in lumps_info.items():
                     lumps_dict_st.append({
                         "repo_name": repo_name,
@@ -493,9 +481,9 @@ def main():
                                        col_bar_stars, "Stars Growth Over Time")
         lumps_closeness_figure(lumps_bar2_stars, SCALING_REPO, dataset_name="Stars")
 
-    #####################################################
+    ############################
     # B) FORKS lumps => monthly_count
-    #####################################################
+    ############################
     df_forks= pd.read_sql("""
       SELECT
         repo_name        AS full_repo,
@@ -524,7 +512,6 @@ def main():
                 q01_dt= lumps_info["Q01"][0] if "Q01" in lumps_info else None
                 if q01_dt:
                     earliest_rows_fk.append({"repo_name": repo_name, "EarliestDate": q01_dt})
-
                 for lbl,(startdt,val) in lumps_info.items():
                     lumps_dict_fk.append({
                         "repo_name": repo_name,
@@ -551,9 +538,9 @@ def main():
                                        col_bar_forks, "Forks Growth Over Time")
         lumps_closeness_figure(lumps_bar2_forks, SCALING_REPO, dataset_name="Forks")
 
-    #####################################################
+    ############################
     # C) PULL REQUEST lumps => monthly_count
-    #####################################################
+    ############################
     df_pulls= pd.read_sql("""
       SELECT
         repo_name            AS full_repo,
@@ -582,7 +569,6 @@ def main():
                 q01_dt= lumps_info["Q01"][0] if "Q01" in lumps_info else None
                 if q01_dt:
                     earliest_rows_pr.append({"repo_name": repo_name, "EarliestDate": q01_dt})
-
                 for lbl,(startdt,val) in lumps_info.items():
                     lumps_dict_pr.append({
                         "repo_name": repo_name,
@@ -609,9 +595,9 @@ def main():
                                    col_bar_pr, "Pull Requests Over Time")
         lumps_closeness_figure(lumps_bar2_pr, SCALING_REPO, dataset_name="PullRequests")
 
-    #####################################################
+    ############################
     # D) ISSUES => sum(comments) => monthly_count
-    #####################################################
+    ############################
     df_issues= pd.read_sql("""
       SELECT
         repo_name           AS full_repo,
@@ -641,7 +627,6 @@ def main():
                 q01_dt= lumps_info["Q01"][0] if "Q01" in lumps_info else None
                 if q01_dt:
                     earliest_rows_iss.append({"repo_name": repo_name, "EarliestDate": q01_dt})
-
                 for lbl,(startdt,val) in lumps_info.items():
                     lumps_dict_iss.append({
                         "repo_name": repo_name,
@@ -699,12 +684,13 @@ def main():
         lumps_closeness_figure(lumps_bar2_mac, SCALING_REPO, dataset_name="MonthlyActiveContrib")
 
     print("\nDone! Repos are skip/enabled via repos.txt, ignoring end_date from repo_list.py,")
-    print("EarliestDate forced to Q01_start, ~50% bigger figure area, SCALING_REPO must be set by the environment.")
-    print("We produced lumps+closeness for Stars/Forks/PullRequests/Issues + MAC => 10 figures.")
+    print("EarliestDate forced to Q01_start, ~50% bigger figure area, SCALING_REPO must be set by environment,")
+    print("and no earliest-date table on the right of lumps figure.")
     if SHOW_POPUPS:
-        print("Popups were shown interactively.")
+        print("Popups were displayed interactively.")
     else:
-        print("Popups were NOT shown (SHOW_POPUPS=0).")
+        print("Popups were NOT displayed (SHOW_POPUPS=0).")
+    print("We produced lumps+closeness for Stars/Forks/PullRequests/Issues + MAC => 10 figures.")
 
 
 if __name__=="__main__":
