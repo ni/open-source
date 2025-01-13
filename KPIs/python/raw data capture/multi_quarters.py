@@ -32,7 +32,7 @@ REPOS_TXT = "repos.txt"
 ############################
 # SELECT WHICH REPO IS THE "SCALING" REPO
 ############################
-SCALING_REPO = "my-scaling-repo"
+SCALING_REPO = "ni/actor-framework"
 
 ############################
 # We'll produce 3 Figures

@@ -45,14 +45,14 @@ repo_list = [
         "end_date": ""
     },
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "ni",
         "repo": "actor-framework",
         "start_date": "2024-08-15",
         "end_date": ""
     },
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "facebook",
         "repo": "react",
         "start_date": "2013-06-03",
@@ -66,7 +66,7 @@ repo_list = [
         "end_date": "2016-11-09"
     },
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "dotnet",
         "repo": "core",
         "start_date": "2014-11-12",
