@@ -37,9 +37,10 @@ REPOS_TXT = "repos.txt"
 REPO_LIST_PATH = "repo_list.py"
 
 ############################
-# SCALING REPO
+# SCALING REPO => from env or default
 ############################
-SCALING_REPO = "ni/actor-framework"
+DEFAULT_SCALING_REPO = "ni/actor-framework"
+SCALING_REPO = os.getenv("SCALING_REPO", DEFAULT_SCALING_REPO)
 
 ############################
 # GLOBAL => number of YEARS to analyze
@@ -187,31 +188,29 @@ def lumps_for_repo(subdf, forced_start_dt=None):
     return lumps_info
 
 ################################################################
-# 5) lumps_figure => minimal row injection
+# 5) lumps_figure => bigger figure => 50% more area
 ################################################################
 def lumps_figure(lumps_pivot_scaled, lumps_start_df, earliest_df, bar_cols, title):
     """
     'EarliestDate shall be the same as Q01_start.'
     => We'll forcibly override earliest_df's 'EarliestDate' with the 'Q01_start' from lumps_start_df.
+    Now figure size => ~1.5 times bigger area than original (15,6).
+    We'll do (18.37,7.35) => ~1.2247 factor => ~50% more area.
     """
     # override earliest with Q01_start
-    # lumps_start_df => row= (repo_name, Q01_start, Q02_start, ...)
-    # earliest_df   => row= (repo_name, EarliestDate)
     if not lumps_start_df.empty:
-        # build a map => repo_name => Q01_start
         q01_map= {}
         for idx, row in lumps_start_df.iterrows():
             rn= row["repo_name"]
-            q01_val= row.get("Q01_start", None) or ""  # string
+            q01_val= row.get("Q01_start", None) or ""
             q01_map[rn]= q01_val
         if not earliest_df.empty:
-            # override earliest_df
             for idx, row in earliest_df.iterrows():
                 rn= row["repo_name"]
                 if rn in q01_map:
                     earliest_df.loc[idx, "EarliestDate"]= q01_map[rn]
 
-    fig= plt.figure(figsize=(15,6))
+    fig= plt.figure(figsize=(18.37,7.35))  # ~50% bigger area than (15,6)
     gs= gridspec.GridSpec(nrows=2, ncols=3, figure=fig,
                           width_ratios=[1.8,2,1],
                           height_ratios=[3,1])
@@ -221,7 +220,6 @@ def lumps_figure(lumps_pivot_scaled, lumps_start_df, earliest_df, bar_cols, titl
     ax_chart=     fig.add_subplot(gs[:,1])
     ax_earliest=  fig.add_subplot(gs[:,2])
 
-    # lumps top table
     ax_lumps_top.axis("off")
     lumps_table_data= lumps_pivot_scaled.fillna(0).round(2).astype(str).replace("0.0","").values.tolist()
     lumps_table_rows= lumps_pivot_scaled.index.tolist()
@@ -277,7 +275,7 @@ def lumps_figure(lumps_pivot_scaled, lumps_start_df, earliest_df, bar_cols, titl
     ax_chart.set_xlabel("")
     ax_chart.set_xticklabels(lumps_bar2.index, rotation=0, ha="center")
 
-    # earliest date => if empty => minimal row
+    # earliest => if empty => minimal row
     ax_earliest.axis("off")
     if earliest_df.empty:
         earliest_df= pd.DataFrame([{"repo_name":"N/A", "EarliestDate":"N/A"}])
@@ -299,9 +297,12 @@ def lumps_figure(lumps_pivot_scaled, lumps_start_df, earliest_df, bar_cols, titl
     return lumps_bar2
 
 ################################################################
-# 6) lumps_closeness_figure => compare scaling vs avg
+# lumps_closeness_figure => bigger figure => ~1.5 times area
 ################################################################
 def lumps_closeness_figure(lumps_bar2, scaling_repo, dataset_name="Stars"):
+    """
+    Original was (8,5) => let's do ~ (9.8,6.1) => ~ sqrt(1.5)* each dimension => ~1.5 area
+    """
     scaling_col= None
     for c in lumps_bar2.columns:
         if c.startswith(scaling_repo+"(") or c.startswith(scaling_repo+"\n("):
@@ -309,7 +310,7 @@ def lumps_closeness_figure(lumps_bar2, scaling_repo, dataset_name="Stars"):
             break
 
     lumps_avg= lumps_bar2.drop(columns=[scaling_col], errors="ignore").mean(axis=1)
-    chart_df= pd.DataFrame(index=lumps_bar2.index)
+    chart_df= pd.DataFrame(index= lumps_bar2.index)
     chart_df["Target"] = lumps_avg
     if scaling_col in lumps_bar2.columns:
         chart_df[scaling_col] = lumps_bar2[scaling_col]
@@ -331,7 +332,7 @@ def lumps_closeness_figure(lumps_bar2, scaling_repo, dataset_name="Stars"):
                 closeness=100.0
         table_rows.append([f"{closeness:.2f}%"])
 
-    fig= plt.figure(figsize=(8,5))
+    fig= plt.figure(figsize=(9.8,6.1))  # ~50% bigger area than (8,5)
     gs= gridspec.GridSpec(nrows=2, ncols=1, height_ratios=[3,1], figure=fig)
 
     ax_top= fig.add_subplot(gs[0,0])
@@ -359,7 +360,7 @@ def lumps_closeness_figure(lumps_bar2, scaling_repo, dataset_name="Stars"):
     plt.show()
 
 ################################################################
-# 7) scale_lumps => same logic
+# scale_lumps => same logic
 ################################################################
 def scale_lumps(lumps_pivot, scaling_repo):
     out= lumps_pivot.copy()
@@ -401,17 +402,15 @@ def scale_lumps(lumps_pivot, scaling_repo):
 def main():
     # 1) read repos.txt => skip repos with enabled=0
     repos_txt_map= read_repos_txt(REPOS_TXT)
-    # e.g. { 'dotnet/core': True, 'ni/actor-framework': True, 'ni/grpc-labview': False, ... }
 
     # 2) read repo_list.py => parse start_date => ignore end_date
     repo_list_data= import_repo_list(REPO_LIST_PATH)
     repo_info_map= build_repo_info_map(repo_list_data)
-    # e.g. { 'ni/actor-framework': { 'enabled':..., 'start_dt':... }, ... }
 
     engine= get_engine()
 
-    print(f"Analyzing data => SCALING_REPO={SCALING_REPO}, global years={GLOBAL_YEARS_TO_ANALYZE}.")
-    print("EarliestDate is forced to Q01_start.\n")
+    print(f"Analyzing data => SCALING_REPO={SCALING_REPO}, 50% bigger figure area, lumps end = start_date + {GLOBAL_YEARS_TO_ANALYZE} year(s).")
+    print("EarliestDate is forcibly set to Q01_start.\n")
 
     #####################################################
     # A) STARS lumps => monthly_count
@@ -432,25 +431,19 @@ def main():
     earliest_rows_st= []
     if not df_stars.empty:
         for (repo_name), subdf in df_stars.groupby("full_repo"):
-            # check repos.txt => skip if not in or en=0
             if repo_name not in repos_txt_map or not repos_txt_map[repo_name]:
                 continue
-            # check repo_list => skip if not in or enabled=false
             if repo_name not in repo_info_map or not repo_info_map[repo_name]["enabled"]:
                 continue
             forced_start_dt= repo_info_map[repo_name]["start_dt"]
 
             lumps_info= lumps_for_repo(subdf, forced_start_dt=forced_start_dt)
             if lumps_info:
-                # build lumps_start_rows => row= { 'repo_name':..., 'Q01_start':..., 'Q02_start':..., ... }
-                # earliest_rows => match Q01_start => we'll unify them
                 row_dict= {"repo_name": repo_name}
-                # we also want earliest_dt => Q01_start
-                # but let's parse lumps_info => lumps_info["Q01"] => (some_dt, sum_val)
                 q01_dt= lumps_info["Q01"][0] if "Q01" in lumps_info else None
-
                 if q01_dt:
-                    earliest_rows_st.append({"repo_name": repo_name, "EarliestDate": q01_dt})  # match Q01_start
+                    # We forcibly set earliest= Q01_start
+                    earliest_rows_st.append({"repo_name": repo_name, "EarliestDate": q01_dt})
 
                 for lbl,(startdt, val) in lumps_info.items():
                     lumps_dict_st.append({
@@ -479,7 +472,7 @@ def main():
         lumps_closeness_figure(lumps_bar2_stars, SCALING_REPO, dataset_name="Stars")
 
     #####################################################
-    # B) FORKS => monthly_count
+    # B) FORKS lumps => monthly_count
     #####################################################
     df_forks= pd.read_sql("""
       SELECT
@@ -537,7 +530,7 @@ def main():
         lumps_closeness_figure(lumps_bar2_forks, SCALING_REPO, dataset_name="Forks")
 
     #####################################################
-    # C) PULL REQUESTS => monthly_count
+    # C) PULL REQUEST lumps => monthly_count
     #####################################################
     df_pulls= pd.read_sql("""
       SELECT
@@ -595,7 +588,7 @@ def main():
         lumps_closeness_figure(lumps_bar2_pr, SCALING_REPO, dataset_name="PullRequests")
 
     #####################################################
-    # D) ISSUES => sum of comments => monthly_count
+    # D) ISSUES => sum(comments) => monthly_count
     #####################################################
     df_issues= pd.read_sql("""
       SELECT
@@ -627,8 +620,6 @@ def main():
                 if q01_dt:
                     earliest_rows_iss.append({"repo_name": repo_name, "EarliestDate": q01_dt})
 
-                subdf["dt"]= subdf.apply(build_date_for_row, axis=1)
-                subdf= subdf.dropna(subset=["dt"]).sort_values("dt")
                 for lbl,(startdt,val) in lumps_info.items():
                     lumps_dict_iss.append({
                         "repo_name": repo_name,
@@ -685,8 +676,9 @@ def main():
                                      col_bar_mac, "Monthly Active Contributors (0.2 Pull + 0.8 Issue)")
         lumps_closeness_figure(lumps_bar2_mac, SCALING_REPO, dataset_name="MonthlyActiveContrib")
 
-    print("\nDone! Repos are skipped/enabled via repos.txt, ignoring end_date in repo_list.py,")
-    print(f"and Q01_start is used as EarliestDate. SCALING_REPO={SCALING_REPO}, we produce lumps+closeness figures.")
+    print("\nDone! Repos are skip/enabled via repos.txt, ignoring end_date from repo_list.py,")
+    print("EarliestDate forced to Q01_start, 50% bigger figure area, and SCALING_REPO configurable via env var.")
+    print(f"Currently SCALING_REPO={SCALING_REPO}. We produced lumps+closeness for Stars/Forks/PullRequests/Issues + MAC => 10 figures.")
 
 
 if __name__=="__main__":
