@@ -13,6 +13,7 @@ from sqlalchemy import create_engine
 from calendar import monthrange
 import matplotlib.gridspec as gridspec
 import importlib.util
+import sys
 
 ############################
 # MySQL Credentials
@@ -38,10 +39,14 @@ REPOS_TXT = "repos.txt"
 REPO_LIST_PATH = "repo_list.py"
 
 ############################
-# SCALING REPO => from env or default
+# SCALING_REPO => from env ONLY
 ############################
-DEFAULT_SCALING_REPO = "ni/actor-framework"
-SCALING_REPO = os.getenv("SCALING_REPO", DEFAULT_SCALING_REPO)
+SCALING_REPO = os.getenv("SCALING_REPO", None)
+if not SCALING_REPO:
+    print("ERROR: You must set the environment variable SCALING_REPO.")
+    print("Example on Windows cmd:  set SCALING_REPO=ni/actor-framework")
+    print("Or on Linux/macOS:  export SCALING_REPO=ni/actor-framework")
+    sys.exit(1)
 
 ############################
 # GLOBAL => number of YEARS to analyze
@@ -81,7 +86,6 @@ def read_repos_txt(path):
             parts=line.split(",")
             if len(parts)<2:
                 continue
-            # e.g. "repo_name=dotnet/core", "enabled=1"
             repo_part= parts[0].split("=")
             en_part=   parts[1].split("=")
             if len(repo_part)<2 or len(en_part)<2:
@@ -303,7 +307,6 @@ def lumps_figure(lumps_pivot_scaled, lumps_start_df, earliest_df, bar_cols, titl
         cell.set_facecolor("white")
 
     plt.tight_layout()
-    # if SHOW_POPUPS => plt.show()
     if SHOW_POPUPS:
         plt.show()
     else:
@@ -412,7 +415,6 @@ def scale_lumps(lumps_pivot, scaling_repo):
 
     return out, col_bar
 
-
 ############################################
 # MAIN
 ############################################
@@ -426,11 +428,11 @@ def main():
 
     engine= get_engine()
 
-    print(f"Analyzing data => SCALING_REPO={SCALING_REPO}, 50% bigger figure area, lumps end = start_date + {GLOBAL_YEARS_TO_ANALYZE} year(s).")
+    print(f"Analyzing data => SCALING_REPO={SCALING_REPO}, lumps end = start_date + {GLOBAL_YEARS_TO_ANALYZE} year(s).")
     if SHOW_POPUPS:
-        print("Popups are enabled. We'll show the figures interactively.")
+        print("Popups are enabled => showing interactive figures.\n")
     else:
-        print("Popups are DISABLED. We'll skip `plt.show()` calls, just save them in memory.\n")
+        print("Popups are DISABLED => skipping plt.show().\n")
 
     #####################################################
     # A) STARS lumps => monthly_count
@@ -451,6 +453,7 @@ def main():
     earliest_rows_st= []
     if not df_stars.empty:
         for (repo_name), subdf in df_stars.groupby("full_repo"):
+            # skip if repos.txt says enabled=0 or if repo_list says not enabled
             if repo_name not in repos_txt_map or not repos_txt_map[repo_name]:
                 continue
             if repo_name not in repo_info_map or not repo_info_map[repo_name]["enabled"]:
@@ -462,7 +465,6 @@ def main():
                 row_dict= {"repo_name": repo_name}
                 q01_dt= lumps_info["Q01"][0] if "Q01" in lumps_info else None
                 if q01_dt:
-                    # We forcibly set earliest= Q01_start
                     earliest_rows_st.append({"repo_name": repo_name, "EarliestDate": q01_dt})
 
                 for lbl,(startdt, val) in lumps_info.items():
@@ -697,12 +699,12 @@ def main():
         lumps_closeness_figure(lumps_bar2_mac, SCALING_REPO, dataset_name="MonthlyActiveContrib")
 
     print("\nDone! Repos are skip/enabled via repos.txt, ignoring end_date from repo_list.py,")
-    print("EarliestDate forced to Q01_start, ~50% bigger figure area, and SCALING_REPO is configurable via env var.")
-    if SHOW_POPUPS:
-        print("Popups were displayed interactively.")
-    else:
-        print("Popups were NOT displayed (SHOW_POPUPS=0).")
+    print("EarliestDate forced to Q01_start, ~50% bigger figure area, SCALING_REPO must be set by the environment.")
     print("We produced lumps+closeness for Stars/Forks/PullRequests/Issues + MAC => 10 figures.")
+    if SHOW_POPUPS:
+        print("Popups were shown interactively.")
+    else:
+        print("Popups were NOT shown (SHOW_POPUPS=0).")
 
 
 if __name__=="__main__":
