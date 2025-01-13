@@ -38,11 +38,11 @@ repo_list = [
         "end_date": "2017-06-14"
     },
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "ni",
         "repo": "labview-icon-editor",
-        "start_date": "2024-01-01",
-        "end_date": "2025-01-01"
+        "start_date": "2024-05-01",
+        "end_date": "2025-05-01"
     },
     {
         "enabled": True,

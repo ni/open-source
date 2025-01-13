@@ -5,6 +5,7 @@ import os
 import math
 import numpy as np
 import pandas as pd
+import matplotlib
 import matplotlib.pyplot as plt
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
@@ -46,6 +47,15 @@ SCALING_REPO = os.getenv("SCALING_REPO", DEFAULT_SCALING_REPO)
 # GLOBAL => number of YEARS to analyze
 ############################
 GLOBAL_YEARS_TO_ANALYZE = 2
+
+############################
+# SHOW_POPUPS => from env => if "0","false" => skip plt.show()
+############################
+SHOW_POPUPS_ENV = os.getenv("SHOW_POPUPS", "1").lower()
+if SHOW_POPUPS_ENV in ["0","false"]:
+    SHOW_POPUPS = False
+else:
+    SHOW_POPUPS = True
 
 ################################################################
 # 1) read repos.txt => skip repos with enabled=0
@@ -210,7 +220,7 @@ def lumps_figure(lumps_pivot_scaled, lumps_start_df, earliest_df, bar_cols, titl
                 if rn in q01_map:
                     earliest_df.loc[idx, "EarliestDate"]= q01_map[rn]
 
-    fig= plt.figure(figsize=(18.37,7.35))  # ~50% bigger area than (15,6)
+    fig= plt.figure(figsize=(18.37,7.35))  # ~50% bigger area
     gs= gridspec.GridSpec(nrows=2, ncols=3, figure=fig,
                           width_ratios=[1.8,2,1],
                           height_ratios=[3,1])
@@ -293,7 +303,11 @@ def lumps_figure(lumps_pivot_scaled, lumps_start_df, earliest_df, bar_cols, titl
         cell.set_facecolor("white")
 
     plt.tight_layout()
-    plt.show()
+    # if SHOW_POPUPS => plt.show()
+    if SHOW_POPUPS:
+        plt.show()
+    else:
+        print(f"[No popup] => lumps_figure: {title}")
     return lumps_bar2
 
 ################################################################
@@ -332,7 +346,7 @@ def lumps_closeness_figure(lumps_bar2, scaling_repo, dataset_name="Stars"):
                 closeness=100.0
         table_rows.append([f"{closeness:.2f}%"])
 
-    fig= plt.figure(figsize=(9.8,6.1))  # ~50% bigger area than (8,5)
+    fig= plt.figure(figsize=(9.8,6.1))  # ~50% bigger area
     gs= gridspec.GridSpec(nrows=2, ncols=1, height_ratios=[3,1], figure=fig)
 
     ax_top= fig.add_subplot(gs[0,0])
@@ -357,7 +371,10 @@ def lumps_closeness_figure(lumps_bar2, scaling_repo, dataset_name="Stars"):
         cell.set_facecolor("white")
 
     plt.tight_layout()
-    plt.show()
+    if SHOW_POPUPS:
+        plt.show()
+    else:
+        print(f"[No popup] => lumps_closeness_figure: {dataset_name}")
 
 ################################################################
 # scale_lumps => same logic
@@ -410,7 +427,10 @@ def main():
     engine= get_engine()
 
     print(f"Analyzing data => SCALING_REPO={SCALING_REPO}, 50% bigger figure area, lumps end = start_date + {GLOBAL_YEARS_TO_ANALYZE} year(s).")
-    print("EarliestDate is forcibly set to Q01_start.\n")
+    if SHOW_POPUPS:
+        print("Popups are enabled. We'll show the figures interactively.")
+    else:
+        print("Popups are DISABLED. We'll skip `plt.show()` calls, just save them in memory.\n")
 
     #####################################################
     # A) STARS lumps => monthly_count
@@ -635,7 +655,7 @@ def main():
     lumps_df_iss= pd.DataFrame(lumps_dict_iss)
     lumps_pivot_iss= pd.DataFrame()
     lumps_start_df_iss= pd.DataFrame(lumps_start_rows_iss)
-    earliest_df_iss= pd.DataFrame(earliest_rows_iss)
+    earliest_df_iss= pd.DataFrame(lumps_start_rows_iss)
     if not lumps_df_iss.empty:
         lumps_pivot_iss= lumps_df_iss.pivot(index="q_label", columns="repo_name", values="q_value")
 
@@ -677,8 +697,12 @@ def main():
         lumps_closeness_figure(lumps_bar2_mac, SCALING_REPO, dataset_name="MonthlyActiveContrib")
 
     print("\nDone! Repos are skip/enabled via repos.txt, ignoring end_date from repo_list.py,")
-    print("EarliestDate forced to Q01_start, 50% bigger figure area, and SCALING_REPO configurable via env var.")
-    print(f"Currently SCALING_REPO={SCALING_REPO}. We produced lumps+closeness for Stars/Forks/PullRequests/Issues + MAC => 10 figures.")
+    print("EarliestDate forced to Q01_start, ~50% bigger figure area, and SCALING_REPO is configurable via env var.")
+    if SHOW_POPUPS:
+        print("Popups were displayed interactively.")
+    else:
+        print("Popups were NOT displayed (SHOW_POPUPS=0).")
+    print("We produced lumps+closeness for Stars/Forks/PullRequests/Issues + MAC => 10 figures.")
 
 
 if __name__=="__main__":
