@@ -10,49 +10,49 @@ Each repo dict has:
 
 repo_list = [
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "ni",
         "repo": "grpc-labview",
         "start_date": "2020-11-02",
         "end_date": ""
     },
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "ni",
         "repo": "labview-memory-management-tools",
         "start_date": "2018-06-30",
         "end_date": ""
     },
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "ni",
         "repo": "niveristand-custom-device-development-tools",
         "start_date": "2016-07-13",
         "end_date": ""
     },
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "ni",
         "repo": "niveristand-custom-device-build-tools",
         "start_date": "2017-06-14",
         "end_date": ""
     },
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "ni",
         "repo": "labview-icon-editor",
         "start_date": "2024-01-01",
         "end_date": ""
     },
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "ni",
         "repo": "actor-framework",
         "start_date": "2024-08-15",
         "end_date": ""
     },
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "facebook",
         "repo": "react",
         "start_date": "2013-06-03",

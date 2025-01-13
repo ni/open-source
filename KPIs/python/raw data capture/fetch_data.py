@@ -301,7 +301,7 @@ def db_get_max_starred_at(repo_name):
     return row[0] if row and row[0] else None
 
 ############################
-# Daily chunk approach
+# One-day chunk approach
 ############################
 def parse_date(s):
     if not s:
@@ -323,6 +323,45 @@ def chunk_date_ranges_daily(start_dt, end_dt):
     return chunks
 
 ############################
+# PROGRESS BAR
+############################
+def get_last_page(resp):
+    link_header = resp.headers.get("Link")
+    if not link_header:
+        return None
+    last_page = None
+    links = link_header.split(',')
+    for link in links:
+        match = re.search(r'<([^>]+)>;\s*rel="([^"]+)"', link.strip())
+        if match:
+            url = match.group(1)
+            rel = match.group(2)
+            if rel == 'last':
+                page_match = re.search(r'[?&]page=(\d+)', url)
+                if page_match:
+                    try:
+                        last_page = int(page_match.group(1))
+                    except ValueError:
+                        pass
+    return last_page
+
+def show_progress_bar(current_page, last_page, bar_length=20):
+    """
+    Print a progress bar with up to 2 decimals.
+    If last_page is None or <= 0, we print "Page X: total unknown".
+    """
+    if not last_page or last_page <= 0:
+        print(f"    Page {current_page}: total unknown")
+        return
+    progress = current_page / last_page
+    if progress > 1.0:
+        progress = 1.0
+    filled_length = int(bar_length * progress)
+    bar = '=' * filled_length + '-' * (bar_length - filled_length)
+    percent = progress * 100
+    print(f"    [{bar}] {percent:.2f}% (Page {current_page} / {last_page})")
+
+############################
 # 1) fetch_fork_data
 ############################
 def fetch_fork_data(owner, repo, start_str, end_str):
@@ -339,13 +378,13 @@ def fetch_fork_data(owner, repo, start_str, end_str):
     db_max_dt = db_get_max_forked_at(repo_name)
 
     for (chunk_start, chunk_end) in daily_chunks:
-        # skip entire day if chunk_end <= db_max_dt
         if db_max_dt and chunk_end <= db_max_dt:
             print(f"[FORKS] skipping entire day {chunk_start.date()} => {chunk_end.date()}, db_max_dt={db_max_dt}")
             continue
 
         print(f"[FORKS] day chunk: {chunk_start.date()} => {chunk_end.date()}, db_max_dt={db_max_dt}")
         page = 1
+        last_page = None
         while True:
             session = get_session()
             url = f"https://api.github.com/repos/{owner}/{repo}/forks"
@@ -357,7 +396,6 @@ def fetch_fork_data(owner, repo, start_str, end_str):
             }
             resp = session.get(url, params=params)
             if handle_rate_limit_and_switch(resp):
-                # if we slept => re-try same page
                 continue
 
             if resp.status_code != 200:
@@ -369,6 +407,14 @@ def fetch_fork_data(owner, repo, start_str, end_str):
                 print(f"    page={page}: no data => end of day chunk.")
                 break
 
+            # parse last_page once
+            if last_page is None:
+                possible_last = get_last_page(resp)
+                if possible_last:
+                    last_page = possible_last
+
+            show_progress_bar(page, last_page)
+
             skip_day = False
             new_rows = []
             for fork_info in data:
@@ -377,7 +423,7 @@ def fetch_fork_data(owner, repo, start_str, end_str):
                     continue
                 forked_dt = datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%SZ")
 
-                # partial skip => if older => skip remainder of the day
+                # partial skip => if older => skip remainder of day
                 if db_max_dt and forked_dt <= db_max_dt:
                     print(f"    [FORKS partial skip] older item={forked_dt} <= db_max_dt={db_max_dt}, skipping remainder of day {chunk_start.date()}")
                     skip_day = True
@@ -424,6 +470,7 @@ def fetch_pull_data(owner, repo, start_str, end_str):
 
         print(f"[PULLS] day chunk: {chunk_start.date()} => {chunk_end.date()}, db_max_dt={db_max_dt}")
         page = 1
+        last_page = None
         while True:
             session = get_session()
             url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
@@ -431,7 +478,7 @@ def fetch_pull_data(owner, repo, start_str, end_str):
                 "page": page,
                 "per_page": 50,
                 "sort": "created",
-                "direction": "asc"  # ascending
+                "direction": "asc"
             }
             resp = session.get(url, params=params)
             if handle_rate_limit_and_switch(resp):
@@ -446,6 +493,13 @@ def fetch_pull_data(owner, repo, start_str, end_str):
                 print(f"    page={page}: no data => end of day chunk.")
                 break
 
+            if last_page is None:
+                possible_last = get_last_page(resp)
+                if possible_last:
+                    last_page = possible_last
+
+            show_progress_bar(page, last_page)
+
             skip_day = False
             new_rows = []
             for pr in data:
@@ -455,20 +509,19 @@ def fetch_pull_data(owner, repo, start_str, end_str):
                 created_dt = datetime.strptime(created_str, "%Y-%m-%dT%H:%M:%SZ")
 
                 if db_max_dt and created_dt <= db_max_dt:
-                    print(f"    [PULLS partial skip] older item={created_dt} <= db_max_dt={db_max_dt}, skip remainder of {chunk_start.date()}")
+                    print(f"    [PULLS partial skip] older item={created_dt} <= db_max_dt={db_max_dt}, skipping remainder of {chunk_start.date()}")
                     skip_day = True
                     break
 
-                # Prepare row
                 pr_number = pr["number"]
-                merged_str = pr["merged_at"]
+                merged_str = pr.get("merged_at")
                 merged_dt_obj = datetime.strptime(merged_str, "%Y-%m-%dT%H:%M:%SZ") if merged_str else None
 
                 new_rows.append({
                     "repo_name": repo_name,
                     "pr_number": pr_number,
                     "created_at": created_dt,
-                    "first_review_at": None,  # not implemented here
+                    "first_review_at": None,
                     "merged_at": merged_dt_obj,
                     "creator_login": pr.get("user", {}).get("login", ""),
                     "title": pr.get("title", "")
@@ -509,6 +562,7 @@ def fetch_issue_data(owner, repo, start_str, end_str):
 
         print(f"[ISSUES] day chunk: {chunk_start.date()} => {chunk_end.date()}, db_max_dt={db_max_dt}")
         page = 1
+        last_page = None
         while True:
             session = get_session()
             url = f"https://api.github.com/repos/{owner}/{repo}/issues"
@@ -532,10 +586,16 @@ def fetch_issue_data(owner, repo, start_str, end_str):
                 print(f"    page={page}: no data => end of day chunk.")
                 break
 
+            if last_page is None:
+                possible_last = get_last_page(resp)
+                if possible_last:
+                    last_page = possible_last
+
+            show_progress_bar(page, last_page)
+
             skip_day = False
             new_rows = []
             for issue in data:
-                # skip if it's a pull_request crossover
                 if "pull_request" in issue:
                     continue
                 created_str = issue.get("created_at")
@@ -552,8 +612,7 @@ def fetch_issue_data(owner, repo, start_str, end_str):
                 closed_str = issue.get("closed_at")
                 closed_dt_obj = datetime.strptime(closed_str, "%Y-%m-%dT%H:%M:%SZ") if closed_str else None
 
-                # first_comment_at, comments, creator_login
-                comments_count = issue.get("comments", 0)
+                ccount = issue.get("comments", 0)
                 creator_login = issue.get("user", {}).get("login", "")
 
                 new_rows.append({
@@ -561,8 +620,8 @@ def fetch_issue_data(owner, repo, start_str, end_str):
                     "issue_number": issue_num,
                     "created_at": created_dt,
                     "closed_at": closed_dt_obj,
-                    "first_comment_at": None,  # not implemented here
-                    "comments": comments_count,
+                    "first_comment_at": None,
+                    "comments": ccount,
                     "creator_login": creator_login
                 })
 
@@ -601,6 +660,7 @@ def fetch_star_data(owner, repo, start_str, end_str):
 
         print(f"[STARS] day chunk: {chunk_start.date()} => {chunk_end.date()}, db_max_dt={db_max_dt}")
         page = 1
+        last_page = None
         while True:
             session = get_session()
             url = f"https://api.github.com/repos/{owner}/{repo}/stargazers"
@@ -621,6 +681,13 @@ def fetch_star_data(owner, repo, start_str, end_str):
             if not data:
                 print(f"    page={page}: no data => end of day chunk.")
                 break
+
+            if last_page is None:
+                possible_last = get_last_page(resp)
+                if possible_last:
+                    last_page = possible_last
+
+            show_progress_bar(page, last_page)
 
             skip_day = False
             new_rows = []
