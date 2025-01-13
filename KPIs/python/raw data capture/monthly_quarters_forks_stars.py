@@ -4,6 +4,8 @@
 import mysql.connector
 import pandas as pd
 import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+import numpy as np
 
 ############################
 # MySQL Credentials
@@ -12,6 +14,11 @@ DB_HOST = "localhost"
 DB_USER = "root"
 DB_PASS = "root"
 DB_NAME = "my_kpis_db"
+
+############################
+# CONFIGURE HOW MANY "QUARTERS" (LUMPS) YOU WANT
+############################
+QUARTERS = 4  # e.g., 4 => Q01..Q04, 5 => Q01..Q05, etc.
 
 def connect_db():
     """
@@ -24,141 +31,158 @@ def connect_db():
         database=DB_NAME
     )
 
-def get_monthly_forks():
+def get_monthly_data(table_name, date_col):
     """
-    Returns a DataFrame with columns:
-      repo_name, y, m, monthly_count
-    by grouping the 'forks' table on (repo_name, YEAR(forked_at), MONTH(forked_at)).
-    This avoids only_full_group_by issues.
-    """
-    conn = connect_db()
-    query = """
-    SELECT
-      repo_name,
-      YEAR(forked_at) AS y,
-      MONTH(forked_at) AS m,
-      COUNT(*) AS monthly_count
-    FROM forks
-    GROUP BY repo_name, y, m
-    ORDER BY repo_name, y, m;
-    """
-    df = pd.read_sql(query, conn)
-    conn.close()
-    return df  # columns: repo_name, y, m, monthly_count
-
-def get_monthly_stars():
-    """
-    Returns a DataFrame with columns:
-      repo_name, y, m, monthly_count
-    by grouping the 'stars' table on (repo_name, YEAR(starred_at), MONTH(starred_at)).
-    This avoids only_full_group_by issues.
-    """
-    conn = connect_db()
-    query = """
-    SELECT
-      repo_name,
-      YEAR(starred_at) AS y,
-      MONTH(starred_at) AS m,
-      COUNT(*) AS monthly_count
-    FROM stars
-    GROUP BY repo_name, y, m
-    ORDER BY repo_name, y, m;
-    """
-    df = pd.read_sql(query, conn)
-    conn.close()
-    return df  # columns: repo_name, y, m, monthly_count
-
-def group_into_consecutive_quarters(df):
-    """
-    Takes columns: repo_name, y, m, monthly_count
-    1) Convert y,m => a date for sorting
-    2) Sort by that date
-    3) For each repo, lumps every 3 monthly rows into Q01, Q02, etc.
-    4) Sort the resulting 'Qxx' labels in numeric order (Q01 < Q02 < Q10).
+    Generic function that queries 'table_name' (e.g. 'forks' or 'stars'),
+    grouping by YEAR(date_col), MONTH(date_col), thus avoiding only_full_group_by errors.
     
-    Returns columns: repo_name, q_label, q_value
+    Returns a DF with columns:
+      repo_name, y, m, monthly_count
     """
-    # 1) Construct a dt
+    conn = connect_db()
+    query = f"""
+    SELECT
+      repo_name,
+      YEAR({date_col}) AS y,
+      MONTH({date_col}) AS m,
+      COUNT(*) AS monthly_count
+    FROM {table_name}
+    GROUP BY repo_name, y, m
+    ORDER BY repo_name, y, m
+    """
+    df = pd.read_sql(query, conn)
+    conn.close()
+    return df  # columns => [repo_name, y, m, monthly_count]
+
+def build_date_for_row(row):
+    """
+    Convert (y, m) => a real date (YYYY-MM-01).
+    If invalid or missing, returns None.
+    """
+    try:
+        yyyy = int(row["y"])
+        mm = int(row["m"])
+        return datetime(yyyy, mm, 1)
+    except:
+        return None
+
+def group_into_configurable_quarters(df, quarters=4):
+    """
+    Takes columns: repo_name, y, m, monthly_count.
+    1) Convert (y,m) => dt
+    2) Find global min_dt, max_dt across all rows
+    3) We divide the entire range [min_dt, max_dt] into 'quarters' lumps.
+       => each lump is a contiguous date interval
+    4) Each monthly row is assigned to exactly one of those lumps
+    5) We label lumps => Q01, Q02, ...
+    6) Return DF with columns [repo_name, q_label, q_value].
+    """
     df = df.copy()
-    df["month_date"] = pd.to_datetime(df.apply(lambda row: f"{int(row.y)}-{int(row.m):02d}-01", axis=1))
-    # 2) sort
-    df = df.sort_values(["repo_name", "month_date"]).reset_index(drop=True)
+    df["dt"] = df.apply(build_date_for_row, axis=1)
+    df = df.dropna(subset=["dt"])  # in case any row is invalid
+    df = df.sort_values(["repo_name", "dt"]).reset_index(drop=True)
 
-    # 3) for each repo, consecutive lumps of 3
-    grouped_list = []
-    for repo_name, subdf in df.groupby("repo_name"):
-        subdf = subdf.sort_values("month_date").reset_index(drop=True)
-        subdf["q_index"] = subdf.index // 3  # each group of 3 months => Q
-        sums = subdf.groupby("q_index")["monthly_count"].sum().reset_index()
-        # create "Q01," "Q02," ...
-        sums["q_label"] = sums["q_index"].apply(lambda x: f"Q{(x+1):02d}")
-        sums["repo_name"] = repo_name
-        sums = sums.rename(columns={"monthly_count": "q_value"})
-        grouped_list.append(sums[["repo_name", "q_label", "q_value"]])
+    if df.empty:
+        return pd.DataFrame(columns=["repo_name","q_label","q_value"])
 
-    result = pd.concat(grouped_list, ignore_index=True)
-    # 4) sort q_label => Q01 < Q02 < Q10 by normal string sorting
-    result = result.sort_values(["repo_name", "q_label"]).reset_index(drop=True)
-    return result
+    # 2) find global min_dt, max_dt
+    min_dt = df["dt"].min()
+    max_dt = df["dt"].max()
+    if min_dt == max_dt:
+        # all data in one date => just put it in Q01
+        df["q_label"] = "Q01"
+        df["q_value"] = df["monthly_count"]
+        return df[["repo_name","q_label","q_value"]]
 
-def create_quarterly_charts(df_forks, df_stars):
+    # define the lumps
+    # we create 'quarters' lumps from min_dt..max_dt
+    total_days = (max_dt - min_dt).days
+    if total_days < 0:
+        total_days = 0
+    if quarters < 1:
+        quarters = 1
+
+    # step in days
+    step = total_days / quarters  # float
+    boundaries = [min_dt]
+    for i in range(1, quarters):
+        # boundary i => min_dt + i*step
+        next_boundary = min_dt + timedelta(days=i*step)
+        boundaries.append(next_boundary)
+    boundaries.append(max_dt + timedelta(seconds=1))  # ensure we include max_dt in last bucket
+
+    # label lumps => Q01..Qxx
+    # we define intervals: [boundaries[i], boundaries[i+1])
+    # each row dt belongs to the first interval that dt < boundary[i+1]
+    # if dt >= boundary[i] and dt < boundary[i+1]
+    label_map = {}
+    for i in range(quarters):
+        label_map[i] = f"Q{(i+1):02d}"
+
+    def find_q_label(row_dt):
+        # find i such that row_dt in [boundaries[i], boundaries[i+1])
+        # we can do a simple loop
+        for i in range(quarters):
+            if boundaries[i] <= row_dt < boundaries[i+1]:
+                return label_map[i]
+        return label_map[quarters-1]  # fallback
+
+    df["q_label"] = df["dt"].apply(find_q_label)
+
+    # 5) sum monthly_count for each repo, q_label
+    g = df.groupby(["repo_name","q_label"])["monthly_count"].sum().reset_index()
+    g = g.rename(columns={"monthly_count":"q_value"})
+
+    # sort q_label => Q01..Q02..Q10 => normal string sort is fine
+    g = g.sort_values(["repo_name","q_label"]).reset_index(drop=True)
+
+    return g
+
+def create_quarterly_figure(df, title_str):
     """
-    We produce 2 subplots (forks, stars), each with side-by-side bars for each repo in each Qxx,
-    plus a table below. The lumps are labeled Q01, Q02, etc.
+    Creates a figure for either forks or stars from df:
+    columns => [repo_name, q_label, q_value].
+    We pivot => row=q_label, columns=repo_name, val=q_value
+    Then bar chart side-by-side for each repo, table below, returning the figure.
     """
-    pivot_forks = df_forks.pivot(index="q_label", columns="repo_name", values="q_value").fillna(0)
-    pivot_stars = df_stars.pivot(index="q_label", columns="repo_name", values="q_value").fillna(0)
+    pivot_df = df.pivot(index="q_label", columns="repo_name", values="q_value").fillna(0)
 
-    fig, axes = plt.subplots(2, 1, figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=(10, 6))
+    pivot_df.plot(kind="bar", ax=ax)
+    ax.set_title(title_str)
+    ax.set_ylabel("Count")
 
-    # 1) forks
-    pivot_forks.plot(kind="bar", ax=axes[0])
-    axes[0].set_title("Forks: Consecutive 3-month lumps => Q01, Q02, etc.")
-    axes[0].set_ylabel("Fork Count")
+    # add table
+    cell_text = pivot_df.values.tolist()
+    col_labels = pivot_df.columns.tolist()
+    row_labels = pivot_df.index.tolist()
 
-    # table below
-    from matplotlib.table import Table
-    cell_text = pivot_forks.values.tolist()
-    col_labels = pivot_forks.columns.tolist()
-    row_labels = pivot_forks.index.tolist()
-
-    t0 = axes[0].table(cellText=cell_text,
-                       rowLabels=row_labels,
-                       colLabels=col_labels,
-                       loc='bottom',
-                       cellLoc='center')
-    axes[0].set_ylim(top=axes[0].get_ylim()[1]*1.2)
-
-    # 2) stars
-    pivot_stars.plot(kind="bar", ax=axes[1])
-    axes[1].set_title("Stars: Consecutive 3-month lumps => Q01, Q02, etc.")
-    axes[1].set_ylabel("Star Count")
-
-    cell_text2 = pivot_stars.values.tolist()
-    col_labels2 = pivot_stars.columns.tolist()
-    row_labels2 = pivot_stars.index.tolist()
-
-    t1 = axes[1].table(cellText=cell_text2,
-                       rowLabels=row_labels2,
-                       colLabels=col_labels2,
-                       loc='bottom',
-                       cellLoc='center')
-    axes[1].set_ylim(top=axes[1].get_ylim()[1]*1.2)
+    # put the table at the bottom
+    t0 = ax.table(cellText=cell_text,
+                  rowLabels=row_labels,
+                  colLabels=col_labels,
+                  loc='bottom',
+                  cellLoc='center')
+    ax.set_ylim(top=ax.get_ylim()[1]*1.2)
 
     plt.tight_layout()
-    plt.show()
+    return fig
 
 def main():
-    # monthly forks
-    df_forks_m = get_monthly_forks()
-    forks_groups = group_into_consecutive_quarters(df_forks_m)  # => q_label, q_value
+    global QUARTERS
 
-    # monthly stars
-    df_stars_m = get_monthly_stars()
-    stars_groups = group_into_consecutive_quarters(df_stars_m)
+    # 1) monthly forks => group => figure
+    forks_m = get_monthly_data("forks","forked_at")  # repo_name,y,m,monthly_count
+    forks_q = group_into_configurable_quarters(forks_m, quarters=QUARTERS)
+    fig_forks = create_quarterly_figure(forks_q, f"Forks: {QUARTERS} lumps => Qxx")
 
-    # create chart
-    create_quarterly_charts(forks_groups, stars_groups)
+    # 2) monthly stars => group => figure
+    stars_m = get_monthly_data("stars","starred_at")
+    stars_q = group_into_configurable_quarters(stars_m, quarters=QUARTERS)
+    fig_stars = create_quarterly_figure(stars_q, f"Stars: {QUARTERS} lumps => Qxx")
+
+    # 3) show
+    plt.show()
 
 if __name__ == "__main__":
     main()
