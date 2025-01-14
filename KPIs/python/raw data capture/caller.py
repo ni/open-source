@@ -2,7 +2,9 @@
 # caller.py
 
 import os
+import sys
 from repo_list import repo_list
+
 from fetch_data import (
     load_tokens,
     create_tables,
@@ -13,35 +15,32 @@ from fetch_data import (
 )
 
 def main():
-    # 1) Load tokens from 'tokens.txt' or env vars
+    # 1) Load GitHub tokens
     load_tokens()
 
-    # 2) Create DB tables
+    # 2) Create DB tables if needed
     create_tables()
 
-    # 3) For each repo, run the daily-chunk partial skip approach
-    for cfg in repo_list:
-        if not cfg["enabled"]:
-            print(f"Skipping disabled: {cfg['owner']}/{cfg['repo']}")
+    # 3) For each repo in repo_list, if enabled => fetch each data type
+    for repo_info in repo_list:
+        if not repo_info.get("enabled", False):
             continue
 
-        owner = cfg["owner"]
-        repo = cfg["repo"]
-        start_date = cfg["start_date"]
-        end_date = cfg["end_date"] or ""
+        owner = repo_info["owner"]
+        repo  = repo_info["repo"]
+        start_str = repo_info["start_date"]
+        end_str   = repo_info["end_date"] or None  # None => up to 'now'
 
-        print(f"\n=== Processing {owner}/{repo} from {start_date} to {end_date or 'NOW'} ===")
+        print("\n=========================================")
+        print(f"Processing {owner}/{repo}")
+        print(f"  from {start_str} to {end_str or 'NOW'}")
 
-        # forks
-        fetch_fork_data(owner, repo, start_date, end_date)
-        # pulls
-        fetch_pull_data(owner, repo, start_date, end_date)
-        # issues
-        fetch_issue_data(owner, repo, start_date, end_date)
-        # stars
-        fetch_star_data(owner, repo, start_date, end_date)
+        fetch_fork_data(owner, repo, start_str, end_str)
+        fetch_pull_data(owner, repo, start_str, end_str)
+        fetch_issue_data(owner, repo, start_str, end_str)
+        fetch_star_data(owner, repo, start_str, end_str)
 
-    print("\nAll done.")
+    print("\nAll done!")
 
 if __name__ == "__main__":
     main()
