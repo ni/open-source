@@ -8,6 +8,9 @@ import mysql.connector
 from datetime import datetime, timedelta
 from time import sleep
 
+# For robust retry logic:
+from requests.adapters import HTTPAdapter, Retry
+
 ############################
 # DATABASE CONFIG
 ############################
@@ -16,11 +19,18 @@ DB_USER = "root"
 DB_PASS = "root"
 DB_NAME = "my_kpis_db"
 
+############################
+# GITHUB TOKENS
+############################
 TOKENS = []
 CURRENT_TOKEN_INDEX = 0
-MAX_LIMIT_BUFFER = 50
+MAX_LIMIT_BUFFER = 50  # switch to next token if remaining < 50
 
 def load_tokens():
+    """
+    Attempt to load tokens from 'tokens.txt' or env variables.
+    If none found => run unauthenticated => low rate limit.
+    """
     global TOKENS
     script_dir = os.path.dirname(os.path.abspath(__file__))
     tokens_file = os.path.join(script_dir, "tokens.txt")
@@ -41,18 +51,48 @@ def load_tokens():
         print("No GitHub tokens found => unauthenticated => lower rate limits.")
 
 def get_session():
+    """
+    Return a requests.Session configured with:
+      1) GitHub token (if any)
+      2) HTTPAdapter that retries on transient errors (ConnectionError, 5xx, etc.).
+    """
     global TOKENS, CURRENT_TOKEN_INDEX
-    s = requests.Session()
+
+    # Create the base session
+    session = requests.Session()
+
+    # If we have multiple tokens, pick the current one
     if TOKENS:
         current_token = TOKENS[CURRENT_TOKEN_INDEX]
-        s.headers.update({"Authorization": f"token {current_token}"})
-    return s
+        session.headers.update({"Authorization": f"token {current_token}"})
+
+    # Define a Retry strategy for robust handling of connection errors & certain HTTP codes
+    retry_strategy = Retry(
+        total=5,                  # total retries
+        connect=5,                # how many times to retry on connection errors
+        read=5,                   # how many times to retry on read errors
+        backoff_factor=2,         # exponential backoff: 1st retry=2s, 2nd=4s, 3rd=8s...
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"]
+        # raise_on_status=False,   # optionally handle 4xx as well
+    )
+
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+
+    # Mount the adapter for both http & https
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+
+    return session
 
 def maybe_switch_token_if_needed(resp):
+    """
+    If near rate limit, switch to next token. 
+    (In addition, we have a robust global retry approach for ConnectionErrors, etc.)
+    """
     global TOKENS, CURRENT_TOKEN_INDEX
     if not TOKENS:
         return
-
     rem_str = resp.headers.get("X-RateLimit-Remaining")
     if rem_str:
         try:
@@ -66,8 +106,7 @@ def maybe_switch_token_if_needed(resp):
 
 def handle_rate_limit(resp):
     """
-    If 403 => attempt to sleep until reset.
-    Return True if we actually sleep so caller can re-try.
+    If we get 403 => attempt to sleep until reset. Return True if we actually sleep so we can re-try.
     """
     if resp.status_code == 403:
         reset_time = resp.headers.get("X-RateLimit-Reset")
@@ -85,6 +124,10 @@ def handle_rate_limit(resp):
     return False
 
 def handle_rate_limit_and_switch(resp):
+    """
+    Combine handle_rate_limit + maybe_switch_token_if_needed.
+    If we sleep => return True => calling code can re-try the same request.
+    """
     if handle_rate_limit(resp):
         return True
     maybe_switch_token_if_needed(resp)
@@ -176,7 +219,7 @@ def db_insert_forks(rows):
         c.close()
         conn.close()
     except Exception as e:
-        print(f"Error inserting forks: {e}")
+        print(f"DB insert error (forks): {e}")
 
 def db_insert_pulls(rows):
     if not rows:
@@ -200,7 +243,7 @@ def db_insert_pulls(rows):
         c.close()
         conn.close()
     except Exception as e:
-        print(f"Error inserting pulls: {e}")
+        print(f"DB insert error (pulls): {e}")
 
 def db_insert_issues(rows):
     if not rows:
@@ -210,8 +253,7 @@ def db_insert_issues(rows):
         c = conn.cursor()
         sql = """
         INSERT IGNORE INTO issues
-         (repo_name, issue_number, created_at, closed_at,
-          first_comment_at, comments, creator_login)
+         (repo_name, issue_number, created_at, closed_at, first_comment_at, comments, creator_login)
         VALUES
          (%s, %s, %s, %s, %s, %s, %s)
         """
@@ -225,7 +267,7 @@ def db_insert_issues(rows):
         c.close()
         conn.close()
     except Exception as e:
-        print(f"Error inserting issues: {e}")
+        print(f"DB insert error (issues): {e}")
 
 def db_insert_stars(rows):
     if not rows:
@@ -243,7 +285,7 @@ def db_insert_stars(rows):
         c.close()
         conn.close()
     except Exception as e:
-        print(f"Error inserting stars: {e}")
+        print(f"DB insert error (stars): {e}")
 
 ############################
 # DB coverage queries
@@ -294,9 +336,7 @@ def parse_date(s):
 
 def chunk_date_ranges_365(start_dt, end_dt):
     """
-    Return list of date ranges up to 365 days each. 
-    Each chunk is inclusive [chunk_start, chunk_end].
-    Next chunk starts at chunk_end + 1 day => no data lost at boundaries.
+    Return list of inclusive date ranges (up to 365 days each), with no data lost at boundaries.
     """
     chunks = []
     cur = start_dt
@@ -332,7 +372,7 @@ def get_last_page(resp):
     return last_page
 
 ############################
-# optional progress
+# optional progress display
 ############################
 def show_per_entry_progress(table_name, repo_name, item_index, total_items):
     if not total_items or total_items <= 0:
@@ -366,12 +406,11 @@ def fetch_fork_data(owner, repo, start_str, end_str=None):
 
     total_chunks = len(all_chunks)
     for i, (chunk_start, chunk_end) in enumerate(all_chunks, start=1):
-        left_percent = 100 - ((i-1)/total_chunks)*100
-        print(f"[{table_name.upper()}] chunk {i}/{total_chunks}: ~{left_percent:.1f}% left. Range: {chunk_start.date()} => {chunk_end.date()}")
+        print(f"[{table_name.upper()}] chunk {i}/{total_chunks}: range {chunk_start.date()}..{chunk_end.date()}")
 
         page = 1
         while True:
-            session = get_session()
+            session = get_session()  # now has robust retry
             url = f"https://api.github.com/repos/{owner}/{repo}/forks"
             params = {
                 "sort": "oldest",
@@ -379,7 +418,9 @@ def fetch_fork_data(owner, repo, start_str, end_str=None):
                 "page": page,
                 "per_page": 100
             }
-            resp = session.get(url, params=params)
+
+            resp = session.get(url, params=params, timeout=30)
+            # handle rate-limits
             if handle_rate_limit_and_switch(resp):
                 continue
 
@@ -410,6 +451,7 @@ def fetch_fork_data(owner, repo, start_str, end_str=None):
                     skip_rest = True
                     break
 
+                # if older/equal than we have => skip the chunk
                 if db_max_dt and forked_dt <= db_max_dt:
                     print(f"    older fork {forked_dt} <= db_max_dt => skip chunk.")
                     skip_rest = True
@@ -455,12 +497,11 @@ def fetch_pull_data(owner, repo, start_str, end_str=None):
 
     total_chunks = len(all_chunks)
     for i, (chunk_start, chunk_end) in enumerate(all_chunks, start=1):
-        left_percent = 100 - ((i-1)/total_chunks)*100
-        print(f"[{table_name.upper()}] chunk {i}/{total_chunks}: ~{left_percent:.1f}% left. Range: {chunk_start.date()} => {chunk_end.date()}")
+        print(f"[{table_name.upper()}] chunk {i}/{total_chunks}: range {chunk_start.date()}..{chunk_end.date()}")
 
         page = 1
         while True:
-            session = get_session()
+            session = get_session()  # robust retry
             url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
             params = {
                 "state": "all",
@@ -469,7 +510,7 @@ def fetch_pull_data(owner, repo, start_str, end_str=None):
                 "page": page,
                 "per_page": 50
             }
-            resp = session.get(url, params=params)
+            resp = session.get(url, params=params, timeout=30)
             if handle_rate_limit_and_switch(resp):
                 continue
 
@@ -553,12 +594,11 @@ def fetch_issue_data(owner, repo, start_str, end_str=None):
 
     total_chunks = len(all_chunks)
     for i, (chunk_start, chunk_end) in enumerate(all_chunks, start=1):
-        left_percent = 100 - ((i-1)/total_chunks)*100
-        print(f"[{table_name.upper()}] chunk {i}/{total_chunks}: ~{left_percent:.1f}% left. Range: {chunk_start.date()} => {chunk_end.date()}")
+        print(f"[{table_name.upper()}] chunk {i}/{total_chunks}: range {chunk_start.date()}..{chunk_end.date()}")
 
         page = 1
         while True:
-            session = get_session()
+            session = get_session()  # robust retry
             url = f"https://api.github.com/repos/{owner}/{repo}/issues"
             params = {
                 "state": "all",
@@ -567,7 +607,7 @@ def fetch_issue_data(owner, repo, start_str, end_str=None):
                 "page": page,
                 "per_page": 50
             }
-            resp = session.get(url, params=params)
+            resp = session.get(url, params=params, timeout=30)
             if handle_rate_limit_and_switch(resp):
                 continue
 
@@ -656,19 +696,19 @@ def fetch_star_data(owner, repo, start_str, end_str=None):
 
     total_chunks = len(all_chunks)
     for i, (chunk_start, chunk_end) in enumerate(all_chunks, start=1):
-        left_percent = 100 - ((i-1)/total_chunks)*100
-        print(f"[{table_name.upper()}] chunk {i}/{total_chunks}: ~{left_percent:.1f}% left. Range: {chunk_start.date()} => {chunk_end.date()}")
+        print(f"[{table_name.upper()}] chunk {i}/{total_chunks}: range {chunk_start.date()}..{chunk_end.date()}")
 
         page = 1
         while True:
-            session = get_session()
+            session = get_session()  # robust retry
             session.headers["Accept"] = "application/vnd.github.v3.star+json"
             url = f"https://api.github.com/repos/{owner}/{repo}/stargazers"
             params = {
                 "page": page,
                 "per_page": 100
             }
-            resp = session.get(url, params=params)
+            resp = session.get(url, params=params, timeout=30)
+
             if handle_rate_limit_and_switch(resp):
                 continue
 
@@ -723,9 +763,9 @@ def fetch_star_data(owner, repo, start_str, end_str=None):
             page += 1
 
 ############################
-# if run fetch_data.py alone
+# If run directly
 ############################
 if __name__ == "__main__":
     load_tokens()
     create_tables()
-    print("fetch_data.py => call fetch_*_data('OWNER', 'REPO', 'YYYY-MM-DD', 'YYYY-MM-DD') from code or 'caller.py'.")
+    print("fetch_data.py => to fetch data, call fetch_*_data(...) from code or from caller.py.")
