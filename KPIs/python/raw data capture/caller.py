@@ -12,10 +12,10 @@ from fetch_data import (
 )
 
 def main():
-    # 1) Load tokens (optional but recommended)
+    # 1) Load tokens
     load_tokens()
 
-    # 2) Create DB tables if not existing
+    # 2) Create tables => ephemeral => drop first
     create_tables()
 
     # 3) Loop over each repo
@@ -24,23 +24,22 @@ def main():
             continue
 
         owner = repo_info["owner"]
-        repo = repo_info["repo"]
+        repo  = repo_info["repo"]
         start_str = repo_info["start_date"]
-        end_str = repo_info["end_date"] or None  # None => now
+        end_str   = repo_info["end_date"] or None
 
-        print("\n============================================")
-        print(f"Processing {owner}/{repo}")
-        print(f"  start_date={start_str}, end_date={end_str or 'NOW'}")
+        print("\n================================================")
+        print(f"Processing {owner}/{repo} from {start_str} to {end_str or 'NOW'}")
 
-        # Chunk-based for forks & stars
+        # chunk-based for forks & stars
         fetch_fork_data(owner, repo, start_str, end_str)
         fetch_star_data(owner, repo, start_str, end_str)
 
-        # Incremental for issues & pulls
+        # incremental (but ephemeral => effectively full) for issues & pulls
         fetch_issue_data(owner, repo, start_str, end_str)
         fetch_pull_data(owner, repo, start_str, end_str)
 
-    print("\nAll done!")
+    print("\nAll done — ephemeral approach.")
 
 if __name__ == "__main__":
     main()

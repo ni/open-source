@@ -1,35 +1,13 @@
-Below is a concise description of the three-file solution (1) repo_list.py, (2) fetch_data.py, and (3) caller.py, along with complete code listings. The intention is that another AI assistant (or any developer) could reconstruct the entire solution just by following these descriptions and code blocks.
+Below is a concise description of the complete three-file solution (1) repo_list.py, (2) fetch_data.py, and (3) caller.py in full, so that any AI assistant (or developer) could reconstruct it. This solution:
 
-High-Level Explanation
-repo_list.py:
+Drops tables on each run (ephemeral approach).
+Uses chunk-based logic for forks and stars (with an early-stop heuristic on consecutive empty pages).
+Uses incremental logic (?since=...) for issues and pulls, but effectively does a fresh fetch each time (since the database is recreated).
+By following the descriptions and code below, another AI or developer could generate the identical solution.
 
-A simple Python file listing multiple repositories you want to fetch data from.
-Each repo entry has:
-enabled (bool) — whether to process it.
-owner (str) — the GitHub owner/org name.
-repo (str) — the GitHub repository name.
-start_date (str, e.g. "YYYY-MM-DD") — earliest date for forks/stars chunking or initial fallback date for issues/pulls.
-end_date (str or empty) — if empty, script treats it as “up to now.”
-fetch_data.py:
+1) repo_list.py
+A Python file listing repositories you want to capture data from. You can add or remove entries as needed. Each repo dict has enabled, owner, repo, start_date, and end_date.
 
-Contains all data-fetching logic for forks, pulls, issues, stars from GitHub, plus MySQL interactions.
-Uses a robust “Requests” Retry strategy in get_session() to automatically handle transient ConnectionError or 5xx responses (up to 5 retries with exponential backoff).
-Forks/Stars:
-No GitHub ?since= param => uses a chunk-based approach (one-year windows) to avoid timeouts for big repos.
-Ascending order, skipping older items already in DB, so data is never duplicated.
-Issues/Pulls:
-These endpoints support ?since=..., so we do incremental fetching based on the last known updated_at in the DB.
-If there’s no DB data yet, we fallback to start_date.
-caller.py:
-
-Orchestrates everything:
-Loads tokens (if any).
-Ensures DB tables exist.
-Iterates over each repo in repo_list.py.
-Calls the appropriate fetch functions for forks, pulls, issues, and stars.
-This combination provides no-data-lost chunking for forks/stars, plus incremental fetch for issues/pulls—while also automatically retrying transient network errors, so you don’t have to manually intervene.
-
-File 1: repo_list.py
 python
 Copy code
 # repo_list.py
@@ -38,8 +16,8 @@ Each repo dict includes:
   - enabled    (bool)
   - owner      (str)
   - repo       (str)
-  - start_date (str, e.g. 'YYYY-MM-DD')
-  - end_date   (str, or ""), where "" => up to 'now'
+  - start_date (str, 'YYYY-MM-DD')
+  - end_date   (str, or ""), where empty => 'now'
 """
 
 repo_list = [
@@ -63,19 +41,17 @@ repo_list = [
         "repo": "tensorflow",
         "start_date": "2007-11-02",
         "end_date": ""
-    },
-    # ... add more repos as needed ...
+    }
+    # ... add more if needed ...
 ]
-How to expand: Just add more dicts with enabled=True (or False) as needed.
-File 2: fetch_data.py
-Below is the complete script for:
+2) fetch_data.py
+A Python file that:
 
-Loading GitHub tokens (load_tokens()).
-Establishing a robust Requests retry approach in get_session().
-Creating or ensuring MySQL tables exist.
-Implementing fetch logic for forks, issues, pulls, stars:
-Forks/Stars: chunk-based approach (1-year slices).
-Issues/Pulls: incremental fetching using ?since=....
+Drops tables each time in create_tables().
+Establishes a robust Requests session with retry logic (get_session()).
+Implements chunk-based fetch with an early-stop mechanism for forks and stars.
+Implements incremental fetch for issues and pulls using ?since=..., though each run is fresh.
+Inserts data into MySQL tables with INSERT IGNORE, ensuring no duplicates within a single run.
 python
 Copy code
 #!/usr/bin/env python
@@ -88,7 +64,7 @@ import mysql.connector
 from datetime import datetime, timedelta
 from time import sleep
 
-# For robust retry logic:
+# For robust retry logic
 from requests.adapters import HTTPAdapter, Retry
 
 ############################
@@ -99,17 +75,14 @@ DB_USER = "root"
 DB_PASS = "root"
 DB_NAME = "my_kpis_db"
 
-############################
-# GITHUB TOKENS
-############################
 TOKENS = []
 CURRENT_TOKEN_INDEX = 0
-MAX_LIMIT_BUFFER = 50  # switch token if remaining < 50
+MAX_LIMIT_BUFFER = 50  # if near rate limit => switch token
 
 def load_tokens():
     """
-    Loads tokens from 'tokens.txt' or environment variables (GITHUB_TOKEN1, GITHUB_TOKEN2).
-    If none found => runs unauthenticated => low rate limit.
+    Attempt to load GitHub tokens from 'tokens.txt' or environment variables
+    (GITHUB_TOKEN1, GITHUB_TOKEN2). If none, run unauthenticated => lower rate limits.
     """
     global TOKENS
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -131,19 +104,18 @@ def load_tokens():
 
 def get_session():
     """
-    Return a requests.Session with:
-      - GitHub token (if any)
-      - HTTPAdapter w/ Retry for robust error handling
+    Returns a requests.Session that:
+      1) Potentially uses a GitHub token
+      2) Retries on transient errors
     """
     global TOKENS, CURRENT_TOKEN_INDEX
 
     session = requests.Session()
-
     if TOKENS:
         current_token = TOKENS[CURRENT_TOKEN_INDEX]
         session.headers.update({"Authorization": f"token {current_token}"})
 
-    # Retry strategy => handle connection errors, 5xx, 429, etc.
+    # Retry strategy for connection/5xx/429 errors
     retry_strategy = Retry(
         total=5,
         connect=5,
@@ -155,12 +127,11 @@ def get_session():
     adapter = HTTPAdapter(max_retries=retry_strategy)
     session.mount("http://", adapter)
     session.mount("https://", adapter)
-
     return session
 
 def maybe_switch_token_if_needed(resp):
     """
-    If near rate-limit => switch to next token (if multiple).
+    If near rate-limit, switch to next token if multiple tokens are loaded.
     """
     global TOKENS, CURRENT_TOKEN_INDEX
     if not TOKENS:
@@ -178,8 +149,7 @@ def maybe_switch_token_if_needed(resp):
 
 def handle_rate_limit(resp):
     """
-    If 403 => sleep until X-RateLimit-Reset.
-    Return True if we actually slept => re-try the same request.
+    If 403 => attempt to sleep until reset. Return True if we actually sleep => re-try.
     """
     if resp.status_code == 403:
         reset_time = resp.headers.get("X-RateLimit-Reset")
@@ -207,7 +177,7 @@ def handle_rate_limit_and_switch(resp):
     return False
 
 ############################
-# MYSQL
+# MYSQL UTILS
 ############################
 def connect_db():
     return mysql.connector.connect(
@@ -218,11 +188,22 @@ def connect_db():
     )
 
 def create_tables():
+    """
+    Drops all tables => ephemeral approach, then re-creates them.
+    """
     conn = connect_db()
     c = conn.cursor()
 
+    # Drop tables first
+    c.execute("DROP TABLE IF EXISTS forks")
+    c.execute("DROP TABLE IF EXISTS pulls")
+    c.execute("DROP TABLE IF EXISTS issues")
+    c.execute("DROP TABLE IF EXISTS stars")
+    conn.commit()
+
+    # Re-create
     c.execute("""
-    CREATE TABLE IF NOT EXISTS forks (
+    CREATE TABLE forks (
         repo_name VARCHAR(255) NOT NULL,
         creator_login VARCHAR(255),
         forked_at DATETIME NOT NULL,
@@ -231,7 +212,7 @@ def create_tables():
     """)
 
     c.execute("""
-    CREATE TABLE IF NOT EXISTS pulls (
+    CREATE TABLE pulls (
         repo_name VARCHAR(255) NOT NULL,
         pr_number INT NOT NULL,
         created_at DATETIME NOT NULL,
@@ -245,7 +226,7 @@ def create_tables():
     """)
 
     c.execute("""
-    CREATE TABLE IF NOT EXISTS issues (
+    CREATE TABLE issues (
         repo_name VARCHAR(255) NOT NULL,
         issue_number INT NOT NULL,
         created_at DATETIME NOT NULL,
@@ -259,7 +240,7 @@ def create_tables():
     """)
 
     c.execute("""
-    CREATE TABLE IF NOT EXISTS stars (
+    CREATE TABLE stars (
         repo_name VARCHAR(255) NOT NULL,
         user_login VARCHAR(255),
         starred_at DATETIME NOT NULL,
@@ -270,10 +251,10 @@ def create_tables():
     conn.commit()
     c.close()
     conn.close()
-    print("Tables created or already exist.")
+    print("Dropped old tables, re-created them => ephemeral approach.")
 
 ############################
-# INSERT HELPERS
+# DB INSERT HELPERS
 ############################
 def db_insert_forks(rows):
     if not rows:
@@ -291,7 +272,7 @@ def db_insert_forks(rows):
         c.close()
         conn.close()
     except Exception as e:
-        print(f"Error inserting forks: {e}")
+        print(f"DB insert error (forks): {e}")
 
 def db_insert_pulls(rows):
     if not rows:
@@ -315,7 +296,7 @@ def db_insert_pulls(rows):
         c.close()
         conn.close()
     except Exception as e:
-        print(f"Error inserting pulls: {e}")
+        print(f"DB insert error (pulls): {e}")
 
 def db_insert_issues(rows):
     if not rows:
@@ -340,7 +321,7 @@ def db_insert_issues(rows):
         c.close()
         conn.close()
     except Exception as e:
-        print(f"Error inserting issues: {e}")
+        print(f"DB insert error (issues): {e}")
 
 def db_insert_stars(rows):
     if not rows:
@@ -349,8 +330,10 @@ def db_insert_stars(rows):
         conn = connect_db()
         c = conn.cursor()
         sql = """
-        INSERT IGNORE INTO stars (repo_name, user_login, starred_at)
-        VALUES (%s, %s, %s)
+        INSERT IGNORE INTO stars
+         (repo_name, user_login, starred_at)
+        VALUES
+         (%s, %s, %s)
         """
         data = [(r["repo_name"], r["user_login"], r["starred_at"]) for r in rows]
         c.executemany(sql, data)
@@ -358,7 +341,7 @@ def db_insert_stars(rows):
         c.close()
         conn.close()
     except Exception as e:
-        print(f"Error inserting stars: {e}")
+        print(f"DB insert error (stars): {e}")
 
 ############################
 # DB coverage queries
@@ -400,8 +383,13 @@ def db_get_max_issue_updated(repo_name):
     return row[0] if row and row[0] else None
 
 ############################
-# 365-day chunk for forks/stars
+# Chunk logic for forks/stars
 ############################
+def parse_date(s):
+    if not s:
+        return None
+    return datetime.strptime(s, "%Y-%m-%d")
+
 def chunk_date_ranges_365(start_dt, end_dt):
     chunks = []
     cur = start_dt
@@ -440,44 +428,386 @@ def show_per_entry_progress(table_name, repo_name, item_index, total_items):
     if progress > 1.0:
         progress = 1.0
     percent = progress * 100
-    print(f"[{repo_name}/{table_name}] => {percent:.2f}% done with items...")
+    print(f"[{repo_name}/{table_name}] => {percent:.2f}% done...")
 
-##############################################################################
-# FORK data (chunk-based)
-##############################################################################
+############################
+# FORK => chunk-based with "stop early" if many empty pages
+############################
 def fetch_fork_data(owner, repo, start_str, end_str=None):
-    # ... entire function shown above ...
-    pass
+    print(f"\n=== fetch_fork_data for {owner}/{repo} (chunk-based, ephemeral) ===")
 
-##############################################################################
-# ISSUE data (incremental, uses ?since=...)
-##############################################################################
+    start_dt = parse_date(start_str)
+    end_dt   = parse_date(end_str) if end_str else datetime.now()
+    if not start_dt or start_dt > end_dt:
+        print("No valid date range => done.")
+        return
+
+    all_chunks = chunk_date_ranges_365(start_dt, end_dt)
+    if not all_chunks:
+        print("No chunks => done.")
+        return
+
+    repo_name = f"{owner}/{repo}"
+    db_max_dt = db_get_max_forked_at(repo_name)  # always None in ephemeral, but logic remains
+    table_name = "forks"
+
+    total_chunks = len(all_chunks)
+    MAX_EMPTY_PAGES = 5
+
+    for i, (chunk_start, chunk_end) in enumerate(all_chunks, start=1):
+        print(f"[{table_name.upper()}] chunk {i}/{total_chunks}: {chunk_start.date()}..{chunk_end.date()}")
+        page = 1
+        consecutive_empty = 0
+
+        while True:
+            session = get_session()
+            url = f"https://api.github.com/repos/{owner}/{repo}/forks"
+            params = {
+                "sort": "oldest",
+                "direction": "asc",
+                "page": page,
+                "per_page": 100
+            }
+            resp = session.get(url, params=params, timeout=30)
+            if handle_rate_limit_and_switch(resp):
+                continue
+
+            if resp.status_code != 200:
+                print(f"  HTTP {resp.status_code}, done page={page}")
+                break
+
+            data = resp.json()
+            if not data:
+                print("  no data => end of chunk.")
+                break
+
+            last_page = get_last_page(resp)
+            total_items = last_page * 100 if last_page else None
+
+            skip_rest = False
+            new_rows = []
+            for idx, fork_info in enumerate(data):
+                created_str = fork_info.get("created_at")
+                if not created_str:
+                    continue
+                forked_dt = datetime.strptime(created_str, "%Y-%m-%dT%H:%M:%SZ")
+
+                if forked_dt < chunk_start:
+                    continue
+                if forked_dt > chunk_end:
+                    print(f"    fork {forked_dt} > chunk_end => break chunk.")
+                    skip_rest = True
+                    break
+
+                if db_max_dt and forked_dt <= db_max_dt:
+                    print(f"    older fork {forked_dt} <= db_max_dt => skip chunk.")
+                    skip_rest = True
+                    break
+
+                new_rows.append({
+                    "repo_name": repo_name,
+                    "creator_login": fork_info.get("owner", {}).get("login", ""),
+                    "forked_at": forked_dt
+                })
+
+                item_index = (page - 1) * 100 + (idx + 1)
+                show_per_entry_progress(table_name, repo_name, item_index, total_items)
+
+            db_insert_forks(new_rows)
+            inserted_count = len(new_rows)
+            print(f"  page={page}: inserted={inserted_count} forks (out of {len(data)})")
+
+            if inserted_count == 0:
+                consecutive_empty += 1
+            else:
+                consecutive_empty = 0
+
+            if skip_rest or len(data) < 100:
+                print("  done page => break.")
+                break
+
+            if consecutive_empty >= MAX_EMPTY_PAGES:
+                print(f"  {consecutive_empty} consecutive empty pages => skip remainder of chunk.")
+                break
+
+            page += 1
+
+############################
+# ISSUES => incremental, ephemeral => always from start_date
+############################
 def fetch_issue_data(owner, repo, start_str, end_str=None):
-    # ... entire function shown above ...
-    pass
+    print(f"\n=== fetch_issue_data (incremental) for {owner}/{repo}, ephemeral ===")
 
-##############################################################################
-# PULL data (incremental, uses ?since=...) via /issues
-##############################################################################
+    repo_name = f"{owner}/{repo}"
+    db_max_update = db_get_max_issue_updated(repo_name)  # always None on fresh DB, but let's keep logic
+    if db_max_update:
+        since_dt = db_max_update
+    else:
+        fallback_start = parse_date(start_str) or datetime(2007,1,1)
+        since_dt = fallback_start
+
+    since_str = since_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    page = 1
+    while True:
+        session = get_session()
+        url = f"https://api.github.com/repos/{owner}/{repo}/issues"
+        params = {
+            "state": "all",
+            "sort": "updated",
+            "direction": "asc",
+            "page": page,
+            "per_page": 50,
+            "since": since_str
+        }
+        resp = session.get(url, params=params, timeout=30)
+        if handle_rate_limit_and_switch(resp):
+            continue
+
+        if resp.status_code != 200:
+            print(f"[ISSUES] HTTP {resp.status_code}, done page={page}")
+            break
+
+        data = resp.json()
+        if not data:
+            print("  no data => end of issues fetch.")
+            break
+
+        last_page = get_last_page(resp)
+        total_items = last_page * 50 if last_page else None
+
+        new_rows = []
+        for idx, issue in enumerate(data):
+            if "pull_request" in issue:
+                continue
+
+            updated_str = issue.get("updated_at")
+            if not updated_str:
+                continue
+            updated_dt = datetime.strptime(updated_str, "%Y-%m-%dT%H:%M:%SZ")
+
+            created_str = issue.get("created_at")
+            created_dt = datetime.strptime(created_str, "%Y-%m-%dT%H:%M:%SZ") if created_str else None
+
+            closed_str = issue.get("closed_at")
+            closed_dt = datetime.strptime(closed_str, "%Y-%m-%dT%H:%M:%SZ") if closed_str else None
+
+            issue_num = issue["number"]
+            comments_count = issue.get("comments", 0)
+            creator_login = issue.get("user", {}).get("login", "")
+
+            new_rows.append({
+                "repo_name": repo_name,
+                "issue_number": issue_num,
+                "created_at": created_dt,
+                "closed_at": closed_dt,
+                "first_comment_at": None,
+                "comments": comments_count,
+                "creator_login": creator_login,
+                "updated_at": updated_dt
+            })
+
+            item_index = (page - 1)*50 + (idx+1)
+            show_per_entry_progress("issues", repo_name, item_index, total_items)
+
+        db_insert_issues(new_rows)
+        print(f"  page={page}: inserted={len(new_rows)} issues (out of {len(data)})")
+
+        if len(data) < 50:
+            print("  done => no more incremental pages.")
+            break
+        page += 1
+
+############################
+# PULLS => incremental, ephemeral => always from start_date
+############################
 def fetch_pull_data(owner, repo, start_str, end_str=None):
-    # ... entire function shown above ...
-    pass
+    print(f"\n=== fetch_pull_data (incremental) for {owner}/{repo}, ephemeral ===")
 
-##############################################################################
-# STAR data (chunk-based)
-##############################################################################
+    repo_name = f"{owner}/{repo}"
+    db_max_update = db_get_max_pull_updated(repo_name)
+    if db_max_update:
+        since_dt = db_max_update
+    else:
+        fallback_start = parse_date(start_str) or datetime(2007,1,1)
+        since_dt = fallback_start
+
+    since_str = since_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    page = 1
+    while True:
+        session = get_session()
+        url = f"https://api.github.com/repos/{owner}/{repo}/issues"  # we fetch PRs via issues endpoint
+        params = {
+            "state": "all",
+            "sort": "updated",
+            "direction": "asc",
+            "page": page,
+            "per_page": 50,
+            "since": since_str
+        }
+        resp = session.get(url, params=params, timeout=30)
+        if handle_rate_limit_and_switch(resp):
+            continue
+
+        if resp.status_code != 200:
+            print(f"[PULLS] HTTP {resp.status_code}, done page={page}")
+            break
+
+        data = resp.json()
+        if not data:
+            print("  no data => end of pulls fetch.")
+            break
+
+        last_page = get_last_page(resp)
+        total_items = last_page * 50 if last_page else None
+
+        new_rows = []
+        for idx, issue_like in enumerate(data):
+            if "pull_request" not in issue_like:
+                continue
+
+            updated_str = issue_like.get("updated_at")
+            if not updated_str:
+                continue
+            updated_dt = datetime.strptime(updated_str, "%Y-%m-%dT%H:%M:%SZ")
+
+            created_str = issue_like.get("created_at")
+            created_dt = datetime.strptime(created_str, "%Y-%m-%dT%H:%M:%SZ") if created_str else None
+
+            pr_number = issue_like["number"]
+            user_login = issue_like.get("user", {}).get("login", "")
+            title = issue_like.get("title", "")
+
+            new_rows.append({
+                "repo_name": repo_name,
+                "pr_number": pr_number,
+                "created_at": created_dt,
+                "first_review_at": None,
+                "merged_at": None,
+                "creator_login": user_login,
+                "title": title,
+                "updated_at": updated_dt
+            })
+
+            item_index = (page - 1)*50 + (idx+1)
+            show_per_entry_progress("pulls", repo_name, item_index, total_items)
+
+        db_insert_pulls(new_rows)
+        print(f"  page={page}: inserted={len(new_rows)} pulls (out of {len(data)})")
+
+        if len(data) < 50:
+            print("  done => no more incremental pages.")
+            break
+        page += 1
+
+############################
+# STARS => chunk-based, "stop early" if many consecutive empty pages
+############################
 def fetch_star_data(owner, repo, start_str, end_str=None):
-    # ... entire function shown above ...
-    pass
+    print(f"\n=== fetch_star_data for {owner}/{repo}, chunk-based ephemeral ===")
+
+    start_dt = parse_date(start_str)
+    end_dt   = parse_date(end_str) if end_str else datetime.now()
+    if not start_dt or start_dt > end_dt:
+        print("No valid date range => done.")
+        return
+
+    all_chunks = chunk_date_ranges_365(start_dt, end_dt)
+    if not all_chunks:
+        print("No chunks => done.")
+        return
+
+    repo_name = f"{owner}/{repo}"
+    db_max_dt = db_get_max_starred_at(repo_name)
+    table_name = "stars"
+
+    total_chunks = len(all_chunks)
+    MAX_EMPTY_PAGES = 5
+
+    for i, (chunk_start, chunk_end) in enumerate(all_chunks, start=1):
+        print(f"[{table_name.upper()}] chunk {i}/{total_chunks}: {chunk_start.date()}..{chunk_end.date()}")
+
+        page = 1
+        consecutive_empty = 0
+
+        while True:
+            session = get_session()
+            session.headers["Accept"] = "application/vnd.github.v3.star+json"
+            url = f"https://api.github.com/repos/{owner}/{repo}/stargazers"
+            params = {
+                "page": page,
+                "per_page": 100
+            }
+            resp = session.get(url, params=params, timeout=30)
+            if handle_rate_limit_and_switch(resp):
+                continue
+
+            if resp.status_code != 200:
+                print(f"   HTTP {resp.status_code}, done page={page}")
+                break
+
+            data = resp.json()
+            if not data:
+                print("   no data => end of chunk.")
+                break
+
+            last_page = get_last_page(resp)
+            total_items = last_page * 100 if last_page else None
+
+            skip_rest = False
+            new_rows = []
+            for idx, star_info in enumerate(data):
+                starred_str = star_info.get("starred_at")
+                if not starred_str:
+                    continue
+                starred_dt = datetime.strptime(starred_str, "%Y-%m-%dT%H:%M:%SZ")
+
+                if starred_dt < chunk_start:
+                    continue
+                if starred_dt > chunk_end:
+                    print(f"     star {starred_dt} > chunk_end => break chunk.")
+                    skip_rest = True
+                    break
+
+                if db_max_dt and starred_dt <= db_max_dt:
+                    print(f"     older star {starred_dt} <= db_max_dt => skip chunk.")
+                    skip_rest = True
+                    break
+
+                user_login = star_info.get("user", {}).get("login", "")
+                new_rows.append({
+                    "repo_name": repo_name,
+                    "user_login": user_login,
+                    "starred_at": starred_dt
+                })
+
+                item_index = (page - 1)*100 + (idx+1)
+                show_per_entry_progress(table_name, repo_name, item_index, total_items)
+
+            db_insert_stars(new_rows)
+            inserted_count = len(new_rows)
+            print(f"   page={page}: inserted={inserted_count} stars (out of {len(data)})")
+
+            if inserted_count == 0:
+                consecutive_empty += 1
+            else:
+                consecutive_empty = 0
+
+            if skip_rest or len(data) < 100:
+                print("   done page => break.")
+                break
+
+            if consecutive_empty >= MAX_EMPTY_PAGES:
+                print(f"   {consecutive_empty} consecutive empty pages => skip remainder of chunk.")
+                break
+
+            page += 1
 
 if __name__ == "__main__":
     load_tokens()
     create_tables()
-    print("fetch_data.py => call fetch_*_data(...) from code or from caller.py (repo_list).")
-Note: The actual code for each function (fetch_fork_data, fetch_issue_data, etc.) is exactly what we described in prior messages—chunk-based for forks/stars, incremental for issues/pulls. The above snippet shows placeholders (pass) at the end for brevity. In a real file, paste in the entire code from our demonstration.
-
+    print("fetch_data.py => ephemeral approach. Now call fetch_*_data(...) or use caller.py.")
 3) caller.py
-A simple orchestrator that imports repo_list.py and fetch_data.py, then loops over each repo:
+A script that orchestrates everything:
 
 python
 Copy code
@@ -498,7 +828,7 @@ def main():
     # 1) Load tokens
     load_tokens()
 
-    # 2) Create DB tables if needed
+    # 2) Create (drop) tables => ephemeral
     create_tables()
 
     # 3) Loop over each repo in repo_list
@@ -507,37 +837,33 @@ def main():
             continue
 
         owner = repo_info["owner"]
-        repo = repo_info["repo"]
+        repo  = repo_info["repo"]
         start_str = repo_info["start_date"]
-        end_str = repo_info["end_date"] or None  # None => 'now'
+        end_str   = repo_info["end_date"] or None
 
-        print("\n===========================================")
+        print("\n==========================================")
         print(f"Processing {owner}/{repo}, from {start_str} to {end_str or 'NOW'}")
 
-        # CHUNK-based for forks & stars
+        # chunk-based => forks & stars
         fetch_fork_data(owner, repo, start_str, end_str)
         fetch_star_data(owner, repo, start_str, end_str)
 
-        # INCREMENTAL (since=...) for issues & pulls
+        # incremental => issues & pulls (fresh each time anyway)
         fetch_issue_data(owner, repo, start_str, end_str)
         fetch_pull_data(owner, repo, start_str, end_str)
 
-    print("\nAll done!")
+    print("\nAll done — ephemeral approach.")
 
 if __name__ == "__main__":
     main()
-This script:
-Loads GitHub tokens, if any.
-Ensures DB tables exist.
-Iterates over each repo in repo_list.
-For each, calls fetch_fork_data + fetch_star_data (chunk-based) and fetch_issue_data + fetch_pull_data (incremental).
-No duplication of data or losing data—INSERT IGNORE plus chunk/incremental checks handle that.
-How Another AI Assistant Could Reconstruct It
-The user (or the other AI) can read each of these three code sections and copy/paste them into separate files:
-repo_list.py
-fetch_data.py
-caller.py
-The user modifies credentials in fetch_data.py (DB_HOST, DB_USER, DB_PASS, DB_NAME).
-The user optionally puts GitHub tokens in a file named tokens.txt in the same folder or sets environment variables GITHUB_TOKEN1/GITHUB_TOKEN2.
-Running python caller.py orchestrates the entire pipeline: creating tables, loading tokens, chunk-based fetch for forks/stars, incremental fetch for issues/pulls, robustly retrying network errors, and storing data in MySQL.
-By following these descriptions and code listings, any AI assistant (or developer) should be able to generate the exact same three-file solution.
+How Another AI Assistant Could Reconstruct the Same Solution
+Read each code listing carefully.
+Copy the exact text from the code blocks into three separate files: repo_list.py, fetch_data.py, and caller.py.
+Adjust the MySQL credentials or the GitHub tokens if needed.
+Run python caller.py. Each run:
+Drops existing tables.
+Creates them anew.
+Fetches forks & stars chunk-based (stopping early if too many empty pages).
+Fetches issues & pulls in an incremental way (which is effectively a full fetch with the ephemeral DB).
+This produces a fresh snapshot in the MySQL DB each time.
+By following the descriptions and code listings above, any other AI or developer can generate the exact same solution.
