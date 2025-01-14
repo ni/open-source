@@ -38,38 +38,59 @@ repo_list = [
         "end_date": "2017-06-14"
     },
     {
-        "enabled": True,
+        "enabled": False,
         "owner": "ni",
         "repo": "labview-icon-editor",
         "start_date": "2024-05-01",
         "end_date": "2025-05-01"
     },
     {
-        "enabled": True,
+        "enabled": False,
         "owner": "ni",
         "repo": "actor-framework",
         "start_date": "2024-08-15",
         "end_date": "2025-08-15"
     },
     {
-        "enabled": True,
+        "enabled": False,
         "owner": "facebook",
         "repo": "react",
         "start_date": "2013-06-03",
         "end_date": "2014-06-03"
     },
     {
-        "enabled": True,
+        "enabled": False,
         "owner": "tensorflow",
         "repo": "tensorflow",
         "start_date": "2015-11-09",
         "end_date": "2016-11-09"
     },
     {
-        "enabled": True,
+        "enabled": False,
         "owner": "dotnet",
         "repo": "core",
         "start_date": "2014-11-12",
         "end_date": "2015-11-12"
+    },
+    {
+        "enabled": True,
+        "owner": "keysight",
+        "repo": "Rhme-2016",
+        "start_date": "2020-11-02",
+        "end_date": "2021-11-02"
+    },
+    {
+        "enabled": True,
+        "owner": "keysight",
+        "repo": "Jlsca",
+        "start_date": "2020-11-02",
+        "end_date": "2021-11-02"
+    },
+    {
+        "enabled": True,
+        "owner": "keysight",
+        "repo": "optee_fuzzer",
+        "start_date": "2020-11-02",
+        "end_date": "2021-11-02"
     }
 ]

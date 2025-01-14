@@ -1,5 +1,3 @@
-# This file controls which repos are skipped (enabled=0) or included (enabled=1).
-
 repo_name=dotnet/core,enabled=1
 repo_name=facebook/react,enabled=1
 repo_name=ni/actor-framework,enabled=1
@@ -9,3 +7,6 @@ repo_name=ni/labview-memory-management-tools,enabled=0
 repo_name=ni/niveristand-custom-device-build-tools,enabled=0
 repo_name=ni/niveristand-custom-device-development-tools,enabled=0
 repo_name=tensorflow/tensorflow,enabled=1
+repo_name=keysight/Jlsca,enabled=1
+repo_name=keysight/optee_fuzzer,enabled=1
+repo_name=keysight/Rhme-2016,enabled=1
