@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from time import sleep
 
 ############################
-# DB Credentials
+# DB Credentials (adjust as needed)
 ############################
 DB_HOST = "localhost"
 DB_USER = "root"
@@ -17,7 +17,7 @@ DB_PASS = "root"
 DB_NAME = "my_kpis_db"
 
 ############################
-# GITHUB TOKENS (two tokens, round-robin)
+# GITHUB TOKENS (up to two tokens, naive round-robin)
 ############################
 TOKENS = []
 CURRENT_TOKEN_INDEX = 0
@@ -116,7 +116,7 @@ def connect_db():
     )
 
 ############################
-# CREATE TABLES
+# CREATE TABLES (you can run this once to ensure tables exist)
 ############################
 def create_tables():
     conn = connect_db()
@@ -160,7 +160,7 @@ def create_tables():
     c.execute("""
     CREATE TABLE IF NOT EXISTS stars (
         repo_name VARCHAR(255) NOT NULL,
-        user_login VARCHAR(255),
+        user_login VARCHAR(255) NOT NULL,
         starred_at DATETIME NOT NULL,
         PRIMARY KEY (repo_name, starred_at, user_login)
     ) ENGINE=InnoDB
@@ -262,7 +262,7 @@ def db_insert_stars(rows):
         print(f"DB insert error (stars): {e}")
 
 ############################
-# DB coverage queries
+# DB coverage queries (optional, if you want to skip items you already have)
 ############################
 def db_get_max_forked_at(repo_name):
     conn = connect_db()
@@ -301,7 +301,7 @@ def db_get_max_starred_at(repo_name):
     return row[0] if row and row[0] else None
 
 ############################
-# 365-day chunk approach
+# Date / chunking helpers
 ############################
 def parse_date(s):
     if not s:
@@ -323,7 +323,7 @@ def chunk_date_ranges_365(start_dt, end_dt):
     return chunks
 
 ############################
-# Simple function to parse the last_page from Link header
+# Simple function to parse last_page from Link header
 ############################
 def get_last_page(resp):
     link_header = resp.headers.get("Link")
@@ -346,7 +346,7 @@ def get_last_page(resp):
     return last_page
 
 ############################
-# Per-entry progress bar
+# Optional progress function
 ############################
 def show_per_entry_progress(table_name, repo_name, item_index, total_items):
     """
@@ -355,35 +355,36 @@ def show_per_entry_progress(table_name, repo_name, item_index, total_items):
     """
     if not total_items or total_items <= 0:
         return  # unknown total, skip
-
     progress = float(item_index) / float(total_items)
     if progress > 1.0:
         progress = 1.0
     percent = progress * 100
     print(f"[{repo_name}/{table_name}] => {percent:.2f}% done with chunk items...")
 
-############################
+##############################################################################
 # 1) fetch_fork_data
-############################
+##############################################################################
 def fetch_fork_data(owner, repo, start_str, end_str):
     print(f"\n=== fetch_fork_data for {owner}/{repo}, using 365-day chunks, from {start_str} -> {end_str or 'NOW'} ===")
     start_dt = parse_date(start_str)
-    end_dt   = parse_date(end_str) if end_str else datetime.now()
+    end_dt = parse_date(end_str) if end_str else datetime.now()
 
     if not start_dt or start_dt > end_dt:
         print("No valid date range => done.")
         return
 
     all_chunks = chunk_date_ranges_365(start_dt, end_dt)
-    total_chunks = len(all_chunks)
-    if total_chunks == 0:
+    if not all_chunks:
         print("No chunks => done.")
         return
 
-    repo_name = f"{owner}/{repo}"
-    db_max_dt = db_get_max_forked_at(repo_name)
     table_name = "forks"
+    repo_name = f"{owner}/{repo}"
 
+    # If you want to skip items already in DB:
+    db_max_dt = db_get_max_forked_at(repo_name)
+
+    total_chunks = len(all_chunks)
     for i, (chunk_start, chunk_end) in enumerate(all_chunks):
         done_percent = (i / total_chunks) * 100
         left_percent = 100 - done_percent
@@ -417,11 +418,10 @@ def fetch_fork_data(owner, repo, start_str, end_str):
                 print(f"    page={page}: no data => end of chunk.")
                 break
 
-            # Attempt to parse last_page * per_page => approximate total item count
             last_page = get_last_page(resp)
             total_possible_items = None
             if last_page and last_page > 0:
-                total_possible_items = last_page * 100  # per_page=100
+                total_possible_items = last_page * 100
 
             skip_chunk = False
             new_rows = []
@@ -431,7 +431,16 @@ def fetch_fork_data(owner, repo, start_str, end_str):
                     continue
                 forked_dt = datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%SZ")
 
-                # partial skip => if older => skip remainder
+                # skip items older than chunk_start
+                if forked_dt < chunk_start:
+                    continue
+                # break if beyond chunk_end
+                if forked_dt > chunk_end:
+                    print(f"    item {forked_dt} > chunk_end={chunk_end}, break.")
+                    skip_chunk = True
+                    break
+
+                # partial skip if already in DB
                 if db_max_dt and forked_dt <= db_max_dt:
                     print(f"    partial skip => older item {forked_dt} <= db_max_dt={db_max_dt}")
                     skip_chunk = True
@@ -443,7 +452,6 @@ def fetch_fork_data(owner, repo, start_str, end_str):
                     "forked_at": forked_dt
                 })
 
-                # per-entry progress
                 item_index = (page - 1) * 100 + (idx + 1)
                 show_per_entry_progress(table_name, repo_name, item_index, total_possible_items)
 
@@ -459,26 +467,29 @@ def fetch_fork_data(owner, repo, start_str, end_str):
             page += 1
             print(f"    next page => {page}")
 
-
+##############################################################################
+# 2) fetch_pull_data
+##############################################################################
 def fetch_pull_data(owner, repo, start_str, end_str):
     print(f"\n=== fetch_pull_data for {owner}/{repo}, using 365-day chunks, from {start_str} -> {end_str or 'NOW'} ===")
     start_dt = parse_date(start_str)
-    end_dt   = parse_date(end_str) if end_str else datetime.now()
+    end_dt = parse_date(end_str) if end_str else datetime.now()
 
     if not start_dt or start_dt > end_dt:
         print("No valid date range => done.")
         return
 
     all_chunks = chunk_date_ranges_365(start_dt, end_dt)
-    total_chunks = len(all_chunks)
-    if total_chunks == 0:
+    if not all_chunks:
         print("No chunks => done.")
         return
 
-    repo_name = f"{owner}/{repo}"
-    db_max_dt = db_get_max_created_at_pulls(repo_name)
     table_name = "pulls"
+    repo_name = f"{owner}/{repo}"
 
+    db_max_dt = db_get_max_created_at_pulls(repo_name)
+
+    total_chunks = len(all_chunks)
     for i, (chunk_start, chunk_end) in enumerate(all_chunks):
         done_percent = (i / total_chunks) * 100
         left_percent = 100 - done_percent
@@ -516,7 +527,7 @@ def fetch_pull_data(owner, repo, start_str, end_str):
             last_page = get_last_page(resp)
             total_possible_items = None
             if last_page and last_page > 0:
-                total_possible_items = last_page * 50  # per_page=50
+                total_possible_items = last_page * 50
 
             skip_chunk = False
             new_rows = []
@@ -525,6 +536,13 @@ def fetch_pull_data(owner, repo, start_str, end_str):
                 if not created_str:
                     continue
                 created_dt = datetime.strptime(created_str, "%Y-%m-%dT%H:%M:%SZ")
+
+                if created_dt < chunk_start:
+                    continue
+                if created_dt > chunk_end:
+                    print(f"    item {created_dt} > chunk_end={chunk_end}, break.")
+                    skip_chunk = True
+                    break
 
                 if db_max_dt and created_dt <= db_max_dt:
                     print(f"    partial skip => older item {created_dt} <= db_max_dt={db_max_dt}")
@@ -545,7 +563,6 @@ def fetch_pull_data(owner, repo, start_str, end_str):
                     "title": pr.get("title", "")
                 })
 
-                # per-entry progress
                 item_index = (page - 1) * 50 + (idx + 1)
                 show_per_entry_progress(table_name, repo_name, item_index, total_possible_items)
 
@@ -561,25 +578,29 @@ def fetch_pull_data(owner, repo, start_str, end_str):
             page += 1
             print(f"    next page => {page}")
 
+##############################################################################
+# 3) fetch_issue_data
+##############################################################################
 def fetch_issue_data(owner, repo, start_str, end_str):
     print(f"\n=== fetch_issue_data for {owner}/{repo}, using 365-day chunks, from {start_str} -> {end_str or 'NOW'} ===")
     start_dt = parse_date(start_str)
-    end_dt   = parse_date(end_str) if end_str else datetime.now()
+    end_dt = parse_date(end_str) if end_str else datetime.now()
 
     if not start_dt or start_dt > end_dt:
         print("No valid date range => done.")
         return
 
     all_chunks = chunk_date_ranges_365(start_dt, end_dt)
-    total_chunks = len(all_chunks)
-    if total_chunks == 0:
+    if not all_chunks:
         print("No chunks => done.")
         return
 
-    repo_name = f"{owner}/{repo}"
-    db_max_dt = db_get_max_created_at_issues(repo_name)
     table_name = "issues"
+    repo_name = f"{owner}/{repo}"
 
+    db_max_dt = db_get_max_created_at_issues(repo_name)
+
+    total_chunks = len(all_chunks)
     for i, (chunk_start, chunk_end) in enumerate(all_chunks):
         done_percent = (i / total_chunks) * 100
         left_percent = 100 - done_percent
@@ -622,12 +643,20 @@ def fetch_issue_data(owner, repo, start_str, end_str):
             skip_chunk = False
             new_rows = []
             for idx, issue in enumerate(data):
+                # skip pseudo-issues that are actually PR placeholders
                 if "pull_request" in issue:
                     continue
                 created_str = issue.get("created_at")
                 if not created_str:
                     continue
                 created_dt = datetime.strptime(created_str, "%Y-%m-%dT%H:%M:%SZ")
+
+                if created_dt < chunk_start:
+                    continue
+                if created_dt > chunk_end:
+                    print(f"    item {created_dt} > chunk_end={chunk_end}, break.")
+                    skip_chunk = True
+                    break
 
                 if db_max_dt and created_dt <= db_max_dt:
                     print(f"    partial skip => older item {created_dt} <= db_max_dt={db_max_dt}")
@@ -651,7 +680,6 @@ def fetch_issue_data(owner, repo, start_str, end_str):
                     "creator_login": creator_login
                 })
 
-                # per-entry progress
                 item_index = (page - 1) * 50 + (idx + 1)
                 show_per_entry_progress(table_name, repo_name, item_index, total_possible_items)
 
@@ -667,45 +695,70 @@ def fetch_issue_data(owner, repo, start_str, end_str):
             page += 1
             print(f"    next page => {page}")
 
+##############################################################################
+# 4) fetch_star_data
+##############################################################################
 def fetch_star_data(owner, repo, start_str, end_str):
+    """
+    Fetch stargazer data for a given GitHub repo in 365-day chunks,
+    from start_str to end_str, inserting into `stars` table.
+    We assume the 'stars' table is:
+
+    CREATE TABLE `stars` (
+      `repo_name` varchar(255) NOT NULL,
+      `user_login` varchar(255) NOT NULL,
+      `starred_at` datetime NOT NULL,
+      PRIMARY KEY (`repo_name`,`starred_at`,`user_login`)
+    ) ENGINE=InnoDB;
+    """
     print(f"\n=== fetch_star_data for {owner}/{repo}, using 365-day chunks, from {start_str} -> {end_str or 'NOW'} ===")
+
     start_dt = parse_date(start_str)
-    end_dt   = parse_date(end_str) if end_str else datetime.now()
+    end_dt = parse_date(end_str) if end_str else datetime.now()
 
     if not start_dt or start_dt > end_dt:
         print("No valid date range => done.")
         return
 
     all_chunks = chunk_date_ranges_365(start_dt, end_dt)
-    total_chunks = len(all_chunks)
-    if total_chunks == 0:
+    if not all_chunks:
         print("No chunks => done.")
         return
 
-    repo_name = f"{owner}/{repo}"
-    db_max_dt = db_get_max_starred_at(repo_name)
     table_name = "stars"
+    repo_name = f"{owner}/{repo}"
 
+    db_max_dt = db_get_max_starred_at(repo_name)
+    if db_max_dt:
+        print(f"Database already has stars up to: {db_max_dt}")
+
+    total_chunks = len(all_chunks)
     for i, (chunk_start, chunk_end) in enumerate(all_chunks):
         done_percent = (i / total_chunks) * 100
         left_percent = 100 - done_percent
-        print(f"[{table_name.upper()}] chunk {i+1}/{total_chunks}: about {left_percent:.1f}% left to finish the chunk approach.")
+        print(f"[{table_name.upper()}] chunk {i+1}/{total_chunks}: about {left_percent:.1f}% left to finish chunk approach.")
 
+        # If the DB already has data at or after chunk_end, skip
         if db_max_dt and chunk_end <= db_max_dt:
             print(f"    skipping entire chunk {chunk_start.date()} => {chunk_end.date()}, db_max_dt={db_max_dt}")
             continue
 
         print(f"    chunk range: {chunk_start.date()} => {chunk_end.date()} (365-day chunk)")
         page = 1
+
         while True:
+            # Prepare a session that includes the correct Accept header
             session = get_session()
+            session.headers['Accept'] = 'application/vnd.github.v3.star+json'
+
+            # We call the stargazers endpoint
             url = f"https://api.github.com/repos/{owner}/{repo}/stargazers"
             params = {
                 "page": page,
                 "per_page": 100
             }
-            session.headers['Accept'] = 'application/vnd.github.v3.star+json'
             resp = session.get(url, params=params)
+
             if handle_rate_limit_and_switch(resp):
                 continue
 
@@ -731,6 +784,16 @@ def fetch_star_data(owner, repo, start_str, end_str):
                     continue
                 starred_dt = datetime.strptime(starred_str, "%Y-%m-%dT%H:%M:%SZ")
 
+                # skip items older than chunk_start
+                if starred_dt < chunk_start:
+                    continue
+                # break if beyond chunk_end
+                if starred_dt > chunk_end:
+                    print(f"    item {starred_dt} > chunk_end={chunk_end}, break.")
+                    skip_chunk = True
+                    break
+
+                # partial skip if already in DB
                 if db_max_dt and starred_dt <= db_max_dt:
                     print(f"    partial skip => older item {starred_dt} <= db_max_dt={db_max_dt}")
                     skip_chunk = True
@@ -743,7 +806,6 @@ def fetch_star_data(owner, repo, start_str, end_str):
                     "starred_at": starred_dt
                 })
 
-                # per-entry progress
                 item_index = (page - 1) * 100 + (idx + 1)
                 show_per_entry_progress(table_name, repo_name, item_index, total_possible_items)
 
@@ -756,5 +818,6 @@ def fetch_star_data(owner, repo, start_str, end_str):
             if len(data) < 100:
                 print("    last page => break.")
                 break
+
             page += 1
             print(f"    next page => {page}")
