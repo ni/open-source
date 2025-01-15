@@ -4,49 +4,49 @@
 from repo_list import repo_list
 from fetch_data import (
     load_tokens,
-    create_and_select_db,
+    init_metadata_db,
+    create_ephemeral_db,
     create_tables,
-    fetch_fork_data,
-    fetch_issue_data,
-    fetch_pull_data,
-    fetch_star_data,
-    CURRENT_DB_NAME
+    fetch_all_data_for_repo
 )
 
 def main():
     # 1) Load tokens
     load_tokens()
 
-    # 2) Create brand-new DB each run => ephemeral approach
-    create_and_select_db()
+    # 2) Connect to persistent metadata DB
+    metadata_conn = init_metadata_db()
 
-    # 3) Create tables in that new DB
-    create_tables()
+    # 3) Create ephemeral DB for this run
+    ephemeral_conn, ephemeral_name = create_ephemeral_db()
+    create_tables(ephemeral_conn)
 
-    print(f"\nUsing newly created DB: {CURRENT_DB_NAME}\n")
-
-    # 4) Process each repo from repo_list
-    for repo_info in repo_list:
-        if not repo_info.get("enabled", False):
+    # 4) Loop over repos
+    for rinfo in repo_list:
+        if not rinfo.get("enabled", False):
             continue
 
-        owner = repo_info["owner"]
-        repo  = repo_info["repo"]
-        start_str = repo_info["start_date"]
-        end_str   = repo_info["end_date"] or None
+        owner = rinfo["owner"]
+        repo  = rinfo["repo"]
+        fallback_str = rinfo.get("start_date", "") or ""
+        end_str = rinfo.get("end_date", "") or None
 
-        print("\n========================================")
-        print(f"Processing {owner}/{repo} from {start_str} to {end_str or 'NOW'}")
+        print("\n=============================================")
+        print(f"Processing {owner}/{repo} from {fallback_str or 'METADATA'} to {end_str or 'NOW'}")
 
-        # chunk-based => forks & stars
-        fetch_fork_data(owner, repo, start_str, end_str)
-        fetch_star_data(owner, repo, start_str, end_str)
+        fetch_all_data_for_repo(
+            ephemeral_conn,
+            metadata_conn,
+            owner,
+            repo,
+            fallback_str,
+            end_str
+        )
 
-        # incremental => issues & pulls
-        fetch_issue_data(owner, repo, start_str, end_str)
-        fetch_pull_data(owner, repo, start_str, end_str)
+    ephemeral_conn.close()
+    metadata_conn.close()
 
-    print("\nAll done! Data stored in DB:", CURRENT_DB_NAME)
+    print(f"\nAll done. Ephemeral DB was: {ephemeral_name}")
 
 if __name__ == "__main__":
     main()
