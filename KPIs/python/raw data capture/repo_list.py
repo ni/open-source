@@ -10,31 +10,31 @@ Each repo dict has:
 
 repo_list = [
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "ni",
         "repo": "grpc-labview",
         "start_date": ""  # let metadata DB handle it
     },
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "ni",
         "repo": "labview-memory-management-tools",
         "start_date": ""  # let metadata DB handle it,
     },
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "ni",
         "repo": "niveristand-custom-device-development-tools",
         "start_date": ""  # let metadata DB handle it,
     },
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "ni",
         "repo": "niveristand-custom-device-build-tools",
         "start_date": ""  # let metadata DB handle it,
     },
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "ni",
         "repo": "labview-icon-editor",
         "start_date": ""  # let metadata DB handle it,
@@ -46,37 +46,37 @@ repo_list = [
         "start_date": ""  # let metadata DB handle it,
     },
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "facebook",
         "repo": "react",
         "start_date": ""  # let metadata DB handle it,
     },
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "tensorflow",
         "repo": "tensorflow",
         "start_date": ""  # let metadata DB handle it,
     },
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "dotnet",
         "repo": "core",
         "start_date": ""  # let metadata DB handle it,
     },
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "keysight",
         "repo": "Rhme-2016",
         "start_date": ""  # let metadata DB handle it,
     },
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "keysight",
         "repo": "Jlsca",
         "start_date": ""  # let metadata DB handle it
     },
     {
-        "enabled": False,
+        "enabled": True,
         "owner": "keysight",
         "repo": "optee_fuzzer",
         "start_date": ""  # let metadata DB handle it
