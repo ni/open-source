@@ -17,7 +17,7 @@ import matplotlib.gridspec as gridspec
 DB_HOST = "localhost"
 DB_USER = "root"
 DB_PASS = "root"
-DB_NAME = "my_kpis_db"
+DB_NAME = "my_kpis_run_20250114202004"
 
 ############################
 # 4 lumps => Q01..Q04
@@ -32,7 +32,7 @@ REPOS_TXT = "repos.txt"
 ############################
 # SELECT WHICH REPO IS THE "SCALING" REPO
 ############################
-SCALING_REPO = "my-scaling-repo"
+SCALING_REPO = "ni/labview-icon-editor"
 
 ############################
 # We'll produce 3 Figures
