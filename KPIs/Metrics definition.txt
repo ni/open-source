@@ -1,0 +1,19 @@
+Monthly active contributors
+
+20% Pull request creation : Measures active contributors
+- We use PR's only in order to minimize outliers caused by an inconsistencies on how repos enforce squashing.
+- This has the lowest weight in order to minimize outliers due to some PR's being made by bots. 
+
+80% Issue engagement: Mesures active engagement
+- We use comments on issues as a way to detect active engagement, this minimizes outliers.
+- Our process enforces issue creation in order to work on a feature, therefore this would be a more accurate indicative of active engagement that minimizes outliers.
+
+
+
+Measures adoption and interest growth
+
+20% FCOT – Fork count over time
+Measures adoption growth by calculating the forks made per quarter.
+
+80% SGOT – Star growth over time
+Measures interest growth by calculating stars made per quarter.
