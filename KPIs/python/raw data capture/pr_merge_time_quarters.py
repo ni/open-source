@@ -18,7 +18,7 @@ import importlib.util
 DB_HOST = "localhost"
 DB_USER = "root"
 DB_PASS = "root"
-DB_NAME = "my_kpis_db"
+DB_NAME = "my_kpis_run_20250114202004"
 
 ############################
 # 4 lumps => Q01..Q04
