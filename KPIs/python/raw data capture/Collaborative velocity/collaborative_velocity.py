@@ -1,19 +1,42 @@
 #!/usr/bin/env python3
 
+import argparse
 import configparser
 import mysql.connector
 import matplotlib.pyplot as plt
 from dateutil.relativedelta import relativedelta
 from datetime import datetime
 import numpy as np
+import sys
 
 def main():
-    # --- 1. Read Config ---
+    # --- 1. Parse Command-Line Arguments ---
+    parser = argparse.ArgumentParser(
+        description="Compute collaborative velocity, scale by user-chosen repo's first window, and compare to average."
+    )
+    parser.add_argument("--scaling-repo", required=True,
+                        help="Name of the repo to use for scaling. e.g. 'facebook/react' ")
+    args = parser.parse_args()
+    scaling_repo = args.scaling_repo  # e.g. "facebook/react"
+    
+    # --- 2. Define Repos List ---
+    repos = [
+        "tensorflow/tensorflow",
+        "facebook/react",
+        "ni/labview-icon-editor"
+    ]
+    
+    if scaling_repo not in repos:
+        print(f"[ERROR] The chosen scaling repo '{scaling_repo}' is not in our known repos:")
+        print(repos)
+        sys.exit(1)
+    
+    # --- 3. Read Config for DB Connection ---
     config = configparser.ConfigParser()
-    config.read('db_config.ini')
+    config.read('db_config.ini')  # Make sure this file exists with a [mysql] section
     db_params = config['mysql']
     
-    # --- 2. Connect to DB ---
+    # --- 4. Connect to MySQL ---
     cnx = mysql.connector.connect(
         host=db_params['host'],
         user=db_params['user'],
@@ -22,20 +45,11 @@ def main():
     )
     cursor = cnx.cursor()
     
-    # Repos to analyze
-    repos = [
-        "ni/actor-framework",
-        "tensorflow/tensorflow",
-        "facebook/react",
-        "dotnet/core", 
-        "ni/labview-icon-editor"
-    ]
+    # We measure up to X years from each repo's oldest date
+    X = 2  # 2 years => ~8 windows of 3 months
     
-    # Number of years to measure from each repo's oldest date
-    X = 1  # e.g., 2 years => ~8 windows of 3 months each
-    
-    # Data structures to store the raw data
-    repo_windows_data = {}  # {repo: (windows_list, M_raw_list, I_raw_list)}
+    # Data structures to store raw M/I per repo
+    repo_windows_data = {}  # {repo: (list_of_windows, list_of_Mraw, list_of_Iraw)}
     
     # ---------- QUERIES ----------
     query_oldest_date = """
@@ -71,27 +85,21 @@ def main():
           AND closed_at < %s
     """
     
-    # --- 3. For Each Repo, find oldest date and build windows ---
+    # --- 5. Collect Raw Data for Each Repo ---
     for repo in repos:
-        print(f"\n[DEBUG] Finding oldest date for repo: {repo}")
-        print("[DEBUG] Query (oldest_date):")
-        print(query_oldest_date.strip())
-        
+        # 5A. Find the oldest date
         cursor.execute(query_oldest_date, (repo, repo))
         result = cursor.fetchone()
         if not result or not result[0]:
             # No data for this repo
-            print(f"[DEBUG] No oldest_date found for repo={repo}")
             repo_windows_data[repo] = ([], [], [])
             continue
         
         oldest_date = result[0]  # datetime object
-        print(f"[DEBUG] oldest_date => {oldest_date}")
-        
-        # 3-month windows up to X years from oldest_date
-        windows = []
         cutoff = oldest_date + relativedelta(years=X)
         
+        # 5B. Build 3-month windows
+        windows = []
         current_start = oldest_date
         while current_start < cutoff:
             current_end = current_start + relativedelta(months=3)
@@ -103,13 +111,11 @@ def main():
         M_raw_list = []
         I_raw_list = []
         
-        # Gather M, I for each window
+        # 5C. Query merges/issues per window
         for (w_start, w_end) in windows:
-            # PR merges
             cursor.execute(query_m, (repo, w_start, w_end))
             merged_count = cursor.fetchone()[0]
             
-            # Issues closed
             cursor.execute(query_i, (repo, w_start, w_end))
             closed_count = cursor.fetchone()[0]
             
@@ -118,121 +124,97 @@ def main():
         
         repo_windows_data[repo] = (windows, M_raw_list, I_raw_list)
     
-    # --- 4. Compute max values over FIRST 4 windows ONLY ---
-    # We'll collect:
-    #   M_max_4[repo] = maximum M in the first 4 windows
-    #   I_max_4[repo] = maximum I in the first 4 windows
-    M_max_4 = {}
-    I_max_4 = {}
+    # --- 6. Identify the Scaling Repo's First Window (M, I) ---
+    scaling_windows, scaling_M_raw_list, scaling_I_raw_list = repo_windows_data.get(scaling_repo, ([], [], []))
     
-    for repo in repos:
-        windows, M_raw_list, I_raw_list = repo_windows_data.get(repo, ([], [], []))
-        
-        # We only look at the first 4 windows, or fewer if the repo has <4
-        limit = min(4, len(M_raw_list))
-        
-        if limit > 0:
-            M_max_4[repo] = max(M_raw_list[:limit])
-            I_max_4[repo] = max(I_raw_list[:limit])
-        else:
-            # No data
-            M_max_4[repo] = 0
-            I_max_4[repo] = 0
-    
-    # --- 5. Find the global smallest max among repos, restricted to the first 4 windows
-    if len(M_max_4) > 0:
-        global_M_max = [M_max_4[r] for r in repos if M_max_4[r] > 0]
-        if global_M_max:
-            M_min_of_max = min(global_M_max)
-        else:
-            M_min_of_max = 0
+    if not scaling_M_raw_list:
+        # If no data for scaling repo, treat first-window as 1,1 to avoid dividing by zero
+        print(f"[WARNING] The chosen scaling repo '{scaling_repo}' has no data in the first window.")
+        print("We'll skip scaling (use factor=1.0 for everything).")
+        scaling_repo_M1 = 1
+        scaling_repo_I1 = 1
     else:
-        M_min_of_max = 0
+        # Actual first-window values
+        scaling_repo_M1 = scaling_M_raw_list[0]
+        scaling_repo_I1 = scaling_I_raw_list[0]
+        if scaling_repo_M1 == 0:
+            scaling_repo_M1 = 1
+        if scaling_repo_I1 == 0:
+            scaling_repo_I1 = 1
     
-    if len(I_max_4) > 0:
-        global_I_max = [I_max_4[r] for r in repos if I_max_4[r] > 0]
-        if global_I_max:
-            I_min_of_max = min(global_I_max)
-        else:
-            I_min_of_max = 0
-    else:
-        I_min_of_max = 0
-    
-    print("\n[DEBUG] Max Alignment (based on first 4 windows)")
-    print(f"  M_min_of_max = {M_min_of_max}")
-    print(f"  I_min_of_max = {I_min_of_max}")
-    
-    # --- 6. Compute scale factors for each repo ---
-    # scaleFactor_M[repo] = M_min_of_max / M_max_4[repo]
-    # scaleFactor_I[repo] = I_min_of_max / I_max_4[repo]
+    # --- 7. Compute Scale Factors for Each Repo (First Window Only) ---
     scaleFactor_M = {}
     scaleFactor_I = {}
     
     for repo in repos:
-        m4 = M_max_4.get(repo, 0)
-        i4 = I_max_4.get(repo, 0)
+        windows, M_raw_list, I_raw_list = repo_windows_data[repo]
         
-        if m4 > 0:
-            scaleFactor_M[repo] = M_min_of_max / m4
-        else:
+        if repo == scaling_repo:
+            # No scaling needed for the reference repo
             scaleFactor_M[repo] = 1.0
-        
-        if i4 > 0:
-            scaleFactor_I[repo] = I_min_of_max / i4
-        else:
             scaleFactor_I[repo] = 1.0
-        
-        print(f"[DEBUG] Repo={repo}, M_max_4={m4}, I_max_4={i4}, "
-              f"scaleFactor_M={scaleFactor_M[repo]:.4f}, scaleFactor_I={scaleFactor_I[repo]:.4f}")
+        else:
+            if M_raw_list and M_raw_list[0] > 0:
+                scaleFactor_M[repo] = float(scaling_repo_M1) / float(M_raw_list[0])
+            else:
+                scaleFactor_M[repo] = 1.0
+            
+            if I_raw_list and I_raw_list[0] > 0:
+                scaleFactor_I[repo] = float(scaling_repo_I1) / float(I_raw_list[0])
+            else:
+                scaleFactor_I[repo] = 1.0
     
-    # --- 7. Apply scaling & compute velocity ---
-    # velocity = 0.4 * M_scaled + 0.6 * I_scaled  (example weights)
+    # --- 8. Apply Scale Factors & Compute Velocity ---
+    # velocity = 0.4*M_scaled + 0.6*I_scaled
     scaled_M = {}
     scaled_I = {}
     velocity_data = {}
     
     for repo in repos:
-        windows, M_raw_list, I_raw_list = repo_windows_data.get(repo, ([], [], []))
-        m_scaled_list = []
-        i_scaled_list = []
+        windows, M_raw_list, I_raw_list = repo_windows_data[repo]
+        m_list_scaled = []
+        i_list_scaled = []
         v_list = []
         
         for idx in range(len(M_raw_list)):
             m_scaled = M_raw_list[idx] * scaleFactor_M[repo]
             i_scaled = I_raw_list[idx] * scaleFactor_I[repo]
-            vel = 0.4 * m_scaled + 0.6 * i_scaled
+            vel = 0.4*m_scaled + 0.6*i_scaled
             
-            m_scaled_list.append(m_scaled)
-            i_scaled_list.append(i_scaled)
+            m_list_scaled.append(m_scaled)
+            i_list_scaled.append(i_scaled)
             v_list.append(vel)
         
-        scaled_M[repo] = m_scaled_list
-        scaled_I[repo] = i_scaled_list
+        scaled_M[repo] = m_list_scaled
+        scaled_I[repo] = i_list_scaled
         velocity_data[repo] = v_list
     
-    # --- 8. Print Magnitudes on Command Line ---
-    print("\n[DEBUG] Final Raw + Scaled Data + Velocity per Window:\n")
+    # --- 9. Print Data for Debugging ---
+    print(f"\n[INFO] Scaling repo: {scaling_repo}")
+    print(f"[INFO]   First window merges = {scaling_repo_M1}, issues = {scaling_repo_I1}\n")
+    
     for repo in repos:
-        windows, M_raw_list, I_raw_list = repo_windows_data.get(repo, ([], [], []))
+        print(f"--- Repo: {repo} ---")
+        print(f"  scaleFactor_M={scaleFactor_M[repo]:.3f}, scaleFactor_I={scaleFactor_I[repo]:.3f}")
+        
+        windows, M_raw_list, I_raw_list = repo_windows_data[repo]
         m_scaled_list = scaled_M[repo]
         i_scaled_list = scaled_I[repo]
         v_list = velocity_data[repo]
         
         for w_idx, (w_start, w_end) in enumerate(windows):
-            print(f"Repo: {repo}, Window {w_idx+1} ({w_start} to {w_end})")
-            print(f"  M_raw = {M_raw_list[w_idx]}, I_raw = {I_raw_list[w_idx]}")
-            print(f"  M_scaled = {m_scaled_list[w_idx]:.2f}, I_scaled = {i_scaled_list[w_idx]:.2f}")
-            print(f"  Velocity = {v_list[w_idx]:.2f}")
-            print("---")
+            print(f"    Window {w_idx+1} [{w_start} to {w_end}]")
+            print(f"      M_raw={M_raw_list[w_idx]}, I_raw={I_raw_list[w_idx]}")
+            print(f"      M_scaled={m_scaled_list[w_idx]:.2f}, I_scaled={i_scaled_list[w_idx]:.2f}")
+            print(f"      Velocity={v_list[w_idx]:.2f}")
+        print()
     
-    # --- 9. Padding: ensure same # of windows for all repos
+    # --- 10. Pad Repos to Have Same # of Windows ---
     max_windows = max(len(repo_windows_data[r][0]) for r in repos)
     
     for repo in repos:
-        windows, M_raw_list, I_raw_list = repo_windows_data.get(repo, ([], [], []))
-        current_len = len(M_raw_list)
-        needed = max_windows - current_len
-        
+        windows, M_raw_list, I_raw_list = repo_windows_data[repo]
+        needed = max_windows - len(M_raw_list)
         if needed > 0:
             M_raw_list.extend([0]*needed)
             I_raw_list.extend([0]*needed)
@@ -240,32 +222,28 @@ def main():
             scaled_I[repo].extend([0]*needed)
             velocity_data[repo].extend([0]*needed)
     
-    # --- 10. Plot the Graphs ---
+    # --- 11. Original Bar Charts (Velocity, M, I) per Repo ---
     x = np.arange(max_windows)
-    bar_width = 0.15  # adjust as needed
+    bar_width = 0.15
     
-    # ---------- Graph 1: Velocity ----------
+    # A. Velocity Chart (original style, one bar per repo per window)
     plt.figure(figsize=(10, 6))
     for i, repo in enumerate(repos):
         v_list = velocity_data[repo]
         x_positions = x + i*bar_width
         
-        label_str = (f"{repo} "
-                     f"(M_max_4={M_max_4[repo]}, "
-                     f"I_max_4={I_max_4[repo]})")
-        
+        label_str = f"{repo} (M_fact={scaleFactor_M[repo]:.2f}, I_fact={scaleFactor_I[repo]:.2f})"
         plt.bar(x_positions, v_list, bar_width, label=label_str)
     
-    plt.title("Velocity (Max Alignment from First 4 Windows)")
+    plt.title(f"Velocity (Scaled using {scaling_repo}'s First Window)")
     plt.xlabel("Window Index")
-    plt.ylabel("Velocity Value (scaled)")
+    plt.ylabel("Velocity (0.4*M + 0.6*I)")
     
-    # Show velocity formula on the plot (optional)
     plt.text(
         0.5, 0.90,
         "Velocity = 0.4 × M_scaled + 0.6 × I_scaled",
         transform=plt.gca().transAxes,
-        fontsize=11,
+        fontsize=10,
         ha='center'
     )
     
@@ -275,16 +253,16 @@ def main():
     plt.savefig("velocity.png")
     plt.show()
     
-    # ---------- Graph 2: Scaled M ----------
+    # B. Scaled M Chart (original style)
     plt.figure(figsize=(10, 6))
     for i, repo in enumerate(repos):
         m_list = scaled_M[repo]
         x_positions = x + i*bar_width
-        label_str = f"{repo} (scaleFactorM={scaleFactor_M[repo]:.3f})"
+        label_str = f"{repo} (scaleFactorM={scaleFactor_M[repo]:.2f})"
         
         plt.bar(x_positions, m_list, bar_width, label=label_str)
     
-    plt.title("Scaled M (PR merges)")
+    plt.title(f"Scaled M (PR merges) - Baseline: {scaling_repo}'s First Window")
     plt.xlabel("Window Index")
     plt.ylabel("Scaled # of PR Merges")
     plt.xticks(x + bar_width*(len(repos)/2), [f"W{i+1}" for i in range(max_windows)])
@@ -293,16 +271,16 @@ def main():
     plt.savefig("scaled_m.png")
     plt.show()
     
-    # ---------- Graph 3: Scaled I ----------
+    # C. Scaled I Chart (original style)
     plt.figure(figsize=(10, 6))
     for i, repo in enumerate(repos):
         i_list = scaled_I[repo]
         x_positions = x + i*bar_width
-        label_str = f"{repo} (scaleFactorI={scaleFactor_I[repo]:.3f})"
+        label_str = f"{repo} (scaleFactorI={scaleFactor_I[repo]:.2f})"
         
         plt.bar(x_positions, i_list, bar_width, label=label_str)
     
-    plt.title("Scaled I (Issues Closed)")
+    plt.title(f"Scaled I (Issues Closed) - Baseline: {scaling_repo}'s First Window")
     plt.xlabel("Window Index")
     plt.ylabel("Scaled # of Issues Closed")
     plt.xticks(x + bar_width*(len(repos)/2), [f"W{i+1}" for i in range(max_windows)])
@@ -311,10 +289,138 @@ def main():
     plt.savefig("scaled_i.png")
     plt.show()
     
-    # --- 11. Close DB Connection ---
+    # --- 12. New: Compare Scaling Repo vs. Average of OTHER repos ---
+    # 12A. Compute average M, I, velocity across "other_repos" (excluding scaling_repo)
+    other_repos = [r for r in repos if r != scaling_repo]
+    
+    avg_M_list = []
+    avg_I_list = []
+    avg_vel_list = []
+    
+    for w_idx in range(max_windows):
+        sum_m = sum(scaled_M[r][w_idx] for r in other_repos)
+        sum_i = sum(scaled_I[r][w_idx] for r in other_repos)
+        sum_v = sum(velocity_data[r][w_idx] for r in other_repos)
+        
+        count = len(other_repos)  # we treat missing data as 0 (already padded)
+        
+        if count > 0:
+            avg_m = sum_m / count
+            avg_i = sum_i / count
+            avg_v = sum_v / count
+        else:
+            avg_m = 0.0
+            avg_i = 0.0
+            avg_v = 0.0
+        
+        avg_M_list.append(avg_m)
+        avg_I_list.append(avg_i)
+        avg_vel_list.append(avg_v)
+    
+    # 12B. Bar charts comparing scaling_repo vs. average
+    
+    # M
+    plt.figure(figsize=(10, 6))
+    bar_width_compare = 0.3
+    x_scaling = x - bar_width_compare/2
+    x_avg     = x + bar_width_compare/2
+    
+    plt.bar(x_scaling,
+            scaled_M[scaling_repo],
+            bar_width_compare,
+            label=f"{scaling_repo} (Scaling Repo)",
+            color='tab:blue')
+    plt.bar(x_avg,
+            avg_M_list,
+            bar_width_compare,
+            label="Other Repos Average",
+            color='tab:orange')
+    
+    plt.title(f"Comparing Scaled Merges\n{scaling_repo} vs. Other Repos Average")
+    plt.xlabel("Window Index")
+    plt.ylabel("Scaled # of PR Merges")
+    plt.xticks(x, [f"W{i+1}" for i in range(max_windows)])
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig("compare_m.png")
+    plt.show()
+    
+    # I
+    plt.figure(figsize=(10, 6))
+    plt.bar(x_scaling,
+            scaled_I[scaling_repo],
+            bar_width_compare,
+            label=f"{scaling_repo} (Scaling Repo)",
+            color='tab:blue')
+    plt.bar(x_avg,
+            avg_I_list,
+            bar_width_compare,
+            label="Other Repos Average",
+            color='tab:orange')
+    
+    plt.title(f"Comparing Scaled Issues\n{scaling_repo} vs. Other Repos Average")
+    plt.xlabel("Window Index")
+    plt.ylabel("Scaled # of Issues Closed")
+    plt.xticks(x, [f"W{i+1}" for i in range(max_windows)])
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig("compare_i.png")
+    plt.show()
+    
+    # Velocity
+    plt.figure(figsize=(10, 6))
+    plt.bar(x_scaling,
+            velocity_data[scaling_repo],
+            bar_width_compare,
+            label=f"{scaling_repo} (Scaling Repo)",
+            color='tab:blue')
+    plt.bar(x_avg,
+            avg_vel_list,
+            bar_width_compare,
+            label="Other Repos Average",
+            color='tab:orange')
+    
+    plt.title(f"Comparing Velocity\n{scaling_repo} vs. Other Repos Average")
+    plt.xlabel("Window Index")
+    plt.ylabel("Scaled Velocity (0.4*M + 0.6*I)")
+    plt.xticks(x, [f"W{i+1}" for i in range(max_windows)])
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig("compare_velocity.png")
+    plt.show()
+    
+    # 12C. Print a table showing how close the scaling repo is to the average (in %).
+    print("\n=== Comparison Table: Scaling Repo vs. Other Repos Average ===")
+    print("Window |   M%    |   I%    | Velocity%")
+    print("-------+---------+---------+----------")
+    
+    for w_idx in range(max_windows):
+        sr_m = scaled_M[scaling_repo][w_idx]
+        sr_i = scaled_I[scaling_repo][w_idx]
+        sr_v = velocity_data[scaling_repo][w_idx]
+        
+        avg_m = avg_M_list[w_idx]
+        avg_i = avg_I_list[w_idx]
+        avg_v = avg_vel_list[w_idx]
+        
+        if avg_m != 0:
+            ratio_m = 100.0*(sr_m/avg_m)
+        else:
+            ratio_m = 0
+        if avg_i != 0:
+            ratio_i = 100.0*(sr_i/avg_i)
+        else:
+            ratio_i = 0
+        if avg_v != 0:
+            ratio_v = 100.0*(sr_v/avg_v)
+        else:
+            ratio_v = 0
+        
+        print(f"W{w_idx+1:<5} | {ratio_m:7.2f}% | {ratio_i:7.2f}% | {ratio_v:8.2f}%")
+    
+    # --- 13. Close DB Connection ---
     cursor.close()
     cnx.close()
-
 
 if __name__ == "__main__":
     main()
