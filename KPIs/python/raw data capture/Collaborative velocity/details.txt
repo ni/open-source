@@ -1,0 +1,349 @@
+Below is an updated script that uses “Max Alignment” but only from the second and third windows (i.e., zero-based indices 1 and 2) to compute each repo’s maximum for scaling. This means:
+
+We collect data for all windows (possibly 4, 8, etc.).
+We look only at the second and third windows of each repo’s data (indices 1 and 2 in the M_raw_list / I_raw_list) when determining the “maximum” for M and I.
+If a repo has fewer than 3 windows total, it will fall back to what’s available.
+We align each repo’s “max from windows 2 & 3” to the global smallest max among all repos (just like the previous “max alignment” approach).
+We then apply that scaling factor to all windows for that repo (so windows #1, #4, #5, etc. remain scaled consistently).
+python
+Copy
+#!/usr/bin/env python3
+
+import configparser
+import mysql.connector
+import matplotlib.pyplot as plt
+from dateutil.relativedelta import relativedelta
+from datetime import datetime
+import numpy as np
+
+def main():
+    # --- 1. Read Config ---
+    config = configparser.ConfigParser()
+    config.read('db_config.ini')
+    db_params = config['mysql']
+    
+    # --- 2. Connect to DB ---
+    cnx = mysql.connector.connect(
+        host=db_params['host'],
+        user=db_params['user'],
+        password=db_params['password'],
+        database=db_params['database']
+    )
+    cursor = cnx.cursor()
+    
+    # Repos to analyze
+    repos = [
+        "ni/actor-framework",
+        "tensorflow/tensorflow",
+        "facebook/react",
+        "dotnet/core"
+    ]
+    
+    # Number of years to measure from each repo's oldest date
+    X = 2  # e.g., 2 years => ~8 windows of 3 months each
+    
+    # Data structures to store the raw data
+    repo_windows_data = {}  # {repo: (windows_list, M_raw_list, I_raw_list)}
+    
+    # ---------- QUERIES ----------
+    query_oldest_date = """
+        SELECT MIN(all_min) AS oldest_date
+        FROM (
+            SELECT MIN(created_at) AS all_min
+            FROM pulls
+            WHERE repo_name = %s
+            
+            UNION ALL
+            
+            SELECT MIN(created_at) AS all_min
+            FROM issues
+            WHERE repo_name = %s
+        ) AS subq
+    """
+    
+    query_m = """
+        SELECT COUNT(*)
+        FROM pulls
+        WHERE repo_name = %s
+          AND merged_at IS NOT NULL
+          AND merged_at >= %s
+          AND merged_at < %s
+    """
+    
+    query_i = """
+        SELECT COUNT(*)
+        FROM issues
+        WHERE repo_name = %s
+          AND closed_at IS NOT NULL
+          AND closed_at >= %s
+          AND closed_at < %s
+    """
+    
+    # --- 3. For Each Repo, find oldest date and build windows ---
+    for repo in repos:
+        print(f"\n[DEBUG] Finding oldest date for repo: {repo}")
+        print("[DEBUG] Query (oldest_date):")
+        print(query_oldest_date.strip())
+        
+        cursor.execute(query_oldest_date, (repo, repo))
+        result = cursor.fetchone()
+        if not result or not result[0]:
+            # No data for this repo
+            print(f"[DEBUG] No oldest_date found for repo={repo}")
+            repo_windows_data[repo] = ([], [], [])
+            continue
+        
+        oldest_date = result[0]  # datetime object
+        print(f"[DEBUG] oldest_date => {oldest_date}")
+        
+        # 3-month windows up to X years from oldest_date
+        windows = []
+        cutoff = oldest_date + relativedelta(years=X)
+        
+        current_start = oldest_date
+        while current_start < cutoff:
+            current_end = current_start + relativedelta(months=3)
+            if current_end > cutoff:
+                current_end = cutoff
+            windows.append((current_start, current_end))
+            current_start = current_end
+        
+        M_raw_list = []
+        I_raw_list = []
+        
+        # Gather M, I for each window
+        for (w_start, w_end) in windows:
+            # PR merges
+            cursor.execute(query_m, (repo, w_start, w_end))
+            merged_count = cursor.fetchone()[0]
+            
+            # Issues closed
+            cursor.execute(query_i, (repo, w_start, w_end))
+            closed_count = cursor.fetchone()[0]
+            
+            M_raw_list.append(merged_count)
+            I_raw_list.append(closed_count)
+        
+        repo_windows_data[repo] = (windows, M_raw_list, I_raw_list)
+    
+    # --- 4. Compute max values over SECOND and THIRD windows only ---
+    # We'll define:
+    #   M_max_2_3[repo] = max(M_raw_list[1:3])
+    #   I_max_2_3[repo] = max(I_raw_list[1:3])
+    # i.e., window indices 1 and 2 in zero-based indexing, if they exist.
+    
+    M_max_2_3 = {}
+    I_max_2_3 = {}
+    
+    for repo in repos:
+        windows, M_raw_list, I_raw_list = repo_windows_data.get(repo, ([], [], []))
+        
+        # Slice out the second and third windows: indices [1:3]
+        subset_M = M_raw_list[1:3]
+        subset_I = I_raw_list[1:3]
+        
+        if len(subset_M) > 0:
+            M_max_2_3[repo] = max(subset_M)
+        else:
+            M_max_2_3[repo] = 0
+        
+        if len(subset_I) > 0:
+            I_max_2_3[repo] = max(subset_I)
+        else:
+            I_max_2_3[repo] = 0
+    
+    # --- 5. Find the global smallest max across repos (based on 2nd+3rd windows)
+    if len(M_max_2_3) > 0:
+        global_M_2_3 = [M_max_2_3[r] for r in repos if M_max_2_3[r] > 0]
+        M_min_of_2_3_max = min(global_M_2_3) if global_M_2_3 else 0
+    else:
+        M_min_of_2_3_max = 0
+    
+    if len(I_max_2_3) > 0:
+        global_I_2_3 = [I_max_2_3[r] for r in repos if I_max_2_3[r] > 0]
+        I_min_of_2_3_max = min(global_I_2_3) if global_I_2_3 else 0
+    else:
+        I_min_of_2_3_max = 0
+    
+    print("\n[DEBUG] Max Alignment (restricted to 2nd & 3rd windows only)")
+    print(f"  M_min_of_2_3_max = {M_min_of_2_3_max}")
+    print(f"  I_min_of_2_3_max = {I_min_of_2_3_max}")
+    
+    # --- 6. Compute scale factors for each repo ---
+    # scaleFactor_M[repo] = M_min_of_2_3_max / M_max_2_3[repo]
+    # scaleFactor_I[repo] = I_min_of_2_3_max / I_max_2_3[repo]
+    scaleFactor_M = {}
+    scaleFactor_I = {}
+    
+    for repo in repos:
+        m_2_3 = M_max_2_3.get(repo, 0)
+        i_2_3 = I_max_2_3.get(repo, 0)
+        
+        if m_2_3 > 0:
+            scaleFactor_M[repo] = M_min_of_2_3_max / m_2_3
+        else:
+            scaleFactor_M[repo] = 1.0
+        
+        if i_2_3 > 0:
+            scaleFactor_I[repo] = I_min_of_2_3_max / i_2_3
+        else:
+            scaleFactor_I[repo] = 1.0
+        
+        print(f"[DEBUG] Repo={repo}, M_max_2_3={m_2_3}, I_max_2_3={i_2_3}, "
+              f"M_scaleFactor={scaleFactor_M[repo]:.4f}, I_scaleFactor={scaleFactor_I[repo]:.4f}")
+    
+    # --- 7. Apply scaling & compute velocity ---
+    # velocity = 0.4 * M_scaled + 0.6 * I_scaled  (example weights)
+    scaled_M = {}
+    scaled_I = {}
+    velocity_data = {}
+    
+    for repo in repos:
+        windows, M_raw_list, I_raw_list = repo_windows_data.get(repo, ([], [], []))
+        m_scaled_list = []
+        i_scaled_list = []
+        v_list = []
+        
+        for idx in range(len(M_raw_list)):
+            m_scaled = M_raw_list[idx] * scaleFactor_M[repo]
+            i_scaled = I_raw_list[idx] * scaleFactor_I[repo]
+            vel = 0.4 * m_scaled + 0.6 * i_scaled
+            
+            m_scaled_list.append(m_scaled)
+            i_scaled_list.append(i_scaled)
+            v_list.append(vel)
+        
+        scaled_M[repo] = m_scaled_list
+        scaled_I[repo] = i_scaled_list
+        velocity_data[repo] = v_list
+    
+    # --- 8. Print Magnitudes on Command Line ---
+    print("\n[DEBUG] Final Raw + Scaled Data + Velocity per Window:\n")
+    for repo in repos:
+        windows, M_raw_list, I_raw_list = repo_windows_data.get(repo, ([], [], []))
+        m_scaled_list = scaled_M[repo]
+        i_scaled_list = scaled_I[repo]
+        v_list = velocity_data[repo]
+        
+        for w_idx, (w_start, w_end) in enumerate(windows):
+            print(f"Repo: {repo}, Window {w_idx+1} ({w_start} to {w_end})")
+            print(f"  M_raw = {M_raw_list[w_idx]}, I_raw = {I_raw_list[w_idx]}")
+            print(f"  M_scaled = {m_scaled_list[w_idx]:.2f}, I_scaled = {i_scaled_list[w_idx]:.2f}")
+            print(f"  Velocity = {v_list[w_idx]:.2f}")
+            print("---")
+    
+    # --- 9. Padding: ensure same # of windows for all repos
+    max_windows = max(len(repo_windows_data[r][0]) for r in repos)
+    
+    for repo in repos:
+        windows, M_raw_list, I_raw_list = repo_windows_data.get(repo, ([], [], []))
+        current_len = len(M_raw_list)
+        needed = max_windows - current_len
+        
+        if needed > 0:
+            M_raw_list.extend([0]*needed)
+            I_raw_list.extend([0]*needed)
+            scaled_M[repo].extend([0]*needed)
+            scaled_I[repo].extend([0]*needed)
+            velocity_data[repo].extend([0]*needed)
+    
+    # --- 10. Plot the Graphs ---
+    x = np.arange(max_windows)
+    bar_width = 0.15  # adjust as needed
+    
+    # ---------- Graph 1: Velocity ----------
+    plt.figure(figsize=(10, 6))
+    for i, repo in enumerate(repos):
+        v_list = velocity_data[repo]
+        x_positions = x + i*bar_width
+        
+        label_str = (f"{repo} (M_2&3={M_max_2_3[repo]}, "
+                     f"I_2&3={I_max_2_3[repo]})")
+        
+        plt.bar(x_positions, v_list, bar_width, label=label_str)
+    
+    plt.title("Velocity (Max Alignment from 2nd & 3rd Windows)")
+    plt.xlabel("Window Index")
+    plt.ylabel("Velocity Value (scaled)")
+    
+    # Show velocity formula on the plot (optional)
+    plt.text(
+        0.5, 0.90,
+        "Velocity = 0.4 × M_scaled + 0.6 × I_scaled",
+        transform=plt.gca().transAxes,
+        fontsize=11,
+        ha='center'
+    )
+    
+    plt.xticks(x + bar_width*(len(repos)/2), [f"W{i+1}" for i in range(max_windows)])
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig("velocity.png")
+    plt.show()
+    
+    # ---------- Graph 2: Scaled M ----------
+    plt.figure(figsize=(10, 6))
+    for i, repo in enumerate(repos):
+        m_list = scaled_M[repo]
+        x_positions = x + i*bar_width
+        label_str = f"{repo} (scaleFactorM={scaleFactor_M[repo]:.3f})"
+        
+        plt.bar(x_positions, m_list, bar_width, label=label_str)
+    
+    plt.title("Scaled M (PR merges)")
+    plt.xlabel("Window Index")
+    plt.ylabel("Scaled # of PR Merges")
+    plt.xticks(x + bar_width*(len(repos)/2), [f"W{i+1}" for i in range(max_windows)])
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig("scaled_m.png")
+    plt.show()
+    
+    # ---------- Graph 3: Scaled I ----------
+    plt.figure(figsize=(10, 6))
+    for i, repo in enumerate(repos):
+        i_list = scaled_I[repo]
+        x_positions = x + i*bar_width
+        label_str = f"{repo} (scaleFactorI={scaleFactor_I[repo]:.3f})"
+        
+        plt.bar(x_positions, i_list, bar_width, label=label_str)
+    
+    plt.title("Scaled I (Issues Closed)")
+    plt.xlabel("Window Index")
+    plt.ylabel("Scaled # of Issues Closed")
+    plt.xticks(x + bar_width*(len(repos)/2), [f"W{i+1}" for i in range(max_windows)])
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig("scaled_i.png")
+    plt.show()
+    
+    # --- 11. Close DB Connection ---
+    cursor.close()
+    cnx.close()
+
+if __name__ == "__main__":
+    main()
+Explanation of the Key Changes
+Slicing for Windows 2 & 3
+
+In zero-based indexing, the first window is at index 0, the second is 1, the third is 2.
+We do:
+python
+Copy
+subset_M = M_raw_list[1:3]
+subset_I = I_raw_list[1:3]
+That captures just the second (index 1) and third (index 2) windows for each repo. If the repo has fewer than 3 windows, the slice might be only 1 element or empty, in which case we handle it by setting the max to 0.
+Max Alignment
+
+We compute M_max_2_3[repo] = max(subset_M) and I_max_2_3[repo] = max(subset_I).
+Across all repos, we find M_min_of_2_3_max = smallest among those maximums, and similarly for I.
+Scale factors are computed so each repo’s “second/third-window max” is scaled down (or up) to that global smallest maximum.
+Apply the Same Scale Factor to All Windows
+
+Even though we only used windows #2 and #3 for alignment, we scale every window’s M and I in that repo by the same factor.
+This means windows #1, #4, #5, etc., might exceed or fall below the new scale but remain consistent relative to the rest of the data.
+Edge Cases
+
+If the repo has 0 or 1 window, the slice [1:3] is empty or partial. We set the max to 0, default scale factor = 1.0.
+If one repo’s second or third window is 0, that might also produce a large or small ratio.
+With these adjustments, you have “Max Alignment” restricted to the 2nd & 3rd windows.
