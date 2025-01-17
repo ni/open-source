@@ -1,23 +1,27 @@
 #!/usr/bin/env python3
-
+#python collaborative_velocity.py --scaling-repo ni/labview-icon-editor --global-offset -32
 import argparse
 import configparser
 import mysql.connector
 import matplotlib.pyplot as plt
 from dateutil.relativedelta import relativedelta
-from datetime import datetime
+from datetime import datetime, timedelta
 import numpy as np
 import sys
 
 def main():
     # --- 1. Parse Command-Line Arguments ---
     parser = argparse.ArgumentParser(
-        description="Compute collaborative velocity, scale by user-chosen repo's first window, and compare to average."
+        description="Compute collaborative velocity with a user-selected scaling repo, compare to average, center bar groups, and allow a global time offset."
     )
     parser.add_argument("--scaling-repo", required=True,
-                        help="Name of the repo to use for scaling. e.g. 'facebook/react' ")
+                        help="Name of the repo to use for scaling, e.g. 'facebook/react'")
+    parser.add_argument("--global-offset", type=int, default=0,
+                        help="Global offset in days to shift all oldest dates (can be negative). Default=0")
+    
     args = parser.parse_args()
-    scaling_repo = args.scaling_repo  # e.g. "facebook/react"
+    scaling_repo = args.scaling_repo
+    global_offset_days = args.global_offset  # integer (can be positive or negative)
     
     # --- 2. Define Repos List ---
     repos = [
@@ -45,11 +49,14 @@ def main():
     )
     cursor = cnx.cursor()
     
-    # We measure up to X years from each repo's oldest date
+    # We measure up to X years from each repo's (offset) oldest date
     X = 2  # 2 years => ~8 windows of 3 months
     
     # Data structures to store raw M/I per repo
     repo_windows_data = {}  # {repo: (list_of_windows, list_of_Mraw, list_of_Iraw)}
+    
+    # Global offset as a timedelta
+    offset_delta = timedelta(days=global_offset_days)
     
     # ---------- QUERIES ----------
     query_oldest_date = """
@@ -96,6 +103,9 @@ def main():
             continue
         
         oldest_date = result[0]  # datetime object
+        # --- APPLY THE GLOBAL OFFSET ---
+        oldest_date = oldest_date + offset_delta  # <--- SHIFT by offset_delta
+        
         cutoff = oldest_date + relativedelta(years=X)
         
         # 5B. Build 3-month windows
@@ -154,12 +164,12 @@ def main():
             scaleFactor_M[repo] = 1.0
             scaleFactor_I[repo] = 1.0
         else:
-            if M_raw_list and M_raw_list[0] > 0:
+            if M_raw_list and len(M_raw_list) > 0 and M_raw_list[0] > 0:
                 scaleFactor_M[repo] = float(scaling_repo_M1) / float(M_raw_list[0])
             else:
                 scaleFactor_M[repo] = 1.0
             
-            if I_raw_list and I_raw_list[0] > 0:
+            if I_raw_list and len(I_raw_list) > 0 and I_raw_list[0] > 0:
                 scaleFactor_I[repo] = float(scaling_repo_I1) / float(I_raw_list[0])
             else:
                 scaleFactor_I[repo] = 1.0
@@ -191,7 +201,12 @@ def main():
     
     # --- 9. Print Data for Debugging ---
     print(f"\n[INFO] Scaling repo: {scaling_repo}")
-    print(f"[INFO]   First window merges = {scaling_repo_M1}, issues = {scaling_repo_I1}\n")
+    print(f"[INFO]   Global offset (days) = {global_offset_days}")
+    if scaling_windows:
+        print(f"[INFO]   First window merges (scaled repo) = {scaling_repo_M1}, issues = {scaling_repo_I1}")
+        print(f"[INFO]   Window 1 date range (scaling repo): {scaling_windows[0]}")
+    else:
+        print(f"[INFO]   Scaling repo has no windows after offset")
     
     for repo in repos:
         print(f"--- Repo: {repo} ---")
@@ -222,23 +237,36 @@ def main():
             scaled_I[repo].extend([0]*needed)
             velocity_data[repo].extend([0]*needed)
     
-    # --- 11. Original Bar Charts (Velocity, M, I) per Repo ---
+    # === Build x_labels from the scaling repo’s start dates (if any) ===
+    x_labels = []
+    for i in range(max_windows):
+        if i < len(scaling_windows):
+            start_date = scaling_windows[i][0]
+            date_str = start_date.strftime("%m/%d/%Y")
+        else:
+            date_str = "N/A"
+        
+        label = f"W{i+1}\n({date_str})"
+        x_labels.append(label)
+    
+    # =============================
+    # 11. Original Grouped Bar Charts
+    # =============================
     x = np.arange(max_windows)
     bar_width = 0.15
+    n_repos = len(repos)
     
-    # A. Velocity Chart (original style, one bar per repo per window)
+    # A. Velocity Chart
     plt.figure(figsize=(10, 6))
-    for i, repo in enumerate(repos):
+    for i_repo, repo in enumerate(repos):
+        x_positions = x + (i_repo - (n_repos - 1)/2)*bar_width
         v_list = velocity_data[repo]
-        x_positions = x + i*bar_width
-        
         label_str = f"{repo} (M_fact={scaleFactor_M[repo]:.2f}, I_fact={scaleFactor_I[repo]:.2f})"
         plt.bar(x_positions, v_list, bar_width, label=label_str)
     
-    plt.title(f"Velocity (Scaled using {scaling_repo}'s First Window)")
+    plt.title(f"Velocity (Scaled using {scaling_repo}'s First Window) - Offset={global_offset_days} days")
     plt.xlabel("Window Index")
     plt.ylabel("Velocity (0.4*M + 0.6*I)")
-    
     plt.text(
         0.5, 0.90,
         "Velocity = 0.4 × M_scaled + 0.6 × I_scaled",
@@ -246,51 +274,49 @@ def main():
         fontsize=10,
         ha='center'
     )
-    
-    plt.xticks(x + bar_width*(len(repos)/2), [f"W{i+1}" for i in range(max_windows)])
+    plt.xticks(x, x_labels)
     plt.legend()
     plt.tight_layout()
     plt.savefig("velocity.png")
     plt.show()
     
-    # B. Scaled M Chart (original style)
+    # B. Scaled M Chart
     plt.figure(figsize=(10, 6))
-    for i, repo in enumerate(repos):
+    for i_repo, repo in enumerate(repos):
+        x_positions = x + (i_repo - (n_repos - 1)/2)*bar_width
         m_list = scaled_M[repo]
-        x_positions = x + i*bar_width
         label_str = f"{repo} (scaleFactorM={scaleFactor_M[repo]:.2f})"
-        
         plt.bar(x_positions, m_list, bar_width, label=label_str)
     
-    plt.title(f"Scaled M (PR merges) - Baseline: {scaling_repo}'s First Window")
+    plt.title(f"Scaled M (PR merges) - Baseline: {scaling_repo}'s First Window\nOffset={global_offset_days} days")
     plt.xlabel("Window Index")
     plt.ylabel("Scaled # of PR Merges")
-    plt.xticks(x + bar_width*(len(repos)/2), [f"W{i+1}" for i in range(max_windows)])
+    plt.xticks(x, x_labels)
     plt.legend()
     plt.tight_layout()
     plt.savefig("scaled_m.png")
     plt.show()
     
-    # C. Scaled I Chart (original style)
+    # C. Scaled I Chart
     plt.figure(figsize=(10, 6))
-    for i, repo in enumerate(repos):
+    for i_repo, repo in enumerate(repos):
+        x_positions = x + (i_repo - (n_repos - 1)/2)*bar_width
         i_list = scaled_I[repo]
-        x_positions = x + i*bar_width
         label_str = f"{repo} (scaleFactorI={scaleFactor_I[repo]:.2f})"
-        
         plt.bar(x_positions, i_list, bar_width, label=label_str)
     
-    plt.title(f"Scaled I (Issues Closed) - Baseline: {scaling_repo}'s First Window")
+    plt.title(f"Scaled I (Issues Closed) - Baseline: {scaling_repo}'s First Window\nOffset={global_offset_days} days")
     plt.xlabel("Window Index")
     plt.ylabel("Scaled # of Issues Closed")
-    plt.xticks(x + bar_width*(len(repos)/2), [f"W{i+1}" for i in range(max_windows)])
+    plt.xticks(x, x_labels)
     plt.legend()
     plt.tight_layout()
     plt.savefig("scaled_i.png")
     plt.show()
     
-    # --- 12. New: Compare Scaling Repo vs. Average of OTHER repos ---
-    # 12A. Compute average M, I, velocity across "other_repos" (excluding scaling_repo)
+    # =============================
+    # 12. Compare Scaling Repo vs. Average
+    # =============================
     other_repos = [r for r in repos if r != scaling_repo]
     
     avg_M_list = []
@@ -302,26 +328,25 @@ def main():
         sum_i = sum(scaled_I[r][w_idx] for r in other_repos)
         sum_v = sum(velocity_data[r][w_idx] for r in other_repos)
         
-        count = len(other_repos)  # we treat missing data as 0 (already padded)
+        count = len(other_repos)
         
         if count > 0:
             avg_m = sum_m / count
             avg_i = sum_i / count
             avg_v = sum_v / count
         else:
-            avg_m = 0.0
-            avg_i = 0.0
-            avg_v = 0.0
+            avg_m = 0
+            avg_i = 0
+            avg_v = 0
         
         avg_M_list.append(avg_m)
         avg_I_list.append(avg_i)
         avg_vel_list.append(avg_v)
     
-    # 12B. Bar charts comparing scaling_repo vs. average
-    
-    # M
+    # 12B. Compare M
     plt.figure(figsize=(10, 6))
     bar_width_compare = 0.3
+    
     x_scaling = x - bar_width_compare/2
     x_avg     = x + bar_width_compare/2
     
@@ -336,16 +361,16 @@ def main():
             label="Other Repos Average",
             color='tab:orange')
     
-    plt.title(f"Comparing Scaled Merges\n{scaling_repo} vs. Other Repos Average")
+    plt.title(f"Comparing Scaled Merges\n{scaling_repo} vs. Others (Offset={global_offset_days} days)")
     plt.xlabel("Window Index")
     plt.ylabel("Scaled # of PR Merges")
-    plt.xticks(x, [f"W{i+1}" for i in range(max_windows)])
+    plt.xticks(x, x_labels)
     plt.legend()
     plt.tight_layout()
     plt.savefig("compare_m.png")
     plt.show()
     
-    # I
+    # 12C. Compare I
     plt.figure(figsize=(10, 6))
     plt.bar(x_scaling,
             scaled_I[scaling_repo],
@@ -358,16 +383,16 @@ def main():
             label="Other Repos Average",
             color='tab:orange')
     
-    plt.title(f"Comparing Scaled Issues\n{scaling_repo} vs. Other Repos Average")
+    plt.title(f"Comparing Scaled Issues\n{scaling_repo} vs. Others (Offset={global_offset_days} days)")
     plt.xlabel("Window Index")
     plt.ylabel("Scaled # of Issues Closed")
-    plt.xticks(x, [f"W{i+1}" for i in range(max_windows)])
+    plt.xticks(x, x_labels)
     plt.legend()
     plt.tight_layout()
     plt.savefig("compare_i.png")
     plt.show()
     
-    # Velocity
+    # 12D. Compare Velocity
     plt.figure(figsize=(10, 6))
     plt.bar(x_scaling,
             velocity_data[scaling_repo],
@@ -380,17 +405,17 @@ def main():
             label="Other Repos Average",
             color='tab:orange')
     
-    plt.title(f"Comparing Velocity\n{scaling_repo} vs. Other Repos Average")
+    plt.title(f"Comparing Velocity\n{scaling_repo} vs. Others (Offset={global_offset_days} days)")
     plt.xlabel("Window Index")
     plt.ylabel("Scaled Velocity (0.4*M + 0.6*I)")
-    plt.xticks(x, [f"W{i+1}" for i in range(max_windows)])
+    plt.xticks(x, x_labels)
     plt.legend()
     plt.tight_layout()
     plt.savefig("compare_velocity.png")
     plt.show()
     
-    # 12C. Print a table showing how close the scaling repo is to the average (in %).
-    print("\n=== Comparison Table: Scaling Repo vs. Other Repos Average ===")
+    # 12E. Print comparison table
+    print("\n=== Comparison Table: Scaling Repo vs. Other Repos Average (Offset={} days) ===".format(global_offset_days))
     print("Window |   M%    |   I%    | Velocity%")
     print("-------+---------+---------+----------")
     
@@ -418,7 +443,7 @@ def main():
         
         print(f"W{w_idx+1:<5} | {ratio_m:7.2f}% | {ratio_i:7.2f}% | {ratio_v:8.2f}%")
     
-    # --- 13. Close DB Connection ---
+    # 13. Close DB Connection
     cursor.close()
     cnx.close()
 
