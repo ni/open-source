@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 #python collaborative_velocity.py --scaling-repo ni/labview-icon-editor --global-offset -32
+
 import argparse
 import configparser
 import mysql.connector
@@ -9,10 +10,46 @@ from datetime import datetime, timedelta
 import numpy as np
 import sys
 
+def get_fiscal_quarter(dt):
+    """
+    Given a date dt, return which fiscal quarter (Q1/Q2/Q3/Q4) it belongs to,
+    assuming the fiscal year runs Oct 1 - Sep 30.
+    
+    Example: 
+      - If dt.month >= 10 => fiscal year = dt.year + 1
+      - Else => fiscal year = dt.year
+    Then we compare dt to the known date ranges for Q1, Q2, Q3, Q4 in that FY.
+    """
+    # Determine the fiscal year
+    # e.g., if date is 2025-11-10, then FY=2026
+    if dt.month >= 10:
+        fy = dt.year + 1
+    else:
+        fy = dt.year
+    
+    # Build the 4 quarter ranges (start <= dt <= end)
+    q1_start = datetime(fy - 1, 10, 1)  # e.g. 2026 => Q1 starts 10/1/2025
+    q1_end   = datetime(fy - 1, 12, 31)
+    q2_start = datetime(fy, 1, 1)
+    q2_end   = datetime(fy, 3, 31)
+    q3_start = datetime(fy, 4, 1)
+    q3_end   = datetime(fy, 6, 30)
+    q4_start = datetime(fy, 7, 1)
+    q4_end   = datetime(fy, 9, 30)
+    
+    if q1_start <= dt <= q1_end:
+        return "Q1"
+    elif q2_start <= dt <= q2_end:
+        return "Q2"
+    elif q3_start <= dt <= q3_end:
+        return "Q3"
+    else:
+        return "Q4"
+
 def main():
     # --- 1. Parse Command-Line Arguments ---
     parser = argparse.ArgumentParser(
-        description="Compute collaborative velocity with a user-selected scaling repo, compare to average, center bar groups, and allow a global time offset."
+        description="Compute collaborative velocity with a user-selected scaling repo, compare to average, center bar groups, allow a global time offset, and label the fiscal quarter + date ranges."
     )
     parser.add_argument("--scaling-repo", required=True,
                         help="Name of the repo to use for scaling, e.g. 'facebook/react'")
@@ -25,8 +62,10 @@ def main():
     
     # --- 2. Define Repos List ---
     repos = [
+        "ni/actor-framework",
         "tensorflow/tensorflow",
         "facebook/react",
+        "dotnet/core",
         "ni/labview-icon-editor"
     ]
     
@@ -103,8 +142,9 @@ def main():
             continue
         
         oldest_date = result[0]  # datetime object
+        
         # --- APPLY THE GLOBAL OFFSET ---
-        oldest_date = oldest_date + offset_delta  # <--- SHIFT by offset_delta
+        oldest_date = oldest_date + offset_delta
         
         cutoff = oldest_date + relativedelta(years=X)
         
@@ -164,12 +204,12 @@ def main():
             scaleFactor_M[repo] = 1.0
             scaleFactor_I[repo] = 1.0
         else:
-            if M_raw_list and len(M_raw_list) > 0 and M_raw_list[0] > 0:
+            if M_raw_list and M_raw_list[0] > 0:
                 scaleFactor_M[repo] = float(scaling_repo_M1) / float(M_raw_list[0])
             else:
                 scaleFactor_M[repo] = 1.0
             
-            if I_raw_list and len(I_raw_list) > 0 and I_raw_list[0] > 0:
+            if I_raw_list and I_raw_list[0] > 0:
                 scaleFactor_I[repo] = float(scaling_repo_I1) / float(I_raw_list[0])
             else:
                 scaleFactor_I[repo] = 1.0
@@ -214,13 +254,13 @@ def main():
         
         windows, M_raw_list, I_raw_list = repo_windows_data[repo]
         m_scaled_list = scaled_M[repo]
-        i_scaled_list = scaled_I[repo]
+        i_list_scaled = scaled_I[repo]
         v_list = velocity_data[repo]
         
         for w_idx, (w_start, w_end) in enumerate(windows):
             print(f"    Window {w_idx+1} [{w_start} to {w_end}]")
             print(f"      M_raw={M_raw_list[w_idx]}, I_raw={I_raw_list[w_idx]}")
-            print(f"      M_scaled={m_scaled_list[w_idx]:.2f}, I_scaled={i_scaled_list[w_idx]:.2f}")
+            print(f"      M_scaled={m_scaled_list[w_idx]:.2f}, I_scaled={i_list_scaled[w_idx]:.2f}")
             print(f"      Velocity={v_list[w_idx]:.2f}")
         print()
     
@@ -237,16 +277,25 @@ def main():
             scaled_I[repo].extend([0]*needed)
             velocity_data[repo].extend([0]*needed)
     
-    # === Build x_labels from the scaling repo’s start dates (if any) ===
+    # === Build x_labels with (Quarter, Start Date, End Date) on separate lines ===
     x_labels = []
     for i in range(max_windows):
         if i < len(scaling_windows):
-            start_date = scaling_windows[i][0]
-            date_str = start_date.strftime("%m/%d/%Y")
+            w_start = scaling_windows[i][0]
+            w_end   = scaling_windows[i][1]
+            
+            # 1) Which fiscal quarter does w_start belong to?
+            quarter = get_fiscal_quarter(w_start)
+            
+            # 2) Format the dates
+            start_date_str = w_start.strftime("%m/%d/%Y")
+            end_date_str   = w_end.strftime("%m/%d/%Y")
+            
+            # 3) Build the multi-line label
+            label = f"{quarter}\n{start_date_str}\n{end_date_str}"
         else:
-            date_str = "N/A"
+            label = "N/A"
         
-        label = f"W{i+1}\n({date_str})"
         x_labels.append(label)
     
     # =============================
