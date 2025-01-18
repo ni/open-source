@@ -1,19 +1,41 @@
 #!/usr/bin/env python3
 
 """
-Quarter-Based Collaborative Velocity Analysis
-with 120-Day Scaling Factor, Single-Line Quarter Labels, Aligned Columns.
+Quarter-Based Velocity Analysis
+with user-defined scaling window (sum-based factor), main quarter table, and
+an ADDITIONAL "Comparison Table" that compares the average (target) of all
+non-scaling repos' raw M/I to the scaling repo's raw M/I, plus velocity.
 
-Special Request:
----------------
-- The "QIdx" column header is left-aligned ("QIdx".ljust(width))
-- All other column headers are center-aligned
-- The data rows remain left-aligned
-- This way, QIdx appears exactly as your example.
+Main Table Columns:
+-------------------
+  1) QIdx
+  2) QuarterLabel
+  3) Repo(Partial?)
+  4) StartDate
+  5) EndDate
+  6) M-raw
+  7) M (scaled)
+  8) M-fact
+  9) I-raw
+  10) I (scaled)
+  11) I-fact
+  12) V
 
-Usage Example:
---------------
-  python collaborative_velocity.py --scaling-repo ni/labview-icon-editor --start-fy 2025 --end-fy 2026
+Second Table Columns (Comparison):
+----------------------------------
+  1) QIdx
+  2) QuarterLabel
+  3) M-target   (avg M-raw of all non-scaling repos)
+  4) M-scaling  (scaling repo's M-raw)
+  5) M% target  (100 * M-scaling / M-target) or N/A if target=0 or missing
+  6) I-target   (avg I-raw)
+  7) I-scaling
+  8) I% target
+  9) V-target   (avg velocity = avg(0.4*M-raw + 0.6*I-raw) among non-scaling)
+  10) V-scaling (0.4*M-raw + 0.6*I-raw for scaling)
+  11) V% target
+
+All columns are center-aligned in both tables.
 """
 
 import argparse
@@ -50,45 +72,43 @@ def get_fy_quarter_boundaries(fy):
     ]
 
 def get_oldest_date(cursor, repo_name):
-    query = """
+    q= """
         SELECT MIN(all_min) AS oldest_date
         FROM (
             SELECT MIN(created_at) AS all_min
             FROM pulls
-            WHERE repo_name = %s
-            
+            WHERE repo_name=%s
             UNION ALL
-            
             SELECT MIN(created_at) AS all_min
             FROM issues
-            WHERE repo_name = %s
-        ) AS subq
+            WHERE repo_name=%s
+        ) subq
     """
-    cursor.execute(query, (repo_name, repo_name))
-    row = cursor.fetchone()
+    cursor.execute(q, (repo_name, repo_name))
+    row= cursor.fetchone()
     return row[0] if row and row[0] else None
 
 def get_last_date(cursor, repo_name):
-    query = """
+    q= """
         SELECT MAX(all_max)
         FROM (
             SELECT MAX(created_at) AS all_max
             FROM pulls
-            WHERE repo_name = %s
+            WHERE repo_name=%s
             UNION ALL
             SELECT MAX(created_at) AS all_max
             FROM issues
-            WHERE repo_name = %s
+            WHERE repo_name=%s
         ) subq
     """
-    cursor.execute(query, (repo_name, repo_name))
-    row = cursor.fetchone()
+    cursor.execute(q, (repo_name, repo_name))
+    row= cursor.fetchone()
     return row[0] if row and row[0] else None
 
 def get_merges_and_issues(cursor, repo, start_dt, end_dt):
     if not start_dt or not end_dt:
         return (0,0)
-    qm = """
+    qm= """
         SELECT COUNT(*)
         FROM pulls
         WHERE repo_name=%s
@@ -97,9 +117,9 @@ def get_merges_and_issues(cursor, repo, start_dt, end_dt):
           AND merged_at <= %s
     """
     cursor.execute(qm, (repo, start_dt, end_dt))
-    merges_count = cursor.fetchone()[0]
+    merges_count= cursor.fetchone()[0]
 
-    qi = """
+    qi= """
         SELECT COUNT(*)
         FROM issues
         WHERE repo_name=%s
@@ -108,29 +128,30 @@ def get_merges_and_issues(cursor, repo, start_dt, end_dt):
           AND closed_at <= %s
     """
     cursor.execute(qi, (repo, start_dt, end_dt))
-    issues_count = cursor.fetchone()[0]
+    issues_count= cursor.fetchone()[0]
     return (merges_count, issues_count)
 
-def format_scale_factor(factor):
-    if factor is None:
-        return "None"
-    if factor==0:
-        return "0.0"
-    s = f"{factor:.15g}"
-    if '.' in s:
-        s = s.rstrip('0')
-        if s.endswith('.'):
-            s+="0"
-    return s
+def format_scale_factor_3dec(f):
+    if f is None:
+        return "N/A"
+    return f"{f:.3f}"
 
-def compute_120day_scale_factors(cursor, scaling_repo, all_repos):
-    scaleFactorM = {}
-    scaleFactorI = {}
-    partialRepo  = {}
-    cannotScale  = {}
+###############################################################################
+# Compute scale factors with a user-defined window
+###############################################################################
+def compute_scale_factors(cursor, scaling_repo, all_repos, window_days):
+    """
+    Sums merges/issues in [oldest, oldest+window_days].
+    Possibly partial if last < that range. Then factor= scalingSum / repoSum, etc.
+    """
+    scaleFactorM={}
+    scaleFactorI={}
+    partialRepo={}
+    cannotScale={}
 
-    s_old = get_oldest_date(cursor, scaling_repo)
+    s_old= get_oldest_date(cursor, scaling_repo)
     if not s_old:
+        # fallback => no data
         for r in all_repos:
             scaleFactorM[r]=1.0
             scaleFactorI[r]=1.0
@@ -138,16 +159,15 @@ def compute_120day_scale_factors(cursor, scaling_repo, all_repos):
             cannotScale[r]=False
         return scaleFactorM, scaleFactorI, partialRepo, cannotScale
 
-    s_end= s_old+ timedelta(days=120)
+    s_end= s_old+ timedelta(days=window_days)
     s_last= get_last_date(cursor, scaling_repo)
     partial_s= False
-    actual_sdays=120
+    use_end= s_end
     if s_last and s_last< s_end:
         partial_s= True
-        actual_sdays= max((s_last- s_old).days,1)
-    M_s,I_s= get_merges_and_issues(cursor, scaling_repo, s_old, s_end)
-    M_sAvg= M_s/float(actual_sdays)
-    I_sAvg= I_s/float(actual_sdays)
+        use_end= s_last
+
+    M_sSum,I_sSum= get_merges_and_issues(cursor, scaling_repo, s_old, use_end)
 
     scaleFactorM[scaling_repo]=1.0
     scaleFactorI[scaling_repo]=1.0
@@ -164,63 +184,68 @@ def compute_120day_scale_factors(cursor, scaling_repo, all_repos):
             partialRepo[r]= False
             cannotScale[r]= True
             continue
-        rend= rold+ timedelta(days=120)
+        rend= rold+ timedelta(days= window_days)
         rlast= get_last_date(cursor, r)
-        isPartial=False
-        actual_rdays=120
+        isPartial= False
+        used_end= rend
         if rlast and rlast< rend:
-            isPartial=True
-            actual_rdays= max((rlast- rold).days,1)
-        Mr,Ir= get_merges_and_issues(cursor, r, rold,rend)
-        MrAvg= Mr/float(actual_rdays)
-        IrAvg= Ir/float(actual_rdays)
+            isPartial= True
+            used_end= rlast
+        MrSum, IrSum= get_merges_and_issues(cursor, r, rold, used_end)
 
         cScale=False
-        sf_m=None
-        sf_i=None
+        sfm=None
+        sfi=None
         # merges
-        if (M_sAvg>0 and MrAvg==0):
-            cScale=True
-        elif M_sAvg==0 and MrAvg>0:
-            sf_m=0.0
+        if (M_sSum>0 and MrSum==0):
+            cScale= True
+        elif M_sSum==0 and MrSum>0:
+            sfm=0.0
         else:
-            if MrAvg==0:
-                sf_m=1.0
+            if MrSum==0:
+                sfm=1.0
             else:
-                sf_m= M_sAvg/MrAvg
+                sfm= M_sSum/MrSum
         # issues
-        if (I_sAvg>0 and IrAvg==0):
-            cScale=True
-        elif I_sAvg==0 and IrAvg>0:
-            sf_i=0.0
+        if (I_sSum>0 and IrSum==0):
+            cScale= True
+        elif I_sSum==0 and IrSum>0:
+            sfi=0.0
         else:
-            if IrAvg==0:
-                sf_i=1.0
+            if IrSum==0:
+                sfi=1.0
             else:
-                sf_i= I_sAvg/IrAvg
+                sfi= I_sSum/IrSum
 
-        scaleFactorM[r]= sf_m
-        scaleFactorI[r]= sf_i
+        scaleFactorM[r]= sfm
+        scaleFactorI[r]= sfi
         partialRepo[r]= isPartial
         cannotScale[r]= cScale
+
     return scaleFactorM, scaleFactorI, partialRepo, cannotScale
 
+###############################################################################
 def main():
     parser= argparse.ArgumentParser(
-        description="Quarter-based velocity + 120-day scaling factor, single-line quarter labels, aligned columns."
+        description="""
+Quarter-based velocity with user-defined scaling window, main table + second table comparing scaling vs. average of non-scaling.
+        """
     )
-    parser.add_argument("--scaling-repo",required=True)
-    parser.add_argument("--start-fy", type=int,required=True)
-    parser.add_argument("--end-fy", type=int,required=True)
-    parser.add_argument("--global-offset",type=int,default=0)
+    parser.add_argument("--scaling-repo", required=True)
+    parser.add_argument("--start-fy", type=int, required=True)
+    parser.add_argument("--end-fy",   type=int, required=True)
+    parser.add_argument("--global-offset", type=int, default=0)
+    parser.add_argument("--scaling-window", type=int, default=120,
+                        help="Days to sum merges/issues from oldest date. Default=120.")
     args= parser.parse_args()
 
     scaling_repo= args.scaling_repo
     start_fy= args.start_fy
     end_fy= args.end_fy
     offset_days= args.global_offset
+    window_days= args.scaling_window
 
-    all_repos=[
+    all_repos= [
         "ni/actor-framework",
         "tensorflow/tensorflow",
         "facebook/react",
@@ -243,76 +268,80 @@ def main():
     )
     cursor= cnx.cursor()
 
-    # 1) scale factors
-    sfM, sfI, partialRepo, cannotScale= compute_120day_scale_factors(cursor, scaling_repo, all_repos)
+    # 1) compute scale factors
+    sfM, sfI, partialRepo, cannotScale= compute_scale_factors(
+        cursor, scaling_repo, all_repos, window_days
+    )
 
-    # 2) gather scaling quarters
+    # 2) gather quarter definitions for scaling
+    def get_fy_quarter_boundaries_local(fy):
+        return get_fy_quarter_boundaries(fy)
+
     def in_quarter(dt,s,e):
-        return dt>=s and dt<= e
+        return (dt and s and e and dt>=s and dt<=e)
 
-    s_old= get_oldest_date(cursor,scaling_repo)
+    s_old= get_oldest_date(cursor, scaling_repo)
     if not s_old:
-        print("[WARNING] no data for scaling => no table.")
+        print("[WARN] no data => no table.")
         return
     s_adjust= s_old+ timedelta(days= offset_days)
 
-    min_fy= min(start_fy, s_adjust.year-1)
-    quarter_list=[]
-    for fy in range(min_fy, end_fy+1):
-        blocks= get_fy_quarter_boundaries(fy)
-        quarter_list.extend(blocks)
-    quarter_list.sort(key=lambda x:x[1])
+    # gather quarters
+    def gather_quarters():
+        out=[]
+        min_fy= min(start_fy, s_adjust.year-1)
+        for fy in range(min_fy, end_fy+1):
+            out.extend(get_fy_quarter_boundaries_local(fy))
+        out.sort(key=lambda x:x[1])
+        return out
 
+    all_quarters= gather_quarters()
     scaling_quarters=[]
     found_first=False
     skip_label="(skipped partial at start)"
 
-    for (qlabel, qst, qend) in quarter_list:
-        # fix multiline => single line
-        qlabel_fixed= qlabel.replace("\n"," ")
-        # parse out fy from "Q3 FY2024"
-        parts= qlabel_fixed.split("FY")
+    for (qlabel,qst,qed) in all_quarters:
+        lbl_fixed= qlabel.replace("\n"," ")
+        # parse out fy
+        parts= lbl_fixed.split("FY")
         if len(parts)==2:
-            # e.g. "Q3 " and "2024"
-            # strip non-digits from second part
             fy_digits=""
             for ch in parts[1]:
                 if ch.isdigit():
-                    fy_digits+=ch
+                    fy_digits+= ch
                 else:
                     break
             if fy_digits:
-                fval= int(fy_digits)
-                if fval> end_fy:
+                if int(fy_digits)> end_fy:
                     break
-
         if not found_first:
-            if in_quarter(s_adjust,qst,qend):
-                partial_lbl= f"{qlabel_fixed} {skip_label}"
-                scaling_quarters.append((partial_lbl,qst,qend,True))
+            if qst<= s_adjust<= qed:
+                partial_lbl= f"{lbl_fixed} {skip_label}"
+                scaling_quarters.append((partial_lbl,qst,qed,True))
                 found_first=True
-            elif qend< s_adjust:
+            elif qed< s_adjust:
                 pass
             else:
-                scaling_quarters.append((qlabel_fixed,qst,qend,False))
+                scaling_quarters.append((lbl_fixed,qst,qed,False))
                 found_first=True
         else:
-            scaling_quarters.append((qlabel_fixed,qst,qend,False))
+            scaling_quarters.append((lbl_fixed,qst,qed,False))
 
     sblocks=[]
     for (_,qs,qe,sk) in scaling_quarters:
-        sblocks.append((None,None) if sk else (qs,qe))
+        if sk: sblocks.append((None,None))
+        else:  sblocks.append((qs,qe))
     n_quarters= len(scaling_quarters)
 
-    # build non-scaling blocks
+    # build quarter windows for non-scaling
     def build_quarter_windows(st,n):
-        out=[]
+        arr=[]
         cur= st
         for _ in range(n):
-            cend= cur+ relativedelta(months=3)-timedelta(seconds=1)
-            out.append((cur,cend))
+            cend= cur+ relativedelta(months=3)- timedelta(seconds=1)
+            arr.append((cur,cend))
             cur= cend+ timedelta(seconds=1)
-        return out
+        return arr
 
     non_scaling_data={}
     for r in all_repos:
@@ -322,132 +351,302 @@ def main():
         if not rold:
             non_scaling_data[r]= [(None,None)]*n_quarters
             continue
-        adj= rold+ timedelta(days= offset_days)
-        blocks= build_quarter_windows(adj,n_quarters)
+        radj= rold+ timedelta(days= offset_days)
+        blocks= build_quarter_windows(radj,n_quarters)
         non_scaling_data[r]= blocks
 
-    def format_cell(r, merges_raw, issues_raw):
+    # main table columns
+    main_header= [
+      "QIdx","QuarterLabel","Repo(Partial?)","StartDate","EndDate",
+      "M-raw","M","M-fact","I-raw","I","I-fact","V"
+    ]
+    row_map= {rr:{} for rr in all_repos}
+
+    def produce_row(qi, lbl, rep, pstr, sdt, edt,
+                    m_raw, m_scl, m_fac,
+                    i_raw, i_scl, i_fac,
+                    vel):
+        return [
+          qi,
+          lbl,
+          rep+pstr,
+          str(sdt) if sdt else "SKIPPED",
+          str(edt) if edt else "SKIPPED",
+          m_raw,
+          m_scl,
+          m_fac,
+          i_raw,
+          i_scl,
+          i_fac,
+          vel
+        ]
+
+    # get merges/issues scaled
+    def format_quarter(r, merges_raw, issues_raw, skip_flag):
+        if skip_flag:
+            return (str(merges_raw),"cannot scale","N/A", str(issues_raw),"cannot scale","N/A","N/A")
         if cannotScale[r]:
-            return ("cannot scale","cannot scale")
+            return (str(merges_raw),"cannot scale","N/A", str(issues_raw),"cannot scale","N/A","N/A")
         fm= sfM[r]
         fi= sfI[r]
+        # M-raw => merges_raw
         if fm is None:
-            M_str="cannot scale"
+            M_s= "cannot scale"
+            M_f= "N/A"
         else:
-            mm_s= merges_raw* fm
-            fac_str= format_scale_factor(fm)
-            M_str= f"{int(round(mm_s))} (sf={fac_str})"
+            mm= merges_raw*(fm if fm else 0)
+            M_s= str(int(round(mm)))
+            M_f= format_scale_factor_3dec(fm)
         if fi is None:
-            I_str="cannot scale"
+            I_s= "cannot scale"
+            I_f= "N/A"
         else:
-            ii_s= issues_raw* fi
-            fac_str= format_scale_factor(fi)
-            I_str= f"{int(round(ii_s))} (sf={fac_str})"
-        return (M_str,I_str)
+            ii= issues_raw*(fi if fi else 0)
+            I_s= str(int(round(ii)))
+            I_f= format_scale_factor_3dec(fi)
+        if "cannot scale" in M_s or "cannot scale" in I_s:
+            v_s= "N/A"
+        else:
+            vcalc= 0.4*(merges_raw*(fm if fm else 0)) + 0.6*(issues_raw*(fi if fi else 0))
+            v_s= f"{vcalc:.1f}"
+        return (str(merges_raw),M_s,M_f, str(issues_raw), I_s,I_f, v_s)
 
-    col_header= ["QIdx","QuarterLabel","Repo(Partial?)","StartDate","EndDate","M","I","V"]
-    rows=[]
-
-    for q_idx,(qlabel,qs,qe,skip_flag) in enumerate(scaling_quarters, start=1):
-        s_st,s_ed= sblocks[q_idx-1]
-        M_s,I_s= (0,0)
+    # fill scaling
+    for q_i,(qlbl,qs,qe,sk) in enumerate(scaling_quarters, start=1):
+        (s_st,s_ed)= sblocks[q_i-1]
+        merges_val, issues_val=(0,0)
         if s_st and s_ed:
-            M_s,I_s= get_merges_and_issues(cursor, scaling_repo, s_st,s_ed)
-        if skip_flag:
-            M_col= "cannot scale"
-            I_col= "cannot scale"
-            V_col= "N/A"
+            merges_val, issues_val= get_merges_and_issues(cursor, scaling_repo, s_st,s_ed)
+        if sk:
+            row_s= produce_row(
+              q_i, qlbl, scaling_repo,
+              " (partial)" if partialRepo[scaling_repo] else "",
+              s_st, s_ed,
+              str(merges_val),
+              "cannot scale","N/A",
+              str(issues_val),
+              "cannot scale","N/A",
+              "N/A"
+            )
         else:
-            M_col= f"{M_s} (sf=1.0)"
-            I_col= f"{I_s} (sf=1.0)"
-            vel= 0.4*M_s+ 0.6*I_s
-            V_col= f"{vel:.1f}"
-        p_str= " (partial)" if partialRepo[scaling_repo] else ""
-        row_s= [
-          q_idx,
-          qlabel,
-          scaling_repo+p_str,
-          str(s_st) if s_st else "SKIPPED",
-          str(s_ed) if s_ed else "SKIPPED",
-          M_col,I_col,V_col
-        ]
-        rows.append(row_s)
+            # factor=1 => scaled= raw
+            vcalc= 0.4* merges_val +0.6* issues_val
+            row_s= produce_row(
+              q_i, qlbl, scaling_repo,
+              " (partial)" if partialRepo[scaling_repo] else "",
+              s_st, s_ed,
+              str(merges_val),
+              str(merges_val),
+              f"{1.000:.3f}",
+              str(issues_val),
+              str(issues_val),
+              f"{1.000:.3f}",
+              f"{vcalc:.1f}"
+            )
+        row_map[scaling_repo][q_i]= row_s
 
-        # non-scaling
-        for r in all_repos:
-            if r==scaling_repo:
-                continue
-            (r_st,r_ed)= (None,None)
-            if r in non_scaling_data:
-                b= non_scaling_data[r]
-                if q_idx-1< len(b):
-                    r_st,r_ed= b[q_idx-1]
-            merges_raw, issues_raw=(0,0)
-            if skip_flag:
-                M_o="cannot scale"
-                I_o="cannot scale"
-                V_o="N/A"
-            else:
-                if r_st and r_ed:
-                    merges_raw, issues_raw= get_merges_and_issues(cursor, r, r_st, r_ed)
-                M_o,I_o= format_cell(r, merges_raw, issues_raw)
-                if "cannot scale" in M_o or "cannot scale" in I_o:
-                    V_o="N/A"
-                else:
-                    fm= sfM[r]
-                    fi= sfI[r]
-                    mm_s= merges_raw*(fm if fm else 0)
-                    ii_s= issues_raw*(fi if fi else 0)
-                    vv= 0.4*mm_s+ 0.6*ii_s
-                    V_o= f"{vv:.1f}"
-            part_r= " (partial)" if partialRepo[r] else ""
-            row_n= [
-              q_idx, qlabel,
-              r+ part_r,
-              str(r_st) if r_st else "N/A",
-              str(r_ed) if r_ed else "N/A",
-              M_o, I_o, V_o
-            ]
-            rows.append(row_n)
+    # fill non-scaling
+    for r in all_repos:
+        if r==scaling_repo:
+            continue
+        blocks= non_scaling_data[r]
+        for q_i,(qlbl,qs,qe,sk) in enumerate(scaling_quarters, start=1):
+            (r_st,r_ed)= blocks[q_i-1]
+            merges_val, issues_val= (0,0)
+            if (not sk) and r_st and r_ed:
+                merges_val, issues_val= get_merges_and_issues(cursor, r, r_st,r_ed)
+            m_raw,m_s,m_f, i_raw,i_s,i_f, v_= format_quarter(r, merges_val, issues_val, sk)
+            row_n= produce_row(
+              q_i, qlbl, r, 
+              " (partial)" if partialRepo[r] else "",
+              r_st,r_ed,
+              m_raw,m_s,m_f,
+              i_raw,i_s,i_f,
+              v_
+            )
+            row_map[r][q_i]= row_n
 
     cursor.close()
     cnx.close()
 
-    # align columns
-    combined= [col_header]+ rows
-    col_widths=[]
-    for col_i in range(len(col_header)):
-        maxlen=0
-        for row in combined:
-            cell= str(row[col_i])
-            if len(cell)> maxlen:
-                maxlen= len(cell)
-        col_widths.append(maxlen+2)
+    # produce the main table
+    main_header= [
+      "QIdx","QuarterLabel","Repo(Partial?)","StartDate","EndDate",
+      "M-raw","M","M-fact","I-raw","I","I-fact","V"
+    ]
+    final_rows=[]
+    sorted_repos= [scaling_repo] + [rr for rr in all_repos if rr!=scaling_repo]
+    for rr in sorted_repos:
+        for q_i in range(1,len(scaling_quarters)+1):
+            if q_i in row_map[rr]:
+                final_rows.append(row_map[rr][q_i])
 
-    def print_header(vals):
-        out_cells=[]
-        for i,(v,w) in enumerate(zip(vals, col_widths)):
-            if i==0:
-                # QIdx => left align
-                out_cells.append(v.ljust(w))
-            else:
-                # all others => center
-                out_cells.append(v.center(w))
-        print(" | ".join(out_cells))
+    # center align
+    def compute_widths(table_data):
+        widths=[]
+        for col_i in range(len(table_data[0])):
+            mx=0
+            for row in table_data:
+                cell= str(row[col_i])
+                if len(cell)> mx:
+                    mx= len(cell)
+            widths.append(mx+2)
+        return widths
 
-    def print_row(vals):
-        out_cells=[]
-        for v,w in zip(vals,col_widths):
-            out_cells.append(str(v).ljust(w))
-        print(" | ".join(out_cells))
+    combined_main= [main_header]+ final_rows
+    main_widths= compute_widths(combined_main)
 
-    print("\n=== Quarter-Based Table with QIdx left-aligned in header ===\n")
-    print_header(col_header)
-    print("-+-".join("-"*cw for cw in col_widths))
-    for row in rows:
-        print_row(row)
+    def center_line(vals, widths):
+        out=[]
+        for v,w in zip(vals,widths):
+            out.append(str(v).center(w))
+        return " | ".join(out)
 
-    print("\n=== Done ===")
+    print(f"\n=== MAIN QUARTER TABLE (Window={window_days} days) ===\n")
+    print(center_line(main_header, main_widths))
+    print("-+-".join("-"*w for w in main_widths))
+    for row in final_rows:
+        row_strs= [str(x) for x in row]
+        print(center_line(row_strs, main_widths))
+
+    ############################################################################
+    # 2) Additional Table => average per quarter for non-scaling => target,
+    #    scaling repo raw => percentage of target
+    ############################################################################
+    # columns => QIdx, QuarterLabel,
+    #            M-target, M-scaling, M%,
+    #            I-target, I-scaling, I%,
+    #            V-target, V-scaling, V%
+    second_cols= [
+      "QIdx","QuarterLabel",
+      "M-target","M-scaling","M%Target",
+      "I-target","I-scaling","I%Target",
+      "V-target","V-scaling","V%Target"
+    ]
+    second_rows=[]
+
+    # We'll gather from row_map. The raw merges => col=5, raw issues => col=8, velocity => col=11
+    M_raw_idx=5
+    I_raw_idx=8
+    V_idx=11
+
+    for q_i, (qlabel,_,_,_) in enumerate(scaling_quarters, start=1):
+        # 1) gather non-scaling's M-raw, I-raw => sum => average
+        ns_count=0
+        sum_m=0
+        sum_i=0
+        sum_v=0.0
+        for r in all_repos:
+            if r==scaling_repo:
+                continue
+            if q_i not in row_map[r]:
+                continue
+            row_dat= row_map[r][q_i]
+            mraw_str= row_dat[M_raw_idx]  # e.g. "3"
+            iraw_str= row_dat[I_raw_idx]  # e.g. "9"
+            v_str   = row_dat[V_idx]      # e.g. "5.4"
+            def parse_int(s):
+                try:
+                    return int(s)
+                except:
+                    return None
+            def parse_float(s):
+                try:
+                    return float(s)
+                except:
+                    return None
+            m_int= parse_int(mraw_str)
+            i_int= parse_int(iraw_str)
+            v_val= parse_float(v_str)
+            if m_int is not None and i_int is not None and v_val is not None:
+                ns_count+=1
+                sum_m+= m_int
+                sum_i+= i_int
+                sum_v+= v_val
+        if ns_count>0:
+            m_avg= sum_m/ns_count
+            i_avg= sum_i/ns_count
+            v_avg= sum_v/ns_count
+        else:
+            m_avg=0
+            i_avg=0
+            v_avg=0
+
+        # 2) scaling row => parse M-raw, I-raw => velocity
+        if q_i not in row_map[scaling_repo]:
+            # skip
+            continue
+        sc_row= row_map[scaling_repo][q_i]
+        sc_m_str= sc_row[M_raw_idx]  # might be "cannot scale" or int
+        sc_i_str= sc_row[I_raw_idx]
+        sc_v_str= sc_row[V_idx]
+        def parse_int(s):
+            try:
+                return int(s)
+            except:
+                return None
+        def parse_float(s):
+            try:
+                return float(s)
+            except:
+                return None
+        sc_m= parse_int(sc_m_str)
+        sc_i= parse_int(sc_i_str)
+        sc_v= parse_float(sc_v_str)
+        # ratio => scaling/avg => if avg=0 => "N/A" unless scaling also=0 => ratio=1
+        def ratio_str(val, avg):
+            if avg>0 and val is not None:
+                return f"{(100.0*(val/avg)):.1f}%"
+            elif avg==0 and val==0:
+                return "100.0%"
+            return "N/A"
+
+        row2= [
+          q_i,
+          qlabel,
+          f"{m_avg:.1f}",
+          sc_m_str,
+          ratio_str(sc_m, m_avg),
+          f"{i_avg:.1f}",
+          sc_i_str,
+          ratio_str(sc_i, i_avg),
+          f"{v_avg:.1f}",
+          sc_v_str if sc_v_str else "N/A",
+          ratio_str(sc_v, v_avg if v_avg else 0)
+        ]
+        second_rows.append(row2)
+
+    # center align that second table
+    second_header= [
+      "QIdx","QuarterLabel",
+      "M-target","M-scaling","M%Target",
+      "I-target","I-scaling","I%Target",
+      "V-target","V-scaling","V%Target"
+    ]
+    comb2= [second_header]+ second_rows
+    sec_widths=[]
+    for c_i in range(len(second_header)):
+        mx=0
+        for row in comb2:
+            cell= str(row[c_i])
+            if len(cell)> mx:
+                mx= len(cell)
+        sec_widths.append(mx+2)
+
+    def center_line(vals, widths):
+        out=[]
+        for v,w in zip(vals,widths):
+            out.append(str(v).center(w))
+        return " | ".join(out)
+
+    print("\n=== SECOND TABLE: Non-scaling average (raw) vs. Scaling Repo (raw) => % of target ===\n")
+    print(center_line(second_header, sec_widths))
+    print("-+-".join("-"*w for w in sec_widths))
+    for row in second_rows:
+        row_strs= [str(x) for x in row]
+        print(center_line(row_strs, sec_widths))
+
+    print("\n=== Done. ===")
 
 if __name__=="__main__":
     main()
