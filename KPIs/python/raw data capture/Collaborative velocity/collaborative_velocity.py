@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+# python collaborative_velocity.py --scaling-repo ni/labview-icon-editor --global-offset -32 --start-fy 2024 --end-fy 2025 --scaling-window 210
 """
 Quarter-Based Velocity Analysis
 with user-defined scaling window (sum-based factor), main quarter table, and
