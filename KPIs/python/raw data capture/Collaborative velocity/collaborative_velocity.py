@@ -246,10 +246,8 @@ Quarter-based velocity with user-defined scaling window, main table + second tab
     window_days= args.scaling_window
 
     all_repos= [
-        "ni/actor-framework",
         "tensorflow/tensorflow",
         "facebook/react",
-        "dotnet/core",
         "ni/labview-icon-editor"
     ]
     if scaling_repo not in all_repos:
