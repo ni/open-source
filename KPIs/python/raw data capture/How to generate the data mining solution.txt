@@ -6,8 +6,6 @@ Implement “incremental” logic (?since=...) for issues/pulls, though each run
 Everything is fully pasted into the fetch_*_data functions, preserving your debug statements.
 
 1) repo_list.py
-python
-Copy code
 # repo_list.py
 """
 Each repo dict has:
