@@ -1,14 +1,15 @@
 # repos.py
+"""
+A placeholder logic for how you define the repos you want to fetch.
+You might store them in a 'repos' table or config. For demonstration, let's do a minimal approach.
+"""
 
-def get_enabled_repos(conn):
+def get_repo_list():
     """
-    Return a list of (owner, repo) from 'repos' where enabled=1.
+    Return a hard-coded list or read from DB.
+    For example: [("owner1","repo1"), ("owner2","repo2")]
     """
-    c = conn.cursor()
-    c.execute("SELECT owner, repo FROM repos WHERE enabled=1")
-    rows = c.fetchall()
-    c.close()
-    results = []
-    for (ow, rp) in rows:
-        results.append((ow, rp))
-    return results
+    return [
+        ("ni","labview-icon-editor"),
+        ("ni","actor-framework")
+    ]

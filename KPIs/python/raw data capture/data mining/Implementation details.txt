@@ -1,0 +1,749 @@
+Below is a complete multi-file solution that:
+
+Automatically creates the target MySQL database if it does not exist (fixing the “Unknown database” error).
+Implements single-thread logic to fetch:
+issues (skip if created_at > baseline_date),
+pulls (skip if created_at > baseline_date),
+issue comments (skip if created_at > baseline_date),
+comment reactions (skip if created_at > baseline_date).
+Uses a repo_baselines table to store baseline_date and an enabled flag per repo.
+Mid-run re-check: If the user changes enabled=0 or adjusts baseline_date, it applies immediately.
+Designed to run either locally for troubleshooting or via a GitHub Action (or any CI) environment.
+We will include:
+
+db.py:
+Connects to MySQL.
+Creates the database if missing.
+Creates needed tables.
+repo_baselines.py:
+DB functions for reading/updating baseline info.
+repos.py:
+A placeholder for how you define the repo list.
+fetch_issues.py, fetch_pulls.py:
+Single-thread listing with skip logic.
+fetch_comments.py:
+Lists issue comments (and optional comment reactions) with skip logic.
+main.py:
+Orchestrator that reads config, connects to DB, calls the fetch logic in sequence, etc.
+config.yaml (sample) plus Step-by-step instructions at the end.
+1. db.py
+python
+Copy
+# db.py
+"""
+1) connect_db(cfg) => ensures the database is created if missing, 
+   then returns a mysql.connector connection.
+
+2) create_tables(conn) => creates repo_baselines, issues, pulls, issue_events, 
+   pull_events, issue_comments, comment_reactions if not exist.
+
+This fixes the error "Unknown database 'my_kpis_analytics_db'" by creating the DB.
+"""
+
+import logging
+import mysql.connector
+
+def connect_db(cfg, create_db_if_missing=True):
+    """
+    Connect to MySQL. If create_db_if_missing=True, we first connect 
+    without specifying the database, do 'CREATE DATABASE IF NOT EXISTS', 
+    then reconnect to the actual DB.
+
+    :param cfg: dictionary loaded from config (cfg['mysql'] with host,port,user,pass,db)
+    :param create_db_if_missing: bool
+    """
+    db_conf = cfg["mysql"]
+    db_name = db_conf["db"]
+
+    # Step 1: connect w/out specifying db => so we can create it if missing
+    temp_conn = mysql.connector.connect(
+        host=db_conf["host"],
+        port=db_conf["port"],
+        user=db_conf["user"],
+        password=db_conf["password"],
+        database=None
+    )
+    temp_cursor = temp_conn.cursor()
+    if create_db_if_missing:
+        logging.info("Ensuring database '%s' exists...", db_name)
+        temp_cursor.execute(f"CREATE DATABASE IF NOT EXISTS {db_name}")
+        temp_conn.commit()
+    temp_cursor.close()
+    temp_conn.close()
+
+    # Step 2: now connect to the actual db
+    conn = mysql.connector.connect(
+        host=db_conf["host"],
+        port=db_conf["port"],
+        user=db_conf["user"],
+        password=db_conf["password"],
+        database=db_name
+    )
+    return conn
+
+def create_tables(conn):
+    """
+    Create all necessary tables:
+    - repo_baselines => per repo's baseline_date + enabled
+    - issues, pulls => minimal placeholders
+    - issue_events, pull_events => placeholders for event data
+    - issue_comments => store comments
+    - comment_reactions => store comment reactions
+    """
+    c = conn.cursor()
+
+    # baseline table
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS repo_baselines (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      owner VARCHAR(255) NOT NULL,
+      repo  VARCHAR(255) NOT NULL,
+      baseline_date DATETIME,
+      enabled TINYINT DEFAULT 1,
+      updated_at DATETIME,
+      UNIQUE KEY (owner, repo)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS issues (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      repo_name VARCHAR(255) NOT NULL,
+      issue_number INT NOT NULL,
+      created_at DATETIME,
+      last_event_id BIGINT UNSIGNED DEFAULT 0
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS pulls (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      repo_name VARCHAR(255) NOT NULL,
+      pull_number INT NOT NULL,
+      created_at DATETIME,
+      last_event_id BIGINT UNSIGNED DEFAULT 0
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS issue_events (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      repo_name VARCHAR(255),
+      issue_number INT,
+      event_id BIGINT UNSIGNED,
+      created_at DATETIME,
+      raw_json JSON
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS pull_events (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      repo_name VARCHAR(255),
+      pull_number INT,
+      event_id BIGINT UNSIGNED,
+      created_at DATETIME,
+      raw_json JSON
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS issue_comments (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      repo_name    VARCHAR(255) NOT NULL,
+      issue_number INT NOT NULL,
+      comment_id   BIGINT UNSIGNED NOT NULL,
+      created_at   DATETIME,
+      body         TEXT,
+      UNIQUE KEY (repo_name, issue_number, comment_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS comment_reactions (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      repo_name    VARCHAR(255) NOT NULL,
+      issue_number INT,
+      comment_id   BIGINT UNSIGNED NOT NULL,
+      reaction_id  BIGINT UNSIGNED NOT NULL,
+      created_at   DATETIME,
+      raw_json     JSON,
+      UNIQUE KEY (repo_name, issue_number, comment_id, reaction_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
+
+    conn.commit()
+    c.close()
+    logging.info("All tables created/verified.")
+2. repo_baselines.py
+python
+Copy
+# repo_baselines.py
+"""
+DB functions to get/update baseline_date + enabled for each (owner, repo).
+We skip items if created_at > baseline_date. If enabled=0 => skip entire repo.
+We also do mid-run re-check to see if baseline_date changed or enabled toggled.
+"""
+
+import logging
+
+def get_baseline_info(conn, owner, repo):
+    """
+    Returns (baseline_date, enabled).
+    If not found => (None, 1) meaning no skip + enabled by default.
+    """
+    c = conn.cursor()
+    c.execute("""
+      SELECT baseline_date, enabled
+      FROM repo_baselines
+      WHERE owner=%s AND repo=%s
+    """, (owner, repo))
+    row = c.fetchone()
+    c.close()
+    if row is None:
+        return (None, 1)
+    return (row[0], row[1])
+
+def refresh_baseline_info_mid_run(conn, owner, repo, old_baseline, old_enabled):
+    """
+    Re-check DB => see if baseline_date or enabled changed. If so, log + return new.
+    """
+    new_base, new_en = get_baseline_info(conn, owner, repo)
+    if new_base != old_baseline or new_en != old_enabled:
+        logging.info("Repo %s/%s => baseline changed mid-run from (%s, %s) to (%s, %s)",
+                     owner, repo, old_baseline, old_enabled, new_base, new_en)
+    return (new_base, new_en)
+3. repos.py
+python
+Copy
+# repos.py
+"""
+Placeholder logic for how we define the list of repos to fetch.
+Could read from a DB table or config. 
+"""
+
+def get_repo_list():
+    """
+    Return a static list for demonstration, or read from a DB table.
+    """
+    return [
+        ("owner1","repo1"),
+        ("owner2","repo2")
+    ]
+4. fetch_issues.py
+python
+Copy
+# fetch_issues.py
+"""
+List issues => skip if created_at > baseline_date => skip.
+Re-check baseline mid-run after each page. 
+Insert or update minimal data in the 'issues' table.
+"""
+
+import logging
+from datetime import datetime
+from repo_baselines import refresh_baseline_info_mid_run
+
+def list_issues_single_thread(conn, owner, repo, baseline_date, enabled, session, handle_rate_limit_func):
+    if enabled == 0:
+        logging.info("Repo %s/%s => enabled=0 => skip entire issues fetch.", owner, repo)
+        return
+
+    page = 1
+    while True:
+        # mid-run re-check
+        new_base, new_en = refresh_baseline_info_mid_run(conn, owner, repo, baseline_date, enabled)
+        if new_en == 0:
+            logging.info("Repo %s/%s => toggled disabled mid-run => stop issues now.", owner, repo)
+            break
+        if new_base != baseline_date:
+            baseline_date = new_base
+            logging.info("Repo %s/%s => updated baseline_date mid-run => now %s", owner, repo, baseline_date)
+
+        url = f"https://api.github.com/repos/{owner}/{repo}/issues"
+        params = {
+            "state":"all",
+            "sort":"created",
+            "direction":"asc",
+            "page":page,
+            "per_page":100
+        }
+        resp = session.get(url, params=params)
+        handle_rate_limit_func(resp)
+        if resp.status_code != 200:
+            logging.warning("Issues => HTTP %d => break for %s/%s", resp.status_code, owner, repo)
+            break
+
+        data = resp.json()
+        if not data:
+            break
+
+        for item in data:
+            if "pull_request" in item:
+                continue  # skip PR in issues listing
+            cstr = item["created_at"]
+            cdt = datetime.strptime(cstr, "%Y-%m-%dT%H:%M:%SZ")
+            if baseline_date and cdt > baseline_date:
+                # skip => item is newer than baseline => ignore
+                continue
+            insert_issue_record(conn, f"{owner}/{repo}", item["number"], cdt)
+
+        if len(data) < 100:
+            break
+        page += 1
+
+def insert_issue_record(conn, repo_name, issue_number, created_dt):
+    c = conn.cursor()
+    sql = """
+    INSERT INTO issues (repo_name, issue_number, created_at)
+    VALUES (%s, %s, %s)
+    ON DUPLICATE KEY UPDATE
+      created_at=VALUES(created_at)
+    """
+    c.execute(sql, (repo_name, issue_number, created_dt))
+    conn.commit()
+    c.close()
+5. fetch_pulls.py
+python
+Copy
+# fetch_pulls.py
+"""
+Similar approach => skip if created_at > baseline_date, single-thread, mid-run re-check.
+"""
+
+import logging
+from datetime import datetime
+from repo_baselines import refresh_baseline_info_mid_run
+
+def list_pulls_single_thread(conn, owner, repo, baseline_date, enabled, session, handle_rate_limit_func):
+    if enabled == 0:
+        logging.info("Repo %s/%s => enabled=0 => skip entire pulls fetch.", owner, repo)
+        return
+
+    page = 1
+    while True:
+        new_base, new_en = refresh_baseline_info_mid_run(conn, owner, repo, baseline_date, enabled)
+        if new_en == 0:
+            logging.info("Repo %s/%s => toggled disabled => stop pulls mid-run.", owner, repo)
+            break
+        if new_base != baseline_date:
+            baseline_date = new_base
+            logging.info("Repo %s/%s => updated baseline_date mid-run => now %s (pulls)", owner, repo, baseline_date)
+
+        url = f"https://api.github.com/repos/{owner}/{repo}/issues"
+        params = {
+            "state":"all",
+            "sort":"created",
+            "direction":"asc",
+            "page":page,
+            "per_page":100
+        }
+        resp = session.get(url, params=params)
+        handle_rate_limit_func(resp)
+        if resp.status_code != 200:
+            logging.warning("Pulls => HTTP %d => break for %s/%s", resp.status_code, owner, repo)
+            break
+
+        data = resp.json()
+        if not data:
+            break
+
+        for item in data:
+            if "pull_request" not in item:
+                continue
+            cstr = item["created_at"]
+            cdt = datetime.strptime(cstr, "%Y-%m-%dT%H:%M:%SZ")
+            if baseline_date and cdt > baseline_date:
+                continue
+            insert_pull_record(conn, f"{owner}/{repo}", item["number"], cdt)
+
+        if len(data)<100:
+            break
+        page += 1
+
+def insert_pull_record(conn, repo_name, pull_number, created_dt):
+    c = conn.cursor()
+    sql = """
+    INSERT INTO pulls (repo_name, pull_number, created_at)
+    VALUES (%s, %s, %s)
+    ON DUPLICATE KEY UPDATE
+      created_at=VALUES(created_at)
+    """
+    c.execute(sql, (repo_name, pull_number, created_dt))
+    conn.commit()
+    c.close()
+6. fetch_comments.py
+python
+Copy
+# fetch_comments.py
+"""
+Lists issue comments => skip if comment.created_at > baseline_date.
+Optionally fetch reactions => skip if reaction.created_at>baseline_date.
+"""
+
+import logging
+from datetime import datetime
+from repo_baselines import refresh_baseline_info_mid_run
+
+def list_issue_comments_single_thread(conn, owner, repo, issue_number,
+                                      baseline_date, enabled, session,
+                                      handle_rate_limit_func):
+    if enabled==0:
+        logging.info("Repo %s/%s => disabled => skip comments for issue #%d",
+                     owner, repo, issue_number)
+        return
+
+    page=1
+    while True:
+        new_base, new_en = refresh_baseline_info_mid_run(conn, owner, repo, baseline_date, enabled)
+        if new_en==0:
+            logging.info("Repo %s/%s => toggled disabled => stop comments mid-run issue #%d",
+                         owner, repo, issue_number)
+            break
+        if new_base != baseline_date:
+            baseline_date=new_base
+            logging.info("Repo %s/%s => baseline_date changed => now %s (comments for #%d)",
+                         owner, repo, baseline_date, issue_number)
+
+        url = f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}/comments"
+        params={
+            "page":page,
+            "per_page":50,
+            "sort":"created",
+            "direction":"asc"
+        }
+        resp=session.get(url, params=params)
+        handle_rate_limit_func(resp)
+        if resp.status_code!=200:
+            logging.warning("Comments => HTTP %d => break for %s/%s issue #%d",
+                            resp.status_code, owner, repo, issue_number)
+            break
+
+        data=resp.json()
+        if not data:
+            break
+
+        for cmt in data:
+            c_created_str=cmt["created_at"]
+            c_created_dt=datetime.strptime(c_created_str, "%Y-%m-%dT%H:%M:%SZ")
+            if baseline_date and c_created_dt>baseline_date:
+                continue
+            insert_comment_record(conn, f"{owner}/{repo}", issue_number, cmt)
+            # Optionally => fetch reactions
+            # fetch_comment_reactions_single_thread(conn, owner, repo, issue_number, cmt["id"], 
+            #         baseline_date, new_en, session, handle_rate_limit_func)
+
+        if len(data)<50:
+            break
+        page+=1
+
+def insert_comment_record(conn, repo_name, issue_num, cmt_json):
+    cmt_id=cmt_json["id"]
+    c_created_str=cmt_json["created_at"]
+    c_created_dt=datetime.strptime(c_created_str, "%Y-%m-%dT%H:%M:%SZ")
+    body=cmt_json.get("body","")
+    c=conn.cursor()
+    sql="""
+    INSERT INTO issue_comments (repo_name, issue_number, comment_id, created_at, body)
+    VALUES (%s, %s, %s, %s, %s)
+    ON DUPLICATE KEY UPDATE
+      created_at=VALUES(created_at),
+      body=VALUES(body)
+    """
+    c.execute(sql,(repo_name, issue_num, cmt_id, c_created_dt, body))
+    conn.commit()
+    c.close()
+
+def fetch_comment_reactions_single_thread(conn, owner, repo, issue_number, comment_id,
+                                         baseline_date, enabled, session,
+                                         handle_rate_limit_func):
+    if enabled==0:
+        logging.info("Repo %s/%s => disabled => skip comment_reactions for issue #%d cmt_id=%d",
+                     owner, repo, issue_number, comment_id)
+        return
+    # mid-run re-check
+    new_base, new_en = refresh_baseline_info_mid_run(conn, owner, repo, baseline_date, enabled)
+    if new_en==0:
+        logging.info("Disabled mid-run => skip reactions")
+        return
+    if new_base!=baseline_date:
+        baseline_date=new_base
+
+    old_accept=session.headers.get("Accept","")
+    session.headers["Accept"]="application/vnd.github.squirrel-girl-preview+json"
+    reac_url=f"https://api.github.com/repos/{owner}/{repo}/issues/comments/{comment_id}/reactions"
+    resp=session.get(reac_url)
+    handle_rate_limit_func(resp)
+    session.headers["Accept"]=old_accept
+
+    if resp.status_code!=200:
+        logging.warning("Reactions => HTTP %d => skip cmt_id=%d in %s/%s",
+                        resp.status_code, comment_id, owner, repo)
+        return
+    data=resp.json()
+    for reac in data:
+        reac_created_str=reac["created_at"]
+        reac_created_dt=datetime.strptime(reac_created_str, "%Y-%m-%dT%H:%M:%SZ")
+        if baseline_date and reac_created_dt>baseline_date:
+            continue
+        insert_comment_reaction(conn, f"{owner}/{repo}", issue_number, comment_id, reac)
+
+def insert_comment_reaction(conn, repo_name, issue_num, comment_id, reac_json):
+    reac_id=reac_json["id"]
+    reac_created_str=reac_json["created_at"]
+    reac_created_dt=datetime.strptime(reac_created_str, "%Y-%m-%dT%H:%M:%SZ")
+    c=conn.cursor()
+    sql="""
+    INSERT INTO comment_reactions 
+      (repo_name, issue_number, comment_id, reaction_id, created_at, raw_json)
+    VALUES
+      (%s, %s, %s, %s, %s, %s)
+    ON DUPLICATE KEY UPDATE
+      created_at=VALUES(created_at),
+      raw_json=VALUES(raw_json)
+    """
+    c.execute(sql,(repo_name, issue_num, comment_id, reac_id, reac_created_dt, reac_json))
+    conn.commit()
+    c.close()
+7. main.py
+python
+Copy
+#!/usr/bin/env python
+# main.py
+"""
+Final orchestrator. Single-thread. 
+- Reads config, connect DB (creating it if missing).
+- create_tables
+- For each repo, load baseline_date & enabled => skip if baseline_date is given & item is newer than that date.
+- List issues, list pulls, (optionally list comments, etc.).
+- Provides instructions for local usage or GitHub action.
+
+We fix the "Unknown database" error by ensuring the DB is created in connect_db.
+"""
+
+import os
+import sys
+import logging
+import yaml
+import requests
+from logging.handlers import TimedRotatingFileHandler
+
+from db import connect_db, create_tables
+from repo_baselines import get_baseline_info
+from repos import get_repo_list
+from fetch_issues import list_issues_single_thread
+from fetch_pulls import list_pulls_single_thread
+from fetch_comments import list_issue_comments_single_thread
+
+def load_config():
+    cfg={}
+    if os.path.isfile("config.yaml"):
+        with open("config.yaml","r",encoding="utf-8") as f:
+            cfg=yaml.safe_load(f)
+    # fallback => environment 
+    cfg.setdefault("mysql", {
+        "host":os.getenv("DB_HOST","localhost"),
+        "port":int(os.getenv("DB_PORT","3306")),
+        "user":os.getenv("DB_USER","root"),
+        "password":os.getenv("DB_PASS","root"),
+        "db":os.getenv("DB_NAME","my_kpis_analytics_db")
+    })
+    cfg.setdefault("tokens", [])
+    cfg.setdefault("logging",{
+        "file_name":"myapp.log",
+        "rotate_when":"midnight",
+        "backup_count":7,
+        "console_level":"DEBUG",
+        "file_level":"DEBUG"
+    })
+    return cfg
+
+def setup_logging(cfg):
+    log_conf=cfg.get("logging",{})
+    log_file=log_conf.get("file_name","myapp.log")
+    rotate_when=log_conf.get("rotate_when","midnight")
+    backup_count=log_conf.get("backup_count",7)
+
+    console_level=log_conf.get("console_level","DEBUG")
+    file_level=log_conf.get("file_level","DEBUG")
+
+    logger=logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+
+    ch=logging.StreamHandler(sys.stdout)
+    ch.setLevel(console_level.upper())
+    logger.addHandler(ch)
+
+    fh=TimedRotatingFileHandler(log_file, when=rotate_when, backupCount=backup_count)
+    fh.setLevel(file_level.upper())
+    logger.addHandler(fh)
+
+    f_console=logging.Formatter("[%(levelname)s] %(message)s")
+    ch.setFormatter(f_console)
+    f_file=logging.Formatter("%(asctime)s [%(levelname)s] %(name)s - %(message)s")
+    fh.setFormatter(f_file)
+
+def handle_rate_limit(resp):
+    # minimal approach => if near limit => just log
+    if "X-RateLimit-Remaining" in resp.headers:
+        try:
+            rem_val=int(resp.headers["X-RateLimit-Remaining"])
+            if rem_val<5:
+                logging.warning("Near rate limit => be cautious or sleep.")
+        except ValueError:
+            pass
+
+def main():
+    cfg=load_config()
+    setup_logging(cfg)
+    logging.info("Starting single-thread script with baseline skip logic (created_at>baseline_date => skip).")
+
+    conn=connect_db(cfg, create_db_if_missing=True)
+    create_tables(conn)
+
+    tokens=cfg.get("tokens",[])
+    session=requests.Session()
+    if tokens:
+        session.headers.update({"Authorization":f"token {tokens[0]}"})
+
+    # fetch all repos from a function
+    all_repos=get_repo_list()
+    for (owner,repo) in all_repos:
+        # get baseline_date + enabled
+        baseline_date, enabled = get_baseline_info(conn, owner, repo)
+        logging.info("Repo %s/%s => baseline_date=%s, enabled=%s",
+                     owner, repo, baseline_date, enabled)
+
+        # 1) List issues => skip newer than baseline
+        list_issues_single_thread(conn, owner, repo, baseline_date, enabled, session, handle_rate_limit)
+        # 2) List pulls => skip newer than baseline
+        list_pulls_single_thread(conn, owner, repo, baseline_date, enabled, session, handle_rate_limit)
+
+        # optional => for each issue, we might list comments, skipping newer
+        # in a real scenario you'd discover which issues are newly inserted 
+        # or updated. For demonstration:
+        # if we inserted issues table => we can do a pass for each row 
+        # and call list_issue_comments_single_thread
+
+    conn.close()
+    logging.info("All done => single-thread run complete, skipping created_at>baseline_date if set.")
+
+if __name__=="__main__":
+    main()
+STEP-BY-STEP INSTRUCTIONS
+Below are detailed instructions for first setup and usage.
+
+1. Install Dependencies
+Python 3.9+ recommended.
+MySQL server installed locally or accessible via network.
+Run:
+bash
+Copy
+pip install mysql-connector-python pyyaml requests
+2. Place Files in a Single Folder
+Your directory might look like this:
+
+arduino
+Copy
+my_kpis_solution/
+  db.py
+  repo_baselines.py
+  repos.py
+  fetch_issues.py
+  fetch_pulls.py
+  fetch_comments.py
+  main.py
+  config.yaml  (optional, for local usage)
+3. Edit config.yaml (Optional)
+yaml
+Copy
+mysql:
+  host: "localhost"
+  port: 3306
+  user: "root"
+  password: "root"
+  db: "my_kpis_analytics_db"
+
+tokens:
+  - "ghp_SampleToken"
+
+logging:
+  file_name: "myapp.log"
+  rotate_when: "midnight"
+  backup_count: 7
+  console_level: "DEBUG"
+  file_level: "DEBUG"
+If you prefer environment variables, skip the file and define e.g. DB_HOST, DB_PASS, etc.
+4. Run Locally
+bash
+Copy
+python main.py
+It loads config, including DB credentials.
+Connects to MySQL. If the DB doesn’t exist, it calls CREATE DATABASE IF NOT EXISTS db_name, preventing “Unknown database” errors.
+Calls create_tables.
+For each (owner, repo) from repos.get_repo_list(), it checks repo_baselines for a row:
+If none => (None,1) means no skip date, repo enabled => fetch everything.
+If found => skip items where created_at>baseline_date if baseline_date is not null, or skip entire repo if enabled=0.
+Single-thread listing for issues, pulls. You can expand it to fetch comments, reactions, or events.
+Mid-run changes: If you toggle enabled=0 in repo_baselines or update baseline_date, the script re-checks after each page of fetch, applying changes immediately.
+
+5. Usage in GitHub Actions
+Create a file .github/workflows/kpis.yml:
+
+yaml
+Copy
+name: "KPIs Data Fetch"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fetch-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+      
+      - name: Install dependencies
+        run: |
+          pip install mysql-connector-python pyyaml requests
+      
+      - name: Run script
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: "3306"
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASS: ${{ secrets.DB_PASS }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          GITHUB_TOKEN1: ${{ secrets.MY_GITHUB_TOKEN }}
+        run: |
+          python main.py
+Provide DB credentials and a token in GitHub Secrets.
+The script runs the same. No concurrency unless you add it in the future.
+FIX to “Unknown database” ERROR
+The key fix is in db.py:
+
+python
+Copy
+temp_conn = mysql.connector.connect(... database=None ...)
+...
+temp_cursor.execute(f"CREATE DATABASE IF NOT EXISTS {db_name}")
+...
+conn = mysql.connector.connect(... database=db_name ...)
+Thus, you never get the error “Unknown database 'my_kpis_analytics_db'” again, as the script ensures it’s created first.
+
+Summation
+This final solution:
+
+Single-Thread approach.
+Reverse skip (created_at > baseline_date => skip).
+Per-Repo baseline date stored in repo_baselines.
+Enable/Disable skipping entire repos.
+Mid-run re-check for baseline changes.
+Comments and reactions skip logic as well, if you decide to call those functions.
+You can run it locally or in GitHub Actions with minimal modifications. That addresses your newest requirements and corrects the MySQL database creation error.
