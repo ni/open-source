@@ -1,6 +1,7 @@
 # fetch_pulls.py
 
 import logging
+import json
 from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
 
@@ -32,6 +33,7 @@ def list_pulls_single_thread(conn, owner, repo, baseline_date, enabled, session,
         if resp.status_code!=200:
             logging.warning("Pulls => HTTP %d => break for %s/%s",resp.status_code,owner,repo)
             break
+
         data=resp.json()
         if not data:
             break
@@ -39,8 +41,8 @@ def list_pulls_single_thread(conn, owner, repo, baseline_date, enabled, session,
         for item in data:
             if "pull_request" not in item:
                 continue
-            cstr=item["created_at"]
-            cdt=datetime.strptime(cstr,"%Y-%m-%dT%H:%M:%SZ")
+            c_created_str=item["created_at"]
+            cdt=datetime.strptime(c_created_str,"%Y-%m-%dT%H:%M:%SZ")
             if baseline_date and cdt>baseline_date:
                 continue
             insert_pull_record(conn, f"{owner}/{repo}", item["number"], cdt)

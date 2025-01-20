@@ -1,11 +1,12 @@
 # fetch_issue_reactions.py
 """
-Fetch Reactions on the Issue object itself => skip if reaction.created_at>baseline_date.
-We do: GET /repos/{owner}/{repo}/issues/{issue_number}/reactions 
-(Need Accept: application/vnd.github.squirrel-girl-preview+json).
+Fetch Issue Reactions => skip if reaction.created_at>baseline_date
+We do GET /repos/{owner}/{repo}/issues/{issue_number}/reactions
+Need Accept: application/vnd.github.squirrel-girl-preview+json
 """
 
 import logging
+import json
 from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
 
@@ -15,7 +16,6 @@ def fetch_issue_reactions_single_thread(conn, owner, repo, issue_number,
     if enabled==0:
         logging.info("Repo %s/%s => disabled => skip issue_reactions for #%d",owner,repo,issue_number)
         return
-
     new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,baseline_date,enabled)
     if new_en==0:
         logging.info("Repo %s/%s => toggled disabled => skip issue_reactions mid-run for #%d",
@@ -28,14 +28,13 @@ def fetch_issue_reactions_single_thread(conn, owner, repo, issue_number,
 
     old_accept=session.headers.get("Accept","")
     session.headers["Accept"]="application/vnd.github.squirrel-girl-preview+json"
-    reac_url=f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}/reactions"
-    resp=session.get(reac_url)
+    url=f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}/reactions"
+    resp=session.get(url)
     handle_rate_limit_func(resp)
     session.headers["Accept"]=old_accept
 
     if resp.status_code!=200:
-        logging.warning("Issue Reactions => HTTP %d => skip for #%d in %s/%s",
-                        resp.status_code, issue_number,owner,repo)
+        logging.warning("Issue Reactions => HTTP %d => skip for #%d in %s/%s",resp.status_code,issue_number,owner,repo)
         return
     data=resp.json()
     for reac in data:
@@ -49,16 +48,18 @@ def insert_issue_reaction(conn, repo_name, issue_num, reac_json):
     reac_id=reac_json["id"]
     reac_created_str=reac_json["created_at"]
     reac_created_dt=datetime.strptime(reac_created_str,"%Y-%m-%dT%H:%M:%SZ")
+    import json
+    raw_json_str=json.dumps(reac_json, ensure_ascii=False)
     c=conn.cursor()
     sql="""
     INSERT INTO issue_reactions 
       (repo_name, issue_number, reaction_id, created_at, raw_json)
-    VALUES 
+    VALUES
       (%s,%s,%s,%s,%s)
     ON DUPLICATE KEY UPDATE
       created_at=VALUES(created_at),
       raw_json=VALUES(raw_json)
     """
-    c.execute(sql,(repo_name, issue_num, reac_id, reac_created_dt, reac_json))
+    c.execute(sql,(repo_name,issue_num,reac_id,reac_created_dt,raw_json_str))
     conn.commit()
     c.close()

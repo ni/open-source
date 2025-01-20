@@ -2,10 +2,12 @@
 """
 Fetch forks => skip if created_at>baseline_date
 Fetch stars => skip if starred_at>baseline_date
-Fetch watchers => no date => fetch if enabled=1
+Fetch watchers => no date => store if enabled=1
+Store raw_json with json.dumps(...) to avoid dict conversion errors.
 """
 
 import logging
+import json
 from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
 
@@ -52,9 +54,11 @@ def list_forks_single_thread(conn, owner, repo, baseline_date, enabled, session,
         page+=1
 
 def insert_fork_record(conn, repo_name, fork_json):
+    import json
     fork_id=fork_json["id"]
     created_str=fork_json["created_at"]
     created_dt=datetime.strptime(created_str,"%Y-%m-%dT%H:%M:%SZ")
+    raw_str=json.dumps(fork_json,ensure_ascii=False)
     c=conn.cursor()
     sql="""
     INSERT INTO forks (repo_name, fork_id, created_at, raw_json)
@@ -63,7 +67,7 @@ def insert_fork_record(conn, repo_name, fork_json):
       created_at=VALUES(created_at),
       raw_json=VALUES(raw_json)
     """
-    c.execute(sql,(repo_name, fork_id, created_dt,fork_json))
+    c.execute(sql,(repo_name,fork_id,created_dt,raw_str))
     conn.commit()
     c.close()
 
@@ -82,7 +86,7 @@ def list_stars_single_thread(conn, owner, repo, baseline_date, enabled, session,
             break
         if new_base!=baseline_date:
             baseline_date=new_base
-            logging.info("Repo %s/%s => baseline changed => now %s (stars)",owner,repo,baseline_date)
+            logging.info("Repo %s/%s => baseline changed => now %s (stars).",owner,repo,baseline_date)
 
         url=f"https://api.github.com/repos/{owner}/{repo}/stargazers"
         params={
@@ -113,9 +117,11 @@ def list_stars_single_thread(conn, owner, repo, baseline_date, enabled, session,
     session.headers["Accept"]=old_accept
 
 def insert_star_record(conn, repo_name, star_json):
+    import json
     user_login=star_json["user"]["login"]
     starred_str=star_json["starred_at"]
     starred_dt=datetime.strptime(starred_str,"%Y-%m-%dT%H:%M:%SZ")
+    raw_str=json.dumps(star_json,ensure_ascii=False)
     c=conn.cursor()
     sql="""
     INSERT INTO stars (repo_name, user_login, starred_at, raw_json)
@@ -124,7 +130,7 @@ def insert_star_record(conn, repo_name, star_json):
       starred_at=VALUES(starred_at),
       raw_json=VALUES(raw_json)
     """
-    c.execute(sql,(repo_name,user_login,starred_dt,star_json))
+    c.execute(sql,(repo_name,user_login,starred_dt,raw_str))
     conn.commit()
     c.close()
 
@@ -142,21 +148,23 @@ def list_watchers_single_thread(conn, owner, repo, enabled, session, handle_rate
         resp=session.get(url, params=params)
         handle_rate_limit_func(resp)
         if resp.status_code!=200:
-            logging.warning("Watchers => HTTP %d => break for %s/%s",resp.status_code,owner,repo)
+            logging.warning("Watchers => HTTP %d => break for %s/%s", resp.status_code,owner,repo)
             break
         data=resp.json()
         if not data:
             break
 
         for user_obj in data:
-            user_login=user_obj["login"]
-            insert_watcher_record(conn,f"{owner}/{repo}",user_login,user_obj)
+            insert_watcher_record(conn, f"{owner}/{repo}", user_obj)
 
         if len(data)<100:
             break
         page+=1
 
-def insert_watcher_record(conn, repo_name, user_login, user_json):
+def insert_watcher_record(conn, repo_name, user_json):
+    import json
+    user_login=user_json["login"]
+    raw_str=json.dumps(user_json, ensure_ascii=False)
     c=conn.cursor()
     sql="""
     INSERT INTO watchers (repo_name, user_login, raw_json)
@@ -164,6 +172,6 @@ def insert_watcher_record(conn, repo_name, user_login, user_json):
     ON DUPLICATE KEY UPDATE
       raw_json=VALUES(raw_json)
     """
-    c.execute(sql,(repo_name,user_login,user_json))
+    c.execute(sql,(repo_name,user_login,raw_str))
     conn.commit()
     c.close()

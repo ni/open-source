@@ -1,18 +1,18 @@
 # fetch_issues.py
 """
-Lists issues => skip if created_at>baseline_date.
-Single-thread => re-check mid-run if baseline changes => immediate effect.
-We store minimal data in 'issues'.
+List issues => skip if issue.created_at>baseline_date. Single-thread. 
 """
 
 import logging
+import json
 from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
 
 def list_issues_single_thread(conn, owner, repo, baseline_date, enabled, session, handle_rate_limit_func):
     if enabled==0:
-        logging.info("Repo %s/%s => disabled => skip issues fetch.", owner, repo)
+        logging.info("Repo %s/%s => disabled => skip issues.", owner,repo)
         return
+
     page=1
     while True:
         new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,baseline_date,enabled)
@@ -34,8 +34,9 @@ def list_issues_single_thread(conn, owner, repo, baseline_date, enabled, session
         resp=session.get(url, params=params)
         handle_rate_limit_func(resp)
         if resp.status_code!=200:
-            logging.warning("Issues => HTTP %d => break for %s/%s",resp.status_code,owner,repo)
+            logging.warning("Issues => HTTP %d => break for %s/%s", resp.status_code,owner,repo)
             break
+
         data=resp.json()
         if not data:
             break
@@ -43,8 +44,8 @@ def list_issues_single_thread(conn, owner, repo, baseline_date, enabled, session
         for item in data:
             if "pull_request" in item:
                 continue
-            cstr=item["created_at"]
-            cdt=datetime.strptime(cstr,"%Y-%m-%dT%H:%M:%SZ")
+            c_created_str=item["created_at"]
+            cdt=datetime.strptime(c_created_str,"%Y-%m-%dT%H:%M:%SZ")
             if baseline_date and cdt>baseline_date:
                 continue
             insert_issue_record(conn, f"{owner}/{repo}", item["number"], cdt)
@@ -61,6 +62,6 @@ def insert_issue_record(conn, repo_name, issue_number, created_dt):
     ON DUPLICATE KEY UPDATE
       created_at=VALUES(created_at)
     """
-    c.execute(sql,(repo_name, issue_number, created_dt))
+    c.execute(sql,(repo_name,issue_number,created_dt))
     conn.commit()
     c.close()

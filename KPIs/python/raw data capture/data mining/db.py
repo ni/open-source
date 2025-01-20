@@ -1,26 +1,20 @@
 # db.py
 """
-1) connect_db(cfg, create_db_if_missing=True):
+1) connect_db(cfg, create_db_if_missing=True)
    - Connects to MySQL
-   - Ensures database is created if missing (fixing "Unknown database" error)
-2) create_tables(conn):
-   - Creates all tables needed for issues, pulls, forks, stars, watchers,
-     comments, comment_reactions, issue_reactions, plus the repo_baselines table.
-
-You can adapt if you want separate DB creation logic, but this is typically easiest.
+   - Creates the DB if missing => avoids 'Unknown database' errors
+2) create_tables(conn)
+   - Builds all relevant tables, including watchers, forks, stars, issues, pulls, comment_reactions, etc.
 """
 
 import logging
 import mysql.connector
 
 def connect_db(cfg, create_db_if_missing=True):
-    """
-    Connect to MySQL, ensuring database is created if missing.
-    """
     db_conf = cfg["mysql"]
     db_name = db_conf["db"]
 
-    # step 1 => connect without db => create if missing
+    # Connect without specifying DB => create it if missing
     tmp_conn = mysql.connector.connect(
         host=db_conf["host"],
         port=db_conf["port"],
@@ -36,7 +30,7 @@ def connect_db(cfg, create_db_if_missing=True):
     tmp_cursor.close()
     tmp_conn.close()
 
-    # step 2 => connect to actual db
+    # Now connect to actual DB
     conn = mysql.connector.connect(
         host=db_conf["host"],
         port=db_conf["port"],
@@ -47,19 +41,9 @@ def connect_db(cfg, create_db_if_missing=True):
     return conn
 
 def create_tables(conn):
-    """
-    Creates all necessary tables for a complete skip-if-newer-than-baseline approach:
-    - repo_baselines => per repo baseline_date & enabled
-    - issues, pulls => minimal placeholders
-    - forks => skip if fork.created_at>baseline_date
-    - stars => skip if starred_at>baseline_date
-    - watchers => no date => fetch all if enabled=1
-    - issue_comments, comment_reactions => skip if creation > baseline
-    - issue_reactions => skip if creation > baseline
-    """
     c = conn.cursor()
 
-    # 1) baseline table
+    # 1) repo_baselines => per-repo baseline_date + enabled
     c.execute("""
     CREATE TABLE IF NOT EXISTS repo_baselines (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -82,7 +66,6 @@ def create_tables(conn):
       last_event_id BIGINT UNSIGNED DEFAULT 0
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
-
     c.execute("""
     CREATE TABLE IF NOT EXISTS pulls (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -104,7 +87,6 @@ def create_tables(conn):
       raw_json JSON
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
-
     c.execute("""
     CREATE TABLE IF NOT EXISTS pull_events (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -116,7 +98,7 @@ def create_tables(conn):
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
 
-    # 4) comments + comment reactions
+    # 4) issue_comments + comment_reactions
     c.execute("""
     CREATE TABLE IF NOT EXISTS issue_comments (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -142,7 +124,7 @@ def create_tables(conn):
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
 
-    # 5) watchers => no date => store if enabled=1
+    # 5) watchers => no created_at => we fetch all if enabled=1
     c.execute("""
     CREATE TABLE IF NOT EXISTS watchers (
       id INT AUTO_INCREMENT PRIMARY KEY,
