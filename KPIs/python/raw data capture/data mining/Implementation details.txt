@@ -131,3 +131,241 @@ Multiple Tokens: Minimizes downtime by switching off near-limit tokens.
 Earliest Reset: Minimizes total sleep time (only as long as needed).
 Separate modules: Each fetch type is isolated, simplifying code organization.
 On-Demand skipping: If a repo is toggled off mid-run or the baseline changes, the code picks that up on each page boundary.
+
+________________________________________________________________________________________________________________________
+
+Below is a detailed breakdown of the database structure (i.e., the schema) used by this solution, along with the intention of each table and field. This allows you to see exactly how each piece of data is stored, why it exists, and what is done with it in the code.
+
+1. repo_baselines Table
+sql
+Copy
+CREATE TABLE IF NOT EXISTS repo_baselines (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  owner VARCHAR(255) NOT NULL,
+  repo  VARCHAR(255) NOT NULL,
+  baseline_date DATETIME,
+  enabled TINYINT DEFAULT 1,
+  updated_at DATETIME,
+  UNIQUE KEY (owner, repo)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+Purpose: Manage per-repo metadata about whether it’s “enabled” for fetching, and a “baseline date” beyond which you might skip newly created data.
+Fields:
+id: Auto-increment primary key—standard MySQL practice for unique row IDs.
+owner: The GitHub username/organization (e.g. "tensorflow").
+repo: The repository name (e.g. "tensorflow").
+baseline_date: A DATETIME that indicates you only want data created on or before this date. Newer items might be skipped.
+enabled: A tiny integer flag (default 1). If set to 0, the solution will skip fetching data for this repo entirely.
+updated_at: A DATETIME that can be used to track when you last updated the row (not always used, but included for convenience).
+Unique Key (owner, repo): Ensures only one row per (owner,repo) pair.
+2. issues Table
+sql
+Copy
+CREATE TABLE IF NOT EXISTS issues (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  repo_name VARCHAR(255) NOT NULL,
+  issue_number INT NOT NULL,
+  created_at DATETIME,
+  last_event_id BIGINT UNSIGNED DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+Purpose: Store basic metadata about issues in a repository.
+Fields:
+id: Auto-increment primary key, unique row identifier.
+repo_name: Combined string of "owner/repo" or something similar, identifying which repo this issue belongs to (e.g. "tensorflow/tensorflow").
+issue_number: The integer issue number from GitHub’s API (e.g., 1234).
+created_at: The date/time the issue was originally created.
+last_event_id: A BIGINT that can track the highest event ID we’ve processed for incremental updates, if needed. Default is 0.
+3. pulls Table
+sql
+Copy
+CREATE TABLE IF NOT EXISTS pulls (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  repo_name VARCHAR(255) NOT NULL,
+  pull_number INT NOT NULL,
+  created_at DATETIME,
+  last_event_id BIGINT UNSIGNED DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+Purpose: Similar to the issues table, but specifically for pull requests.
+Fields:
+id: Auto-increment primary key.
+repo_name: "owner/repo" identifier.
+pull_number: The pull request number (just like an issue number, but for PRs).
+created_at: When this PR was opened.
+last_event_id: If you want to track the maximum event ID for that pull, especially if you fetch separate “pull events.”
+4. issue_events Table
+sql
+Copy
+CREATE TABLE IF NOT EXISTS issue_events (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  repo_name VARCHAR(255),
+  issue_number INT,
+  event_id BIGINT UNSIGNED,
+  created_at DATETIME,
+  raw_json JSON
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+Purpose: Store events related to issues (e.g., labeled, assigned, closed, reopened) in a raw JSON form plus minimal columns.
+Fields:
+id: Auto-increment primary key.
+repo_name: Repository name string, e.g., "tensorflow/tensorflow".
+issue_number: The integer issue number that these events correspond to.
+event_id: The unique ID from GitHub’s event object (like 12345678).
+created_at: Timestamp from GitHub’s created_at for the event.
+raw_json: A MySQL JSON column that can store the entire event object as returned by GitHub.
+5. pull_events Table
+sql
+Copy
+CREATE TABLE IF NOT EXISTS pull_events (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  repo_name VARCHAR(255),
+  pull_number INT,
+  event_id BIGINT UNSIGNED,
+  created_at DATETIME,
+  raw_json JSON
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+Purpose: Same structure as issue_events, but specifically for pull request events.
+Fields:
+id: Auto-increment primary key.
+repo_name: Which repo.
+pull_number: Which PR number.
+event_id: The unique GitHub event ID.
+created_at: The event’s creation time.
+raw_json: A JSON column storing the entire raw event payload from GitHub.
+6. issue_comments Table
+sql
+Copy
+CREATE TABLE IF NOT EXISTS issue_comments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  repo_name    VARCHAR(255) NOT NULL,
+  issue_number INT NOT NULL,
+  comment_id   BIGINT UNSIGNED NOT NULL,
+  created_at   DATETIME,
+  body LONGTEXT,
+  UNIQUE KEY (repo_name, issue_number, comment_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+Purpose: Hold comments made on issues (not PRs, though PRs can be issues too—some solutions unify them, but we keep them separate).
+Fields:
+id: Auto-increment PK.
+repo_name: "owner/repo".
+issue_number: Which issue this comment belongs to.
+comment_id: The GitHub comment ID, typically a large integer.
+created_at: When the comment was created.
+body: The actual text content of the comment. We used LONGTEXT to allow extremely long comments without errors.
+Unique Key: (repo_name, issue_number, comment_id) ensures no duplicates for the same comment.
+7. comment_reactions Table
+sql
+Copy
+CREATE TABLE IF NOT EXISTS comment_reactions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  repo_name    VARCHAR(255) NOT NULL,
+  issue_number INT,
+  comment_id   BIGINT UNSIGNED NOT NULL,
+  reaction_id  BIGINT UNSIGNED NOT NULL,
+  created_at   DATETIME,
+  raw_json     JSON,
+  UNIQUE KEY (repo_name, issue_number, comment_id, reaction_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+Purpose: GitHub allows “reactions” (+1, heart, etc.) on comments. This table stores them if the solution is fetching comment reactions.
+Fields:
+id: Auto-increment PK.
+repo_name: The repo string again.
+issue_number: The issue the comment belongs to (helpful for referencing context).
+comment_id: The comment on which the reaction was placed.
+reaction_id: Unique ID from GitHub for that reaction.
+created_at: Timestamp for the reaction creation.
+raw_json: Store the entire reaction object in JSON to preserve details.
+8. watchers Table
+sql
+Copy
+CREATE TABLE IF NOT EXISTS watchers (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  repo_name VARCHAR(255) NOT NULL,
+  user_login VARCHAR(255) NOT NULL,
+  raw_json JSON,
+  UNIQUE KEY (repo_name, user_login)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+Purpose: Keep track of who is watching (subscribed to) a repo. The GitHub API for watchers/subscribers doesn’t give a “created_at,” so we store only basic info.
+Fields:
+id: PK auto-increment.
+repo_name: The repo identifier.
+user_login: The user’s GitHub login who’s watching the repo.
+raw_json: The entire user object from GitHub’s watchers endpoint, if you want to store extra fields (like avatar URL).
+Unique Key: (repo_name, user_login)—one row per user per repo.
+9. stars Table
+sql
+Copy
+CREATE TABLE IF NOT EXISTS stars (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  repo_name VARCHAR(255) NOT NULL,
+  user_login VARCHAR(255) NOT NULL,
+  starred_at DATETIME,
+  raw_json JSON,
+  UNIQUE KEY (repo_name, user_login, starred_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+Purpose: Store who starred a repo, with a starred_at date/time. The GitHub API for stargazers includes a “starred_at” field if you use Accept: application/vnd.github.v3.star+json.
+Fields:
+id: PK.
+repo_name: "owner/repo" string.
+user_login: The user’s GitHub login who starred the repo.
+starred_at: The date/time the user starred it (from GitHub’s starred_at field).
+raw_json: The entire stargazer object, often includes user info.
+Unique Key: (repo_name, user_login, starred_at) ensures no duplicates for the same star event.
+10. forks Table
+sql
+Copy
+CREATE TABLE IF NOT EXISTS forks (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  repo_name VARCHAR(255) NOT NULL,
+  fork_id BIGINT UNSIGNED NOT NULL,
+  created_at DATETIME,
+  raw_json JSON,
+  UNIQUE KEY (repo_name, fork_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+Purpose: Track fork events. The GitHub /forks endpoint returns a “created_at” for each fork, plus other metadata.
+Fields:
+id: Auto-increment PK.
+repo_name: e.g., "owner/repo".
+fork_id: The unique ID GitHub assigns to each fork (like a separate repository ID).
+created_at: The date/time that fork was created.
+raw_json: The entire fork object in JSON, so you can see the fork’s owner, etc.
+Unique Key: (repo_name, fork_id) ensures one row per fork.
+11. issue_reactions Table
+sql
+Copy
+CREATE TABLE IF NOT EXISTS issue_reactions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  repo_name VARCHAR(255) NOT NULL,
+  issue_number INT NOT NULL,
+  reaction_id BIGINT UNSIGNED NOT NULL,
+  created_at DATETIME,
+  raw_json JSON,
+  UNIQUE KEY (repo_name, issue_number, reaction_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+Purpose: Store top-level reactions on the issue object itself (not on comments). For instance, GitHub allows a user to +1 the issue itself.
+Fields:
+id: PK.
+repo_name: Which repo the issue belongs to.
+issue_number: Which issue’s reaction we’re recording.
+reaction_id: The unique ID for the reaction from GitHub.
+created_at: When that reaction was placed.
+raw_json: The entire reaction object in JSON (e.g., which user did it, which type of reaction).
+12. How These Tables Work Together
+repo_baselines toggles or filters repos.
+issues, pulls, issue_events, pull_events store the main content for issues and PRs, plus their event histories.
+issue_comments, comment_reactions store user comments on issues and any reactions on those comments.
+stars, watchers, forks store who starred, who’s watching, and fork metadata for each repo.
+issue_reactions covers top-level reactions on an issue itself (not a comment).
+When the script fetches from GitHub’s various endpoints, it populates these tables. By default each table uses a PRIMARY KEY id, plus a unique or composite key that prevents duplicating the same GitHub object if you re-run the script (like (repo_name, issue_number, comment_id) for comments).
+
+13. Intended Usage
+Insert / Upsert: Usually each fetch module uses something like:
+sql
+Copy
+INSERT INTO ... ON DUPLICATE KEY UPDATE ...
+to avoid duplicates.
+Lookups: You can query these tables for analytics or join them to see how many forks vs. watchers vs. stars a repo has.
+Event Histories: The raw_json fields store the entire JSON payload from GitHub so you don’t lose any fields you aren’t explicitly using yet.
+14. Summary
+Each table addresses a separate domain: watchers, forks, stars, issues, etc.
+Many use a raw_json JSON column to store the entire GitHub payload.
+Unique keys ensure we don’t re-insert the same row multiple times.
+This design keeps an expandable schema: if you want to parse more fields from raw_json later, you can do so without altering the table again.
+Thus, these tables collectively capture all main GitHub data for each repository, with references to the baseline_date and enabled logic in repo_baselines. This structure is the foundation of the entire solution.
