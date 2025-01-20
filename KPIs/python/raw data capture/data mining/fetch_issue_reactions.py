@@ -1,7 +1,7 @@
 # fetch_issue_reactions.py
 """
 Fetch Reactions on the issue object => skip if reaction.created_at>baseline_date
-We pass handle_rate_limit_func, max_retries => robust_get_page => no partial data on 403.
+Now re-try 403,429,500,502,503,504 => skip after max_retries
 """
 
 import logging
@@ -11,14 +11,14 @@ from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
 
 def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
-    for attempt in range(1, max_retries+1):
+    for attempt in range(1,max_retries+1):
         resp=session.get(url, params=params)
         handle_rate_limit_func(resp)
         if resp.status_code==200:
             return (resp,True)
-        elif resp.status_code in (403,429):
+        elif resp.status_code in (403,429,500,502,503,504):
             logging.warning("HTTP %d => attempt %d/%d => will retry => %s",
-                            resp.status_code,attempt,max_retries,url)
+                            resp.status_code, attempt, max_retries, url)
             time.sleep(5)
         else:
             logging.warning("HTTP %d => attempt %d => break => %s", resp.status_code, attempt, url)
@@ -56,14 +56,12 @@ def fetch_issue_reactions_single_thread(conn, owner, repo, issue_number,
         return
     if new_base!=baseline_date:
         baseline_date=new_base
-        logging.info("Repo %s/%s => baseline changed => now %s (issue_reactions for #%d)",
-                     owner,repo,baseline_date,issue_number)
 
     old_accept=session.headers.get("Accept","")
     session.headers["Accept"]="application/vnd.github.squirrel-girl-preview+json"
     url=f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}/reactions"
     (resp,success)=robust_get_page(
-        session, url, params={},
+        session,url,params={},
         handle_rate_limit_func=handle_rate_limit_func,
         max_retries=max_retries
     )
@@ -72,7 +70,6 @@ def fetch_issue_reactions_single_thread(conn, owner, repo, issue_number,
     if not success:
         logging.warning("Issue Reactions => skip => issue #%d => %s/%s",issue_number,owner,repo)
         return
-
     data=resp.json()
     for reac in data:
         reac_created_str=reac["created_at"]

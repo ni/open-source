@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 # main.py
 """
-Final single-thread orchestrator:
- - All fetch modules accept (handle_rate_limit_func, max_retries)
- - We load max_retries from config.yaml
- - We define handle_rate_limit_func => rotates tokens or sleeps
- - We pass them to watchers, forks, stars, issues, pulls, events, comments, issue reactions
-No more NameError => each module consistently references (max_retries).
+Final single-thread orchestrator with robust approach:
+ - handle_rate_limit_func rotates tokens or sleeps for near-limit
+ - pass max_retries from config.yaml
+ - watchers, forks, stars, issues, pulls, events, comments, issue reactions => 
+   each fetch uses robust_get_page, which now re-tries 500,502,503,504 as well.
 """
 
 import os
@@ -31,11 +30,11 @@ def load_config():
         with open("config.yaml","r",encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
     cfg.setdefault("mysql", {
-        "host":os.getenv("DB_HOST","localhost"),
-        "port":int(os.getenv("DB_PORT","3306")),
-        "user":os.getenv("DB_USER","root"),
-        "password":os.getenv("DB_PASS","root"),
-        "db":os.getenv("DB_NAME","my_kpis_analytics_db")
+        "host": os.getenv("DB_HOST","localhost"),
+        "port": int(os.getenv("DB_PORT","3306")),
+        "user": os.getenv("DB_USER","root"),
+        "password": os.getenv("DB_PASS","root"),
+        "db": os.getenv("DB_NAME","my_kpis_analytics_db")
     })
     cfg.setdefault("tokens", [])
     cfg.setdefault("logging", {
@@ -45,9 +44,8 @@ def load_config():
         "console_level": "DEBUG",
         "file_level": "DEBUG"
     })
-    # important => define a global max_retries
-    cfg.setdefault("max_retries", 20000)
-    cfg.setdefault("max_retries", 20000)
+    # define global max_retries
+    cfg.setdefault("max_retries", 20)
     return cfg
 
 def setup_logging(cfg):
@@ -79,20 +77,20 @@ def rotate_token():
     if not TOKENS:
         return
     old_idx = CURRENT_TOKEN_INDEX
-    CURRENT_TOKEN_INDEX = (CURRENT_TOKEN_INDEX + 1) % len(TOKENS)
+    CURRENT_TOKEN_INDEX = (CURRENT_TOKEN_INDEX+1) % len(TOKENS)
     new_token = TOKENS[CURRENT_TOKEN_INDEX]
     session.headers["Authorization"] = f"token {new_token}"
     logging.info("Rotated token from idx %d to %d => now using token: %s...",
                  old_idx, CURRENT_TOKEN_INDEX, new_token[:10])
 
 def do_sleep_based_on_reset(resp):
-    reset_str = resp.headers.get("X-RateLimit-Reset","")
+    reset_str=resp.headers.get("X-RateLimit-Reset","")
     if reset_str.isdigit():
-        reset_ts = int(reset_str)
-        now_ts = int(time.time())
-        delta = reset_ts - now_ts + 10
+        reset_ts=int(reset_str)
+        now_ts=int(time.time())
+        delta=reset_ts-now_ts+10
         if delta>0:
-            logging.warning("All tokens exhausted => sleeping %d sec for rate-limit reset...",delta)
+            logging.warning("Sleeping %d seconds for rate-limit reset...",delta)
             time.sleep(delta)
     else:
         logging.warning("Cannot parse reset => fallback => sleep 3600s")
@@ -104,7 +102,7 @@ def handle_rate_limit_func(resp):
         return
     if "X-RateLimit-Remaining" in resp.headers:
         try:
-            rem_val = int(resp.headers["X-RateLimit-Remaining"])
+            rem_val=int(resp.headers["X-RateLimit-Remaining"])
             if rem_val<5:
                 logging.warning("Near rate limit => rotate or sleep.")
                 old_idx=CURRENT_TOKEN_INDEX
@@ -114,7 +112,7 @@ def handle_rate_limit_func(resp):
         except ValueError:
             pass
     if resp.status_code in (403,429):
-        logging.warning("HTTP %d => forcibly rotate or sleep",resp.status_code)
+        logging.warning("HTTP %d => forcibly rotate or sleep", resp.status_code)
         old_idx=CURRENT_TOKEN_INDEX
         rotate_token()
         if CURRENT_TOKEN_INDEX==old_idx:
@@ -124,7 +122,7 @@ def main():
     global TOKENS, session
     cfg=load_config()
     setup_logging(cfg)
-    logging.info("Starting single-thread => robust approach => with max_retries => no 'max_retries' name error.")
+    logging.info("Starting single-thread => robust approach => re-try 5xx => skip if fails repeatedly.")
 
     conn=connect_db(cfg, create_db_if_missing=True)
     create_tables(conn)
@@ -134,13 +132,13 @@ def main():
     if TOKENS:
         session.headers["Authorization"] = f"token {TOKENS[0]}"
 
-    max_retries=cfg.get("max_retries",20)
+    max_retries = cfg.get("max_retries",20)
     logging.info("Global max_retries => %d",max_retries)
 
     all_repos = get_repo_list()
     for (owner, repo) in all_repos:
         baseline_date, enabled = get_baseline_info(conn, owner, repo)
-        logging.info("Repo %s/%s => baseline_date=%s, enabled=%s",owner,repo,baseline_date,enabled)
+        logging.info("Repo %s/%s => baseline_date=%s, enabled=%s", owner, repo, baseline_date, enabled)
 
         # watchers, forks, stars
         from fetch_forks_stars_watchers import (
@@ -150,7 +148,7 @@ def main():
         )
         list_watchers_single_thread(
             conn, owner, repo,
-            enabled, 
+            enabled,
             session,
             handle_rate_limit_func,
             max_retries
@@ -190,7 +188,7 @@ def main():
             max_retries
         )
 
-        # events => issue_events + pull_events => skip new
+        # events => issue_events & pull_events => skip if new
         from fetch_events import (
             fetch_issue_events_for_all_issues,
             fetch_pull_events_for_all_pulls
@@ -231,7 +229,7 @@ def main():
         )
 
     conn.close()
-    logging.info("All done => watchers, forks, stars, issues, pulls, events, comments, issue reactions => robust => success.")
+    logging.info("All done => watchers, forks, stars, issues, pulls, events, comments, issue reactions => robust => re-tries 5xx => success.")
 
 if __name__=="__main__":
     main()
