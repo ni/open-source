@@ -1,8 +1,8 @@
 # fetch_forks_stars_watchers.py
 """
-Fetch forks => skip if fork.created_at>baseline_date
+Fetch forks => skip if created_at>baseline_date
 Fetch stars => skip if starred_at>baseline_date
-Fetch watchers => no created_at => store all if enabled=1
+Fetch watchers => no date => fetch if enabled=1
 """
 
 import logging
@@ -11,17 +11,17 @@ from repo_baselines import refresh_baseline_info_mid_run
 
 def list_forks_single_thread(conn, owner, repo, baseline_date, enabled, session, handle_rate_limit_func):
     if enabled==0:
-        logging.info("Repo %s/%s => disabled => skip forks.", owner, repo)
+        logging.info("Repo %s/%s => disabled => skip forks.",owner,repo)
         return
     page=1
     while True:
         new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,baseline_date,enabled)
         if new_en==0:
-            logging.info("Repo %s/%s => toggled disabled => stop forks mid-run.", owner, repo)
+            logging.info("Repo %s/%s => toggled disabled => stop forks mid-run",owner,repo)
             break
         if new_base!=baseline_date:
             baseline_date=new_base
-            logging.info("Repo %s/%s => baseline changed => now %s (forks).", owner, repo, baseline_date)
+            logging.info("Repo %s/%s => baseline changed => now %s (forks).",owner,repo,baseline_date)
 
         url=f"https://api.github.com/repos/{owner}/{repo}/forks"
         params={
@@ -32,7 +32,7 @@ def list_forks_single_thread(conn, owner, repo, baseline_date, enabled, session,
         resp=session.get(url, params=params)
         handle_rate_limit_func(resp)
         if resp.status_code!=200:
-            logging.warning("Forks => HTTP %d => break for %s/%s", resp.status_code, owner, repo)
+            logging.warning("Forks => HTTP %d => break %s/%s", resp.status_code,owner,repo)
             break
         data=resp.json()
         if not data:
@@ -45,7 +45,7 @@ def list_forks_single_thread(conn, owner, repo, baseline_date, enabled, session,
             cdt=datetime.strptime(cstr,"%Y-%m-%dT%H:%M:%SZ")
             if baseline_date and cdt>baseline_date:
                 continue
-            insert_fork_record(conn,f"{owner}/{repo}", fork)
+            insert_fork_record(conn, f"{owner}/{repo}", fork)
 
         if len(data)<100:
             break
@@ -63,28 +63,26 @@ def insert_fork_record(conn, repo_name, fork_json):
       created_at=VALUES(created_at),
       raw_json=VALUES(raw_json)
     """
-    c.execute(sql,(repo_name, fork_id, created_dt, fork_json))
+    c.execute(sql,(repo_name, fork_id, created_dt,fork_json))
     conn.commit()
     c.close()
 
 def list_stars_single_thread(conn, owner, repo, baseline_date, enabled, session, handle_rate_limit_func):
     if enabled==0:
-        logging.info("Repo %s/%s => disabled => skip stars.", owner, repo)
+        logging.info("Repo %s/%s => disabled => skip stars.",owner,repo)
         return
 
-    # we need Accept header => "application/vnd.github.v3.star+json" to get starred_at
     old_accept=session.headers.get("Accept","")
     session.headers["Accept"]="application/vnd.github.v3.star+json"
-
     page=1
     while True:
         new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,baseline_date,enabled)
         if new_en==0:
-            logging.info("Repo %s/%s => toggled disabled => stop stars mid-run", owner, repo)
+            logging.info("Repo %s/%s => toggled disabled => stop stars mid-run",owner,repo)
             break
         if new_base!=baseline_date:
             baseline_date=new_base
-            logging.info("Repo %s/%s => baseline changed => now %s (stars).", owner, repo, baseline_date)
+            logging.info("Repo %s/%s => baseline changed => now %s (stars)",owner,repo,baseline_date)
 
         url=f"https://api.github.com/repos/{owner}/{repo}/stargazers"
         params={
@@ -94,25 +92,24 @@ def list_stars_single_thread(conn, owner, repo, baseline_date, enabled, session,
         resp=session.get(url, params=params)
         handle_rate_limit_func(resp)
         if resp.status_code!=200:
-            logging.warning("Stars => HTTP %d => break for %s/%s", resp.status_code, owner, repo)
+            logging.warning("Stars => HTTP %d => break %s/%s",resp.status_code,owner,repo)
             break
         data=resp.json()
         if not data:
             break
 
         for stargazer in data:
-            starred_str=stargazer.get("starred_at")
-            if not starred_str:
+            sstr=stargazer.get("starred_at")
+            if not sstr:
                 continue
-            starred_dt=datetime.strptime(starred_str,"%Y-%m-%dT%H:%M:%SZ")
-            if baseline_date and starred_dt>baseline_date:
+            sdt=datetime.strptime(sstr,"%Y-%m-%dT%H:%M:%SZ")
+            if baseline_date and sdt>baseline_date:
                 continue
-            insert_star_record(conn,f"{owner}/{repo}", stargazer)
+            insert_star_record(conn, f"{owner}/{repo}", stargazer)
 
         if len(data)<100:
             break
         page+=1
-
     session.headers["Accept"]=old_accept
 
 def insert_star_record(conn, repo_name, star_json):
@@ -127,17 +124,13 @@ def insert_star_record(conn, repo_name, star_json):
       starred_at=VALUES(starred_at),
       raw_json=VALUES(raw_json)
     """
-    c.execute(sql,(repo_name, user_login, starred_dt, star_json))
+    c.execute(sql,(repo_name,user_login,starred_dt,star_json))
     conn.commit()
     c.close()
 
 def list_watchers_single_thread(conn, owner, repo, enabled, session, handle_rate_limit_func):
-    """
-    Watchers => /subscribers => no created_at => can't skip. 
-    If enabled=0 => skip entire watchers fetch.
-    """
     if enabled==0:
-        logging.info("Repo %s/%s => disabled => skip watchers", owner, repo)
+        logging.info("Repo %s/%s => disabled => skip watchers",owner,repo)
         return
     page=1
     while True:
@@ -149,7 +142,7 @@ def list_watchers_single_thread(conn, owner, repo, enabled, session, handle_rate
         resp=session.get(url, params=params)
         handle_rate_limit_func(resp)
         if resp.status_code!=200:
-            logging.warning("Watchers => HTTP %d => break for %s/%s", resp.status_code, owner, repo)
+            logging.warning("Watchers => HTTP %d => break for %s/%s",resp.status_code,owner,repo)
             break
         data=resp.json()
         if not data:
@@ -171,6 +164,6 @@ def insert_watcher_record(conn, repo_name, user_login, user_json):
     ON DUPLICATE KEY UPDATE
       raw_json=VALUES(raw_json)
     """
-    c.execute(sql,(repo_name, user_login, user_json))
+    c.execute(sql,(repo_name,user_login,user_json))
     conn.commit()
     c.close()
