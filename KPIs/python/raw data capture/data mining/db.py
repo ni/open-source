@@ -2,14 +2,9 @@
 """
 1) connect_db(cfg, create_db_if_missing=True):
    - Connects to MySQL
-   - Creates DB if missing => prevents unknown DB error
+   - Creates the DB if missing => avoids unknown DB error
 2) create_tables(conn):
-   - Builds all tables:
-     repo_baselines,
-     issues, pulls,
-     issue_comments, comment_reactions,
-     issue_events, pull_events, issue_reactions,
-     forks, stars, watchers
+   - Builds all relevant tables for watchers, forks, stars, issues, pulls, comments, events, etc.
 """
 
 import logging
@@ -19,7 +14,7 @@ def connect_db(cfg, create_db_if_missing=True):
     db_conf = cfg["mysql"]
     db_name = db_conf["db"]
 
-    # Connect w/o specifying db => create it if needed
+    # Connect w/o specifying db => create if missing
     tmp_conn = mysql.connector.connect(
         host=db_conf["host"],
         port=db_conf["port"],
@@ -35,7 +30,7 @@ def connect_db(cfg, create_db_if_missing=True):
     tmp_cursor.close()
     tmp_conn.close()
 
-    # Now connect to the actual DB
+    # Connect to actual DB
     conn = mysql.connector.connect(
         host=db_conf["host"],
         port=db_conf["port"],
@@ -48,7 +43,7 @@ def connect_db(cfg, create_db_if_missing=True):
 def create_tables(conn):
     c = conn.cursor()
 
-    # 1) baseline => per repo
+    # repo_baselines => per repo baseline_date + enabled
     c.execute("""
     CREATE TABLE IF NOT EXISTS repo_baselines (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -71,7 +66,6 @@ def create_tables(conn):
       last_event_id BIGINT UNSIGNED DEFAULT 0
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
-
     c.execute("""
     CREATE TABLE IF NOT EXISTS pulls (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -82,7 +76,7 @@ def create_tables(conn):
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
 
-    # events placeholders => issue_events, pull_events
+    # events => issue_events, pull_events
     c.execute("""
     CREATE TABLE IF NOT EXISTS issue_events (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -93,7 +87,6 @@ def create_tables(conn):
       raw_json JSON
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
-
     c.execute("""
     CREATE TABLE IF NOT EXISTS pull_events (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -117,7 +110,6 @@ def create_tables(conn):
       UNIQUE KEY (repo_name, issue_number, comment_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
-
     c.execute("""
     CREATE TABLE IF NOT EXISTS comment_reactions (
       id INT AUTO_INCREMENT PRIMARY KEY,

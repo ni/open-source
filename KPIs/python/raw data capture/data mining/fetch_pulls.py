@@ -1,15 +1,30 @@
 # fetch_pulls.py
-
 import logging
-import json
+import time
 from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
 
-def list_pulls_single_thread(conn, owner, repo, baseline_date, enabled, session, handle_rate_limit_func):
-    if enabled==0:
-        logging.info("Repo %s/%s => disabled => skip pulls.",owner,repo)
-        return
+def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
+    for attempt in range(1,max_retries+1):
+        resp=session.get(url, params=params)
+        handle_rate_limit_func(resp)
+        if resp.status_code==200:
+            return (resp,True)
+        elif resp.status_code in (403,429):
+            logging.warning("HTTP %d => attempt %d/%d => will retry => %s",
+                            resp.status_code,attempt,max_retries,url)
+            time.sleep(5)
+        else:
+            logging.warning("HTTP %d => attempt %d => break => %s",resp.status_code,attempt,url)
+            return (resp,False)
+    logging.warning("Exceeding max_retries => give up => %s",url)
+    return (None,False)
 
+def list_pulls_single_thread(conn, owner, repo, baseline_date, enabled,
+                             session, handle_rate_limit_func, max_retries):
+    if enabled==0:
+        logging.info("Repo %s/%s => disabled => skip pulls",owner,repo)
+        return
     page=1
     while True:
         new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,baseline_date,enabled)
@@ -18,7 +33,7 @@ def list_pulls_single_thread(conn, owner, repo, baseline_date, enabled, session,
             break
         if new_base!=baseline_date:
             baseline_date=new_base
-            logging.info("Repo %s/%s => baseline changed => now %s (pulls)",owner,repo,baseline_date)
+            logging.info("Repo %s/%s => baseline changed => now %s (pulls).",owner,repo,baseline_date)
 
         url=f"https://api.github.com/repos/{owner}/{repo}/issues"
         params={
@@ -28,10 +43,13 @@ def list_pulls_single_thread(conn, owner, repo, baseline_date, enabled, session,
             "page":page,
             "per_page":100
         }
-        resp=session.get(url, params=params)
-        handle_rate_limit_func(resp)
-        if resp.status_code!=200:
-            logging.warning("Pulls => HTTP %d => break for %s/%s", resp.status_code,owner,repo)
+        (resp,success)=robust_get_page(
+            session, url, params,
+            handle_rate_limit_func,
+            max_retries=max_retries
+        )
+        if not success:
+            logging.warning("Pulls => can't get page %d => break => %s/%s",page,owner,repo)
             break
         data=resp.json()
         if not data:
@@ -44,7 +62,7 @@ def list_pulls_single_thread(conn, owner, repo, baseline_date, enabled, session,
             cdt=datetime.strptime(c_created_str,"%Y-%m-%dT%H:%M:%SZ")
             if baseline_date and cdt>baseline_date:
                 continue
-            insert_pull_record(conn,f"{owner}/{repo}",item["number"],cdt)
+            insert_pull_record(conn, f"{owner}/{repo}", item["number"], cdt)
 
         if len(data)<100:
             break

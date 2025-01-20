@@ -1,15 +1,33 @@
 # fetch_issues.py
 """
-Lists issues => skip if created_at>baseline_date => store in issues table.
-We do not call comments or events here => separate modules handle that.
+Lists issues => skip if created_at>baseline_date
+No immediate break on 403 => we pass (handle_rate_limit_func, max_retries).
 """
 
 import logging
-import json
+import time
 from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
 
-def list_issues_single_thread(conn, owner, repo, baseline_date, enabled, session, handle_rate_limit_func):
+def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
+    for attempt in range(1,max_retries+1):
+        resp=session.get(url, params=params)
+        handle_rate_limit_func(resp)
+        if resp.status_code==200:
+            return (resp,True)
+        elif resp.status_code in (403,429):
+            logging.warning("HTTP %d => attempt %d/%d => retry => %s",
+                            resp.status_code,attempt,max_retries,url)
+            time.sleep(5)
+        else:
+            logging.warning("HTTP %d => attempt %d => break => %s",
+                            resp.status_code, attempt, url)
+            return (resp,False)
+    logging.warning("Exceed max_retries => give up => %s",url)
+    return (None,False)
+
+def list_issues_single_thread(conn, owner, repo, baseline_date, enabled,
+                              session, handle_rate_limit_func, max_retries):
     if enabled==0:
         logging.info("Repo %s/%s => disabled => skip issues",owner,repo)
         return
@@ -31,11 +49,15 @@ def list_issues_single_thread(conn, owner, repo, baseline_date, enabled, session
             "page":page,
             "per_page":100
         }
-        resp=session.get(url, params=params)
-        handle_rate_limit_func(resp)
-        if resp.status_code!=200:
-            logging.warning("Issues => HTTP %d => break for %s/%s", resp.status_code,owner,repo)
+        (resp, success) = robust_get_page(
+            session, url, params, 
+            handle_rate_limit_func,
+            max_retries=max_retries
+        )
+        if not success:
+            logging.warning("Issues => can't get page %d => break => %s/%s",page,owner,repo)
             break
+
         data=resp.json()
         if not data:
             break
