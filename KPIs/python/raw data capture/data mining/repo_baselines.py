@@ -1,16 +1,16 @@
 # repo_baselines.py
 """
-DB functions to get/update baseline_date + enabled for each (owner, repo).
-We skip items if created_at > baseline_date. If enabled=0 => skip entire repo.
-We also do mid-run re-check to see if baseline_date changed or enabled toggled.
+DB funcs for reading/updating (baseline_date, enabled) for each (owner, repo).
+We skip items if created_at>baseline_date. If enabled=0 => skip entire fetch.
+We do mid-run refresh to see changes immediately.
 """
 
 import logging
 
 def get_baseline_info(conn, owner, repo):
     """
-    Returns (baseline_date, enabled).
-    If not found => (None, 1) meaning no skip + enabled by default.
+    Return (baseline_date, enabled).
+    If no row => (None,1) => fetch everything, enabled=1.
     """
     c = conn.cursor()
     c.execute("""
@@ -21,15 +21,15 @@ def get_baseline_info(conn, owner, repo):
     row = c.fetchone()
     c.close()
     if row is None:
-        return (None, 1)
+        return (None,1)
     return (row[0], row[1])
 
-def refresh_baseline_info_mid_run(conn, owner, repo, old_baseline, old_enabled):
+def refresh_baseline_info_mid_run(conn, owner, repo, old_base, old_en):
     """
-    Re-check DB => see if baseline_date or enabled changed. If so, log + return new.
+    Re-check if baseline_date or enabled changed. If so => log change, return new.
     """
     new_base, new_en = get_baseline_info(conn, owner, repo)
-    if new_base != old_baseline or new_en != old_enabled:
-        logging.info("Repo %s/%s => baseline changed mid-run from (%s, %s) to (%s, %s)",
-                     owner, repo, old_baseline, old_enabled, new_base, new_en)
+    if new_base!=old_base or new_en!=old_en:
+        logging.info("Repo %s/%s => baseline changed mid-run from (%s,%s) to (%s,%s)",
+                     owner, repo, old_base, old_en, new_base, new_en)
     return (new_base, new_en)
