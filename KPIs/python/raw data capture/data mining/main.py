@@ -1,18 +1,22 @@
 #!/usr/bin/env python
 # main.py
 """
-Final orchestrator, single-thread approach:
- - skip items if created_at>baseline_date
- - watchers => no created_at => fetch if enabled=1
- - includes issues, pulls, forks, watchers, stars, comments, comment reactions, issue reactions
- - mid-run re-check => immediate effect if baseline changes
- - uses connect_db => create DB if missing => fix 'Unknown database'
- - uses json.dumps => fix "Python type dict cannot be converted" error
+Final single-thread orchestrator that ensures:
+ - We fetch issues, pulls, forks, stars, watchers
+ - We fetch *all* events (issue_events, pull_events),
+ - We fetch *all* comments => comment_reactions,
+ - We fetch *all* issue reactions,
+All on first run => so that comment_reactions, issue_comments, issue_events, 
+issue_reactions, pull_events, forks, watchers, stars get populated.
+
+Skip items if created_at>baseline_date or starred_at>baseline_date, watchers have no date => fetch if enabled=1.
+Mid-run baseline toggles => immediate effect.
+We store raw_json with json.dumps => fix 'Python type dict' errors.
+Database => auto-created => fix unknown DB error.
 """
 
 import os
 import sys
-import json
 import logging
 import yaml
 import requests
@@ -23,17 +27,26 @@ from repo_baselines import get_baseline_info
 from repos import get_repo_list
 from fetch_issues import list_issues_single_thread
 from fetch_pulls import list_pulls_single_thread
-from fetch_comments import list_issue_comments_single_thread, fetch_comment_reactions_single_thread
-from fetch_issue_reactions import fetch_issue_reactions_single_thread
 from fetch_forks_stars_watchers import (
-    list_forks_single_thread,
+    list_forks_single_thread, 
     list_stars_single_thread,
     list_watchers_single_thread
+)
+from fetch_comments import (
+    fetch_comments_for_all_issues
+)
+from fetch_issue_reactions import (
+    fetch_issue_reactions_for_all_issues
+)
+from fetch_events import (
+    fetch_issue_events_for_all_issues,
+    fetch_pull_events_for_all_pulls
 )
 
 def load_config():
     cfg={}
     if os.path.isfile("config.yaml"):
+        import yaml
         with open("config.yaml","r",encoding="utf-8") as f:
             cfg=yaml.safe_load(f)
     cfg.setdefault("mysql",{
@@ -82,14 +95,14 @@ def handle_rate_limit(resp):
         try:
             rem_val=int(resp.headers["X-RateLimit-Remaining"])
             if rem_val<5:
-                logging.warning("Near rate limit => might need to sleep or skip calls.")
+                logging.warning("Near rate limit => might need to throttle.")
         except ValueError:
             pass
 
 def main():
     cfg=load_config()
     setup_logging(cfg)
-    logging.info("Starting single-thread script => skip if created_at>baseline_date, watchers => fetch if enabled=1.")
+    logging.info("Starting single-thread script => on first run, populates all tables: comments, comment_reactions, events, issue_reactions, watchers, forks, stars, etc.")
 
     conn=connect_db(cfg, create_db_if_missing=True)
     create_tables(conn)
@@ -99,10 +112,10 @@ def main():
     if tokens:
         session.headers.update({"Authorization":f"token {tokens[0]}"})
 
-    # get repos
     all_repos=get_repo_list()
     for (owner,repo) in all_repos:
-        baseline_date, enabled = get_baseline_info(conn,owner,repo)
+        from repo_baselines import get_baseline_info
+        baseline_date, enabled=get_baseline_info(conn,owner,repo)
         logging.info("Repo %s/%s => baseline_date=%s, enabled=%s",owner,repo,baseline_date,enabled)
 
         # 1) issues => skip new
@@ -110,27 +123,28 @@ def main():
         # 2) pulls => skip new
         list_pulls_single_thread(conn,owner,repo,baseline_date,enabled,session,handle_rate_limit)
 
-        # 3) forks => skip if fork.created_at>baseline_date
-        list_forks_single_thread(conn,owner,repo,baseline_date,enabled,session,handle_rate_limit)
-
-        # 4) watchers => no created_at => fetch if enabled=1
+        # 3) fetch watchers => no date => if enabled=1
         list_watchers_single_thread(conn,owner,repo,enabled,session,handle_rate_limit)
-
-        # 5) stars => skip if starred_at>baseline_date
+        # 4) fetch forks => skip if created_at>baseline_date
+        list_forks_single_thread(conn,owner,repo,baseline_date,enabled,session,handle_rate_limit)
+        # 5) fetch stars => skip if starred_at>baseline_date
         list_stars_single_thread(conn,owner,repo,baseline_date,enabled,session,handle_rate_limit)
 
-        # 6) optional => comments => skip new
-        # for demonstration => might pick an issue # or do them all
-        # list_issue_comments_single_thread(conn, owner, repo, 1, baseline_date, enabled, session, handle_rate_limit)
+        # 6) fetch events => issue_events & pull_events => skip if event.created_at>baseline_date
+        from fetch_events import fetch_issue_events_for_all_issues, fetch_pull_events_for_all_pulls
+        fetch_issue_events_for_all_issues(conn,owner,repo,baseline_date,enabled,session,handle_rate_limit)
+        fetch_pull_events_for_all_pulls(conn,owner,repo,baseline_date,enabled,session,handle_rate_limit)
 
-        # 7) optional => comment reactions => skip new
-        # fetch_comment_reactions_single_thread(conn, owner, repo, 1, cmt_id, baseline_date, enabled, session, handle_rate_limit)
+        # 7) fetch comments for all issues => skip new
+        from fetch_comments import fetch_comments_for_all_issues
+        fetch_comments_for_all_issues(conn,owner,repo,baseline_date,enabled,session,handle_rate_limit)
 
-        # 8) optional => issue reactions => skip new
-        # fetch_issue_reactions_single_thread(conn, owner, repo, issue_num, baseline_date, enabled, session, handle_rate_limit)
+        # 8) fetch issue reactions => skip if reaction.created_at>baseline_date
+        from fetch_issue_reactions import fetch_issue_reactions_for_all_issues
+        fetch_issue_reactions_for_all_issues(conn,owner,repo,baseline_date,enabled,session,handle_rate_limit)
 
     conn.close()
-    logging.info("All done => single-thread run complete => data in MySQL DB => skipping created_at>baseline_date as needed.")
+    logging.info("All done => single-thread => fully populates comment_reactions, issue_comments, issue_events, issue_reactions, pull_events, forks, watchers, stars, etc. on first run.")
 
 if __name__=="__main__":
     main()

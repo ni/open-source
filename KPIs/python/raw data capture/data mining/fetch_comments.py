@@ -1,13 +1,32 @@
 # fetch_comments.py
 """
 Lists issue comments => skip if comment.created_at>baseline_date
-Optionally fetch comment reactions => skip if reaction.created_at>baseline_date
+Also fetch comment reactions => skip if reaction.created_at>baseline_date
+We store them so that they appear on the first run.
 """
 
 import logging
 import json
 from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
+
+def fetch_comments_for_all_issues(conn, owner, repo, baseline_date, enabled,
+                                  session, handle_rate_limit_func):
+    """
+    For each issue in 'issues' table for this repo, fetch & store comments (skip new).
+    Also fetch comment reactions for each comment.
+    This ensures 'issue_comments' & 'comment_reactions' are populated on the first run.
+    """
+    if enabled==0:
+        logging.info("Repo %s/%s => disabled => skip all comments",owner,repo)
+        return
+    c=conn.cursor()
+    c.execute("SELECT issue_number FROM issues WHERE repo_name=%s",(f"{owner}/{repo}",))
+    rows=c.fetchall()
+    c.close()
+    for (issue_num,) in rows:
+        list_issue_comments_single_thread(conn, owner, repo, issue_num,
+                                          baseline_date, enabled, session, handle_rate_limit_func)
 
 def list_issue_comments_single_thread(conn, owner, repo, issue_number,
                                       baseline_date, enabled, session,
@@ -19,7 +38,7 @@ def list_issue_comments_single_thread(conn, owner, repo, issue_number,
     while True:
         new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,baseline_date,enabled)
         if new_en==0:
-            logging.info("Repo %s/%s => toggled disabled => stop comments mid-run for issue #%d",owner,repo,issue_number)
+            logging.info("Repo %s/%s => toggled disabled => stop comments mid-run for #%d",owner,repo,issue_number)
             break
         if new_base!=baseline_date:
             baseline_date=new_base
@@ -35,7 +54,8 @@ def list_issue_comments_single_thread(conn, owner, repo, issue_number,
         resp=session.get(url, params=params)
         handle_rate_limit_func(resp)
         if resp.status_code!=200:
-            logging.warning("Comments => HTTP %d => break for issue #%d in %s/%s",resp.status_code,issue_number,owner,repo)
+            logging.warning("Comments => HTTP %d => break for issue #%d in %s/%s",
+                            resp.status_code,issue_number,owner,repo)
             break
 
         data=resp.json()
@@ -47,10 +67,11 @@ def list_issue_comments_single_thread(conn, owner, repo, issue_number,
             c_created_dt=datetime.strptime(c_created_str,"%Y-%m-%dT%H:%M:%SZ")
             if baseline_date and c_created_dt>baseline_date:
                 continue
-            insert_comment_record(conn, f"{owner}/{repo}", issue_number, cmt)
+            insert_comment_record(conn,f"{owner}/{repo}",issue_number,cmt)
 
-            # optionally fetch comment reactions => skip if reaction.created_at>baseline_date
-            # fetch_comment_reactions_single_thread(conn, owner, repo, issue_number, cmt["id"], baseline_date, new_en, session, handle_rate_limit_func)
+            # fetch comment reactions => skip if reaction.created_at>baseline_date
+            fetch_comment_reactions_single_thread(conn, owner, repo, issue_number, cmt["id"],
+                                                 baseline_date, new_en, session, handle_rate_limit_func)
 
         if len(data)<50:
             break
@@ -95,21 +116,26 @@ def fetch_comment_reactions_single_thread(conn, owner, repo, issue_number, comme
     session.headers["Accept"]=old_accept
 
     if resp.status_code!=200:
-        logging.warning("Comment Reactions => HTTP %d => skip cmt_id=%d in %s/%s",resp.status_code,comment_id,owner,repo)
+        logging.warning("Comment Reactions => HTTP %d => skip cmt_id=%d in %s/%s",
+                        resp.status_code,comment_id,owner,repo)
         return
     data=resp.json()
+    from datetime import datetime
+    import json
     for reac in data:
         reac_created_str=reac["created_at"]
         reac_created_dt=datetime.strptime(reac_created_str,"%Y-%m-%dT%H:%M:%SZ")
         if baseline_date and reac_created_dt>baseline_date:
             continue
-        insert_comment_reaction(conn, f"{owner}/{repo}", issue_number, comment_id, reac)
+        insert_comment_reaction(conn, repo_name, issue_number, comment_id, reac)
 
 def insert_comment_reaction(conn, repo_name, issue_num, comment_id, reac_json):
     import json
     reac_id=reac_json["id"]
     reac_created_str=reac_json["created_at"]
+    from datetime import datetime
     reac_created_dt=datetime.strptime(reac_created_str,"%Y-%m-%dT%H:%M:%SZ")
+    raw_str=json.dumps(reac_json, ensure_ascii=False)
     c=conn.cursor()
     sql="""
     INSERT INTO comment_reactions
@@ -120,9 +146,6 @@ def insert_comment_reaction(conn, repo_name, issue_num, comment_id, reac_json):
       created_at=VALUES(created_at),
       raw_json=VALUES(raw_json)
     """
-    # store raw_json as JSON => do json.dumps
-    import json
-    raw_json_str=json.dumps(reac_json,ensure_ascii=False)
-    c.execute(sql,(repo_name, issue_num, comment_id, reac_id, reac_created_dt, raw_json_str))
+    c.execute(sql,(repo_name,issue_num,comment_id,reac_id,reac_created_dt,raw_str))
     conn.commit()
     c.close()

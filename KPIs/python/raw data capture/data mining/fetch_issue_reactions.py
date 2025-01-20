@@ -1,14 +1,31 @@
 # fetch_issue_reactions.py
 """
-Fetch Issue Reactions => skip if reaction.created_at>baseline_date
-We do GET /repos/{owner}/{repo}/issues/{issue_number}/reactions
-Need Accept: application/vnd.github.squirrel-girl-preview+json
+Fetch Reactions on the Issue object => skip if reaction.created_at>baseline_date
+We do GET /repos/{owner}/{repo}/issues/{issue_number}/reactions (Squirrel-Girl preview).
 """
 
 import logging
 import json
 from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
+
+def fetch_issue_reactions_for_all_issues(conn, owner, repo, baseline_date, enabled,
+                                         session, handle_rate_limit_func):
+    """
+    For each issue in 'issues' table for this repo, fetch issue-level reactions => skip if new.
+    This ensures 'issue_reactions' is populated on first run.
+    """
+    if enabled==0:
+        logging.info("Repo %s/%s => disabled => skip issue_reactions",owner,repo)
+        return
+    c=conn.cursor()
+    c.execute("SELECT issue_number FROM issues WHERE repo_name=%s",(f"{owner}/{repo}",))
+    rows=c.fetchall()
+    c.close()
+    for (issue_num,) in rows:
+        fetch_issue_reactions_single_thread(conn, owner, repo, issue_num,
+                                            baseline_date, enabled, session,
+                                            handle_rate_limit_func)
 
 def fetch_issue_reactions_single_thread(conn, owner, repo, issue_number,
                                         baseline_date, enabled, session,
@@ -18,13 +35,11 @@ def fetch_issue_reactions_single_thread(conn, owner, repo, issue_number,
         return
     new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,baseline_date,enabled)
     if new_en==0:
-        logging.info("Repo %s/%s => toggled disabled => skip issue_reactions mid-run for #%d",
-                     owner,repo,issue_number)
+        logging.info("Repo %s/%s => toggled disabled => skip issue_reactions mid-run for #%d",owner,repo,issue_number)
         return
     if new_base!=baseline_date:
         baseline_date=new_base
-        logging.info("Repo %s/%s => baseline changed => now %s (issue_reactions for #%d)",
-                     owner,repo,baseline_date,issue_number)
+        logging.info("Repo %s/%s => baseline changed => now %s (issue_reactions for #%d)",owner,repo,baseline_date,issue_number)
 
     old_accept=session.headers.get("Accept","")
     session.headers["Accept"]="application/vnd.github.squirrel-girl-preview+json"
@@ -49,10 +64,10 @@ def insert_issue_reaction(conn, repo_name, issue_num, reac_json):
     reac_created_str=reac_json["created_at"]
     reac_created_dt=datetime.strptime(reac_created_str,"%Y-%m-%dT%H:%M:%SZ")
     import json
-    raw_json_str=json.dumps(reac_json, ensure_ascii=False)
+    raw_str=json.dumps(reac_json, ensure_ascii=False)
     c=conn.cursor()
     sql="""
-    INSERT INTO issue_reactions 
+    INSERT INTO issue_reactions
       (repo_name, issue_number, reaction_id, created_at, raw_json)
     VALUES
       (%s,%s,%s,%s,%s)
@@ -60,6 +75,6 @@ def insert_issue_reaction(conn, repo_name, issue_num, reac_json):
       created_at=VALUES(created_at),
       raw_json=VALUES(raw_json)
     """
-    c.execute(sql,(repo_name,issue_num,reac_id,reac_created_dt,raw_json_str))
+    c.execute(sql,(repo_name, issue_num, reac_id, reac_created_dt, raw_str))
     conn.commit()
     c.close()

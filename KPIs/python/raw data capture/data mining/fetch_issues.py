@@ -1,6 +1,7 @@
 # fetch_issues.py
 """
-List issues => skip if issue.created_at>baseline_date. Single-thread. 
+Lists issues => skip if created_at>baseline_date => store in issues table.
+We do not call comments or events here => separate modules handle that.
 """
 
 import logging
@@ -10,14 +11,13 @@ from repo_baselines import refresh_baseline_info_mid_run
 
 def list_issues_single_thread(conn, owner, repo, baseline_date, enabled, session, handle_rate_limit_func):
     if enabled==0:
-        logging.info("Repo %s/%s => disabled => skip issues.", owner,repo)
+        logging.info("Repo %s/%s => disabled => skip issues",owner,repo)
         return
-
     page=1
     while True:
         new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,baseline_date,enabled)
         if new_en==0:
-            logging.info("Repo %s/%s => toggled disabled => stop issues mid-run.",owner,repo)
+            logging.info("Repo %s/%s => toggled disabled => stop issues mid-run",owner,repo)
             break
         if new_base!=baseline_date:
             baseline_date=new_base
@@ -36,7 +36,6 @@ def list_issues_single_thread(conn, owner, repo, baseline_date, enabled, session
         if resp.status_code!=200:
             logging.warning("Issues => HTTP %d => break for %s/%s", resp.status_code,owner,repo)
             break
-
         data=resp.json()
         if not data:
             break
