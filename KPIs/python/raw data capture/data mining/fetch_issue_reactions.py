@@ -1,4 +1,9 @@
 # fetch_issue_reactions.py
+"""
+Fetch Reactions on the issue object => skip if reaction.created_at>baseline_date
+We pass handle_rate_limit_func, max_retries => robust_get_page => no partial data on 403.
+"""
+
 import logging
 import time
 import json
@@ -6,7 +11,7 @@ from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
 
 def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
-    for attempt in range(1,max_retries+1):
+    for attempt in range(1, max_retries+1):
         resp=session.get(url, params=params)
         handle_rate_limit_func(resp)
         if resp.status_code==200:
@@ -16,9 +21,9 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
                             resp.status_code,attempt,max_retries,url)
             time.sleep(5)
         else:
-            logging.warning("HTTP %d => attempt %d => break => %s",resp.status_code,attempt,url)
+            logging.warning("HTTP %d => attempt %d => break => %s", resp.status_code, attempt, url)
             return (resp,False)
-    logging.warning("Exceed max_retries => give up => url=%s",url)
+    logging.warning("Exceeded max_retries => give up => %s",url)
     return (None,False)
 
 def fetch_issue_reactions_for_all_issues(conn, owner, repo, baseline_date, enabled,
@@ -47,7 +52,7 @@ def fetch_issue_reactions_single_thread(conn, owner, repo, issue_number,
         return
     new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,baseline_date,enabled)
     if new_en==0:
-        logging.info("Repo %s/%s => toggled disabled => skip issue_reactions mid-run => #%d",owner,repo,issue_number)
+        logging.info("Repo %s/%s => toggled disabled => skip issue_reactions => #%d mid-run",owner,repo,issue_number)
         return
     if new_base!=baseline_date:
         baseline_date=new_base
@@ -67,6 +72,7 @@ def fetch_issue_reactions_single_thread(conn, owner, repo, issue_number,
     if not success:
         logging.warning("Issue Reactions => skip => issue #%d => %s/%s",issue_number,owner,repo)
         return
+
     data=resp.json()
     for reac in data:
         reac_created_str=reac["created_at"]

@@ -2,7 +2,7 @@
 """
 Fetch issue_events => skip if event.created_at>baseline_date
 Fetch pull_events => skip if event.created_at>baseline_date
-We do NOT break on 403 => robust_get_page => we pass handle_rate_limit_func, max_retries => no 'NameError: max_retries'.
+No immediate break on 403 => robust_get_page => pass (handle_rate_limit_func, max_retries).
 """
 
 import logging
@@ -12,7 +12,7 @@ from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
 
 def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
-    for attempt in range(1,max_retries+1):
+    for attempt in range(1, max_retries+1):
         resp=session.get(url, params=params)
         handle_rate_limit_func(resp)
         if resp.status_code==200:
@@ -25,7 +25,7 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
             logging.warning("HTTP %d => attempt %d => break => %s",
                             resp.status_code,attempt,url)
             return (resp,False)
-    logging.warning("Exceeding max_retries => give up => url=%s",url)
+    logging.warning("Exceeded max_retries => giving up => url=%s",url)
     return (None,False)
 
 def fetch_issue_events_for_all_issues(conn, owner, repo, baseline_date, enabled,
@@ -41,7 +41,8 @@ def fetch_issue_events_for_all_issues(conn, owner, repo, baseline_date, enabled,
     for (issue_num,) in rows:
         fetch_issue_events_single_thread(
             conn, owner, repo, issue_num,
-            baseline_date, enabled, session,
+            baseline_date, enabled,
+            session,
             handle_rate_limit_func,
             max_retries
         )
@@ -56,8 +57,7 @@ def fetch_issue_events_single_thread(conn, owner, repo, issue_number,
     while True:
         new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,baseline_date,enabled)
         if new_en==0:
-            logging.info("Repo %s/%s => toggled disabled => stop issue_events => #%d mid-run",
-                         owner,repo,issue_number)
+            logging.info("Repo %s/%s => toggled disabled => stop issue_events => #%d mid-run",owner,repo,issue_number)
             break
         if new_base!=baseline_date:
             baseline_date=new_base
@@ -75,7 +75,7 @@ def fetch_issue_events_single_thread(conn, owner, repo, issue_number,
             max_retries=max_retries
         )
         if not success:
-            logging.warning("Issue Events => can't fetch page %d => stop => issue #%d => %s/%s",
+            logging.warning("Issue Events => can't fetch page %d => stop => #%d => %s/%s",
                             page,issue_number,owner,repo)
             break
         data=resp.json()
@@ -121,8 +121,8 @@ def fetch_pull_events_for_all_pulls(conn, owner, repo, baseline_date, enabled,
     for (pull_num,) in rows:
         fetch_pull_events_single_thread(
             conn, owner, repo, pull_num,
-            baseline_date, enabled, session,
-            handle_rate_limit_func,
+            baseline_date, enabled,
+            session, handle_rate_limit_func,
             max_retries
         )
 
@@ -136,8 +136,7 @@ def fetch_pull_events_single_thread(conn, owner, repo, pull_number,
     while True:
         new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,baseline_date,enabled)
         if new_en==0:
-            logging.info("Repo %s/%s => toggled disabled => stop pull_events => PR #%d mid-run",
-                         owner,repo,pull_number)
+            logging.info("Repo %s/%s => toggled disabled => stop pull_events => PR #%d mid-run",owner,repo,pull_number)
             break
         if new_base!=baseline_date:
             baseline_date=new_base

@@ -1,10 +1,12 @@
 # db.py
 """
-1) connect_db(cfg, create_db_if_missing=True):
+1) connect_db(cfg, create_db_if_missing=True)
    - Connects to MySQL
    - Creates the DB if missing => avoids unknown DB error
-2) create_tables(conn):
-   - Builds all relevant tables for watchers, forks, stars, issues, pulls, comments, events, etc.
+
+2) create_tables(conn)
+   - Builds all relevant tables (repo_baselines, watchers, forks, stars, issues, pulls,
+     comments, events, etc.)
 """
 
 import logging
@@ -43,7 +45,6 @@ def connect_db(cfg, create_db_if_missing=True):
 def create_tables(conn):
     c = conn.cursor()
 
-    # repo_baselines => per repo baseline_date + enabled
     c.execute("""
     CREATE TABLE IF NOT EXISTS repo_baselines (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -56,7 +57,6 @@ def create_tables(conn):
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
 
-    # issues, pulls
     c.execute("""
     CREATE TABLE IF NOT EXISTS issues (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -66,6 +66,7 @@ def create_tables(conn):
       last_event_id BIGINT UNSIGNED DEFAULT 0
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
+
     c.execute("""
     CREATE TABLE IF NOT EXISTS pulls (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -76,7 +77,6 @@ def create_tables(conn):
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
 
-    # events => issue_events, pull_events
     c.execute("""
     CREATE TABLE IF NOT EXISTS issue_events (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -87,6 +87,7 @@ def create_tables(conn):
       raw_json JSON
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
+
     c.execute("""
     CREATE TABLE IF NOT EXISTS pull_events (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -98,7 +99,6 @@ def create_tables(conn):
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
 
-    # issue_comments + comment_reactions
     c.execute("""
     CREATE TABLE IF NOT EXISTS issue_comments (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -110,6 +110,7 @@ def create_tables(conn):
       UNIQUE KEY (repo_name, issue_number, comment_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
+
     c.execute("""
     CREATE TABLE IF NOT EXISTS comment_reactions (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -123,7 +124,6 @@ def create_tables(conn):
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
 
-    # watchers => no date => fetch if enabled=1
     c.execute("""
     CREATE TABLE IF NOT EXISTS watchers (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -134,7 +134,6 @@ def create_tables(conn):
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
 
-    # stars => skip if starred_at>baseline_date
     c.execute("""
     CREATE TABLE IF NOT EXISTS stars (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -146,7 +145,6 @@ def create_tables(conn):
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
 
-    # forks => skip if created_at>baseline_date
     c.execute("""
     CREATE TABLE IF NOT EXISTS forks (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -158,7 +156,6 @@ def create_tables(conn):
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
 
-    # issue_reactions => skip if reaction.created_at>baseline_date
     c.execute("""
     CREATE TABLE IF NOT EXISTS issue_reactions (
       id INT AUTO_INCREMENT PRIMARY KEY,

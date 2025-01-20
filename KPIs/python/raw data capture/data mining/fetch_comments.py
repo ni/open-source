@@ -1,4 +1,10 @@
 # fetch_comments.py
+"""
+Lists issue comments => skip if created_at>baseline_date
+Also fetch comment reactions => skip if reaction.created_at>baseline_date
+No break on 403 => robust_get_page => uses max_retries param.
+"""
+
 import logging
 import time
 import json
@@ -6,25 +12,26 @@ from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
 
 def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
-    for attempt in range(1,max_retries+1):
-        resp=session.get(url, params=params)
+    for attempt in range(1, max_retries+1):
+        resp = session.get(url, params=params)
         handle_rate_limit_func(resp)
-        if resp.status_code==200:
-            return (resp,True)
+        if resp.status_code == 200:
+            return (resp, True)
         elif resp.status_code in (403,429):
             logging.warning("HTTP %d => attempt %d/%d => retry => %s",
-                            resp.status_code,attempt,max_retries,url)
+                            resp.status_code, attempt, max_retries, url)
             time.sleep(5)
         else:
-            logging.warning("HTTP %d => attempt %d => break => %s",resp.status_code,attempt,url)
-            return (resp,False)
-    logging.warning("Exceed max_retries => give up => %s",url)
+            logging.warning("HTTP %d => attempt %d => break => %s",
+                            resp.status_code, attempt, url)
+            return (resp, False)
+    logging.warning("Exceeded max_retries => giving up => url=%s", url)
     return (None,False)
 
 def fetch_comments_for_all_issues(conn, owner, repo, baseline_date, enabled,
                                   session, handle_rate_limit_func, max_retries):
     if enabled==0:
-        logging.info("Repo %s/%s => disabled => skip all comments",owner,repo)
+        logging.info("Repo %s/%s => disabled => skip all comments", owner, repo)
         return
     c=conn.cursor()
     c.execute("SELECT issue_number FROM issues WHERE repo_name=%s",(f"{owner}/{repo}",))
@@ -43,32 +50,38 @@ def list_issue_comments_single_thread(conn, owner, repo, issue_number,
                                       baseline_date, enabled, session,
                                       handle_rate_limit_func, max_retries):
     if enabled==0:
-        logging.info("Repo %s/%s => disabled => skip comments => issue #%d",owner,repo,issue_number)
+        logging.info("Repo %s/%s => disabled => skip comments => issue #%d", owner, repo, issue_number)
         return
     page=1
     full_repo_name=f"{owner}/{repo}"
     while True:
-        new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,baseline_date,enabled)
+        new_base,new_en = refresh_baseline_info_mid_run(conn,owner,repo,baseline_date,enabled)
         if new_en==0:
-            logging.info("Repo %s/%s => toggled disabled => stop comments => issue #%d mid-run",owner,repo,issue_number)
+            logging.info("Repo %s/%s => toggled disabled => stop comments => issue #%d mid-run",
+                         owner,repo,issue_number)
             break
         if new_base!=baseline_date:
             baseline_date=new_base
             logging.info("Repo %s/%s => baseline changed => now %s (comments for #%d)",
                          owner,repo,baseline_date,issue_number)
 
-        url=f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}/comments"
-        params={
+        url = f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}/comments"
+        params = {
             "page": page,
             "per_page":50,
             "sort":"created",
             "direction":"asc"
         }
-        (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
+        (resp, success)=robust_get_page(
+            session, url, params,
+            handle_rate_limit_func,
+            max_retries=max_retries
+        )
         if not success:
             logging.warning("Comments => cannot get page %d => break => issue #%d => %s/%s",
-                            page,issue_number,owner,repo)
+                            page, issue_number, owner, repo)
             break
+
         data=resp.json()
         if not data:
             break
@@ -79,6 +92,7 @@ def list_issue_comments_single_thread(conn, owner, repo, issue_number,
             if baseline_date and c_created_dt>baseline_date:
                 continue
             insert_comment_record(conn, full_repo_name, issue_number, cmt)
+
             # fetch comment reactions => skip new
             fetch_comment_reactions_single_thread(
                 conn, owner, repo, issue_number, cmt["id"],
@@ -86,19 +100,19 @@ def list_issue_comments_single_thread(conn, owner, repo, issue_number,
                 handle_rate_limit_func, max_retries
             )
 
-        if len(data)<50:
+        if len(data) < 50:
             break
-        page+=1
+        page += 1
 
 def insert_comment_record(conn, repo_name, issue_num, cmt_json):
-    cmt_id=cmt_json["id"]
-    c_created_str=cmt_json["created_at"]
-    c_created_dt=datetime.strptime(c_created_str,"%Y-%m-%dT%H:%M:%SZ")
-    body=cmt_json.get("body","")
-    c=conn.cursor()
-    sql="""
+    cmt_id = cmt_json["id"]
+    c_created_str = cmt_json["created_at"]
+    c_created_dt = datetime.strptime(c_created_str,"%Y-%m-%dT%H:%M:%SZ")
+    body = cmt_json.get("body","")
+    c = conn.cursor()
+    sql = """
     INSERT INTO issue_comments (repo_name, issue_number, comment_id, created_at, body)
-    VALUES (%s,%s,%s,%s,%s)
+    VALUES (%s, %s, %s, %s, %s)
     ON DUPLICATE KEY UPDATE
       created_at=VALUES(created_at),
       body=VALUES(body)
@@ -122,12 +136,16 @@ def fetch_comment_reactions_single_thread(conn, owner, repo, issue_number, comme
         baseline_date=new_base
 
     url=f"https://api.github.com/repos/{owner}/{repo}/issues/comments/{comment_id}/reactions"
-    (resp,success)=robust_get_page(session,url,params={},handle_rate_limit_func=handle_rate_limit_func,
-                                   max_retries=max_retries)
+    (resp,success)=robust_get_page(
+        session, url, params={},
+        handle_rate_limit_func=handle_rate_limit_func,
+        max_retries=max_retries
+    )
     if not success:
         logging.warning("Comment Reactions => skip => cmt_id=%d => issue #%d => %s/%s",
-                        comment_id, issue_number, owner, repo)
+                        comment_id,issue_number,owner,repo)
         return
+
     data=resp.json()
     for reac in data:
         reac_created_str=reac["created_at"]
