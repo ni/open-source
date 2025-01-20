@@ -3,7 +3,7 @@
 Fetch watchers => no date => if enabled=1
 Fetch forks => skip if created_at>baseline_date
 Fetch stars => skip if starred_at>baseline_date
-No break on 403 => robust_get_page => pass handle_rate_limit_func, max_retries => consistent usage.
+We re-try 403,429,500,502,503,504 => skip after max_retries
 """
 
 import logging
@@ -13,18 +13,18 @@ from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
 
 def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
-    for attempt in range(1,max_retries+1):
+    for attempt in range(1, max_retries+1):
         resp=session.get(url, params=params)
         handle_rate_limit_func(resp)
+
         if resp.status_code==200:
             return (resp,True)
-        elif resp.status_code in (403,429):
+        elif resp.status_code in (403,429,500,502,503,504):
             logging.warning("HTTP %d => attempt %d/%d => will retry => %s",
-                            resp.status_code,attempt,max_retries,url)
+                            resp.status_code, attempt, max_retries, url)
             time.sleep(5)
         else:
-            logging.warning("HTTP %d => attempt %d => break => %s",
-                            resp.status_code,attempt,url)
+            logging.warning("HTTP %d => attempt %d => break => %s",resp.status_code, attempt, url)
             return (resp,False)
     logging.warning("Exceeded max_retries => giving up => %s",url)
     return (None,False)
@@ -85,7 +85,8 @@ def list_forks_single_thread(conn, owner, repo, baseline_date, enabled,
             break
         if new_base!=baseline_date:
             baseline_date=new_base
-            logging.info("Repo %s/%s => baseline changed => now %s (forks).",owner,repo,baseline_date)
+            logging.info("Repo %s/%s => baseline changed => now %s (forks).",
+                         owner,repo,baseline_date)
 
         url=f"https://api.github.com/repos/{owner}/{repo}/forks"
         params={
@@ -100,7 +101,6 @@ def list_forks_single_thread(conn, owner, repo, baseline_date, enabled,
         data=resp.json()
         if not data:
             break
-
         for fork in data:
             cstr=fork.get("created_at")
             if not cstr:
@@ -159,7 +159,6 @@ def list_stars_single_thread(conn, owner, repo, baseline_date, enabled,
         if not success:
             logging.warning("Stars => can't get page %d => break => %s/%s",page,owner,repo)
             break
-
         data=resp.json()
         if not data:
             break
@@ -181,7 +180,7 @@ def list_stars_single_thread(conn, owner, repo, baseline_date, enabled,
 
 def insert_star_record(conn, repo_name, star_json, starred_dt):
     user_login=star_json["user"]["login"]
-    raw_str=json.dumps(star_json, ensure_ascii=False)
+    raw_str=json.dumps(star_json,ensure_ascii=False)
     c=conn.cursor()
     sql="""
     INSERT INTO stars (repo_name, user_login, starred_at, raw_json)

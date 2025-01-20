@@ -5,20 +5,20 @@ from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
 
 def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
-    for attempt in range(1, max_retries+1):
+    for attempt in range(1,max_retries+1):
         resp=session.get(url, params=params)
         handle_rate_limit_func(resp)
-        if resp.status_code == 200:
-            return (resp, True)
+
+        if resp.status_code==200:
+            return (resp,True)
         elif resp.status_code in (403,429,500,502,503,504):
-            logging.warning("HTTP %d => attempt %d/%d => retry => %s",
+            logging.warning("HTTP %d => attempt %d/%d => will retry => %s",
                             resp.status_code, attempt, max_retries, url)
             time.sleep(5)
         else:
-            logging.warning("HTTP %d => attempt %d => break => %s",
-                            resp.status_code, attempt, url)
+            logging.warning("HTTP %d => attempt %d => break => %s", resp.status_code, attempt, url)
             return (resp,False)
-    logging.warning("Exceeded max_retries => giving up => %s",url)
+    logging.warning("Exceeded max_retries => giving up => %s", url)
     return (None,False)
 
 def list_pulls_single_thread(conn, owner, repo, baseline_date, enabled,
@@ -44,11 +44,8 @@ def list_pulls_single_thread(conn, owner, repo, baseline_date, enabled,
             "page":page,
             "per_page":100
         }
-        (resp,success)=robust_get_page(
-            session,url,params,
-            handle_rate_limit_func,
-            max_retries=max_retries
-        )
+        (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,
+                                       max_retries=max_retries)
         if not success:
             logging.warning("Pulls => can't get page %d => break => %s/%s",page,owner,repo)
             break

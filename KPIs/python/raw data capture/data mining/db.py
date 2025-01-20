@@ -2,11 +2,11 @@
 """
 1) connect_db(cfg, create_db_if_missing=True):
    - Connects to MySQL
-   - Creates the DB if missing => avoids unknown DB error
+   - Creates DB if missing => avoids unknown DB error
 
 2) create_tables(conn):
    - Builds all relevant tables
-   - We set issue_comments.body to LONGTEXT to avoid "Data too long..." errors for large comment bodies
+   - We set issue_comments.body to LONGTEXT => handle large comments
 """
 
 import logging
@@ -16,7 +16,7 @@ def connect_db(cfg, create_db_if_missing=True):
     db_conf = cfg["mysql"]
     db_name = db_conf["db"]
 
-    # Connect without specifying db => create if missing
+    # Connect w/o specifying db => create if missing
     tmp_conn = mysql.connector.connect(
         host=db_conf["host"],
         port=db_conf["port"],
@@ -32,7 +32,7 @@ def connect_db(cfg, create_db_if_missing=True):
     tmp_cursor.close()
     tmp_conn.close()
 
-    # Now connect to the actual DB
+    # Now connect to actual DB
     conn = mysql.connector.connect(
         host=db_conf["host"],
         port=db_conf["port"],
@@ -99,7 +99,7 @@ def create_tables(conn):
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
 
-    # body => LONGTEXT to avoid "Data too long" for large comments
+    # LONGTEXT => handle very large comment bodies
     c.execute("""
     CREATE TABLE IF NOT EXISTS issue_comments (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -171,4 +171,4 @@ def create_tables(conn):
 
     conn.commit()
     c.close()
-    logging.info("All tables created/verified. (issue_comments.body => LONGTEXT)")
+    logging.info("All tables created/verified.")

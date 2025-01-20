@@ -1,8 +1,8 @@
 # fetch_issues.py
 """
 Lists issues => skip if created_at>baseline_date
-Now also re-tries for HTTP 500, 502, 503, 504 in robust_get_page, 
-plus 403/429 for rate-limits. If fails repeatedly => skip.
+We re-try on HTTP 403,429,500,502,503,504 => skip after max_retries
+handle_rate_limit_func does the X-RateLimit storage & preemptive sleeps
 """
 
 import logging
@@ -11,9 +11,13 @@ from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
 
 def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
+    """
+    Attempt GET up to max_retries times => re-trying 403,429,500,502,503,504
+    """
     for attempt in range(1, max_retries+1):
         resp = session.get(url, params=params)
         handle_rate_limit_func(resp)
+
         if resp.status_code == 200:
             return (resp, True)
         elif resp.status_code in (403,429,500,502,503,504):
@@ -40,7 +44,8 @@ def list_issues_single_thread(conn, owner, repo, baseline_date, enabled,
             break
         if new_base!=baseline_date:
             baseline_date=new_base
-            logging.info("Repo %s/%s => baseline changed => now %s (issues).",owner,repo,baseline_date)
+            logging.info("Repo %s/%s => baseline changed => now %s (issues).",
+                         owner,repo,baseline_date)
 
         url=f"https://api.github.com/repos/{owner}/{repo}/issues"
         params={
@@ -50,13 +55,11 @@ def list_issues_single_thread(conn, owner, repo, baseline_date, enabled,
             "page":page,
             "per_page":100
         }
-        (resp, success) = robust_get_page(
-            session, url, params,
-            handle_rate_limit_func,
-            max_retries=max_retries
-        )
+        (resp, success) = robust_get_page(session, url, params,
+                                          handle_rate_limit_func,
+                                          max_retries=max_retries)
         if not success:
-            logging.warning("Issues => can't get page %d => break => %s/%s",page,owner,repo)
+            logging.warning("Issues => can't get page %d => break => %s/%s", page, owner, repo)
             break
 
         data = resp.json()
@@ -65,6 +68,7 @@ def list_issues_single_thread(conn, owner, repo, baseline_date, enabled,
 
         for item in data:
             if "pull_request" in item:
+                # skip pulls
                 continue
             c_created_str = item["created_at"]
             cdt = datetime.strptime(c_created_str,"%Y-%m-%dT%H:%M:%SZ")
@@ -72,7 +76,7 @@ def list_issues_single_thread(conn, owner, repo, baseline_date, enabled,
                 continue
             insert_issue_record(conn, f"{owner}/{repo}", item["number"], cdt)
 
-        if len(data) < 100:
+        if len(data)<100:
             break
         page+=1
 

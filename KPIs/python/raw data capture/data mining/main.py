@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 # main.py
 """
-Final single-thread orchestrator with robust approach:
- - handle_rate_limit_func rotates tokens or sleeps for near-limit
- - pass max_retries from config.yaml
- - watchers, forks, stars, issues, pulls, events, comments, issue reactions => 
-   each fetch uses robust_get_page, which now re-tries 500,502,503,504 as well.
+Single-thread orchestrator with:
+ - Preemptive checks if all tokens near-limit => parse X-RateLimit-Reset => earliest reset => sleep
+ - Dictionary token_info => store each token's remaining, reset
+ - No partial token strings in logs
+ - re-check all tokens after sleeping
+ - re-try logic for 403,429,500,502,503,504
+ - single-run approach
 """
 
 import os
@@ -23,6 +25,7 @@ from repos import get_repo_list
 CURRENT_TOKEN_INDEX = 0
 TOKENS = []
 session = None
+token_info = {}  # e.g. token_info[token_idx] = {"remaining": ..., "reset": ...}
 
 def load_config():
     cfg = {}
@@ -44,7 +47,6 @@ def load_config():
         "console_level": "DEBUG",
         "file_level": "DEBUG"
     })
-    # define global max_retries
     cfg.setdefault("max_retries", 20)
     return cfg
 
@@ -67,8 +69,8 @@ def setup_logging(cfg):
     fh.setLevel(file_level.upper())
     logger.addHandler(fh)
 
-    fmt_console = logging.Formatter("[%(levelname)s] %(message)s")
-    ch.setFormatter(fmt_console)
+    f_console = logging.Formatter("[%(levelname)s] %(message)s")
+    ch.setFormatter(f_console)
     f_file = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s - %(message)s")
     fh.setFormatter(f_file)
 
@@ -77,65 +79,159 @@ def rotate_token():
     if not TOKENS:
         return
     old_idx = CURRENT_TOKEN_INDEX
-    CURRENT_TOKEN_INDEX = (CURRENT_TOKEN_INDEX+1) % len(TOKENS)
+    CURRENT_TOKEN_INDEX = (CURRENT_TOKEN_INDEX + 1) % len(TOKENS)
     new_token = TOKENS[CURRENT_TOKEN_INDEX]
     session.headers["Authorization"] = f"token {new_token}"
-    logging.info("Rotated token from idx %d to %d => now using token: %s...",
-                 old_idx, CURRENT_TOKEN_INDEX, new_token[:10])
+    logging.info("Rotated token from index %d to %d => not showing partial token string for security",
+                 old_idx, CURRENT_TOKEN_INDEX)
 
-def do_sleep_based_on_reset(resp):
-    reset_str=resp.headers.get("X-RateLimit-Reset","")
-    if reset_str.isdigit():
-        reset_ts=int(reset_str)
-        now_ts=int(time.time())
-        delta=reset_ts-now_ts+10
-        if delta>0:
-            logging.warning("Sleeping %d seconds for rate-limit reset...",delta)
-            time.sleep(delta)
+def update_token_info(token_idx, resp):
+    """
+    Parse X-RateLimit-Remaining, X-RateLimit-Reset from resp, store in token_info dict.
+    If parse fails or not present => do nothing. We'll just handle that gracefully.
+    """
+    global token_info
+    rem_str = resp.headers.get("X-RateLimit-Remaining","")
+    rst_str = resp.headers.get("X-RateLimit-Reset","")
+    if rem_str.isdigit():
+        remaining = int(rem_str)
     else:
-        logging.warning("Cannot parse reset => fallback => sleep 3600s")
-        time.sleep(3600)
+        remaining = None
+    if rst_str.isdigit():
+        reset_ts = int(rst_str)
+    else:
+        reset_ts = None
 
-def handle_rate_limit_func(resp):
-    global TOKENS, CURRENT_TOKEN_INDEX, session
+    if remaining is not None and reset_ts is not None:
+        token_info[token_idx] = {
+            "remaining": remaining,
+            "reset": reset_ts
+        }
+
+def get_all_tokens_near_limit():
+    """
+    Return True if *all* tokens in token_info have 'remaining'<5
+    Also, only check tokens if we actually have info for them
+    If we don't have data for a token => assume not near limit
+    """
+    global token_info, TOKENS
+    if not TOKENS:
+        return False
+    for idx in range(len(TOKENS)):
+        info = token_info.get(idx)
+        if (not info) or (info["remaining"] and info["remaining"] >= 5):
+            return False
+    return True
+
+def sleep_until_earliest_reset():
+    """
+    Among all tokens, pick the earliest 'reset' time => sleep until then + 30sec buffer
+    If can't parse => fallback 1 hour
+    If earliest reset is in the past => skip sleep
+    """
+    global token_info, TOKENS
     if not TOKENS:
         return
-    if "X-RateLimit-Remaining" in resp.headers:
-        try:
-            rem_val=int(resp.headers["X-RateLimit-Remaining"])
-            if rem_val<5:
-                logging.warning("Near rate limit => rotate or sleep.")
-                old_idx=CURRENT_TOKEN_INDEX
-                rotate_token()
-                if CURRENT_TOKEN_INDEX==old_idx:
-                    do_sleep_based_on_reset(resp)
-        except ValueError:
-            pass
+    earliest = None
+    for idx in range(len(TOKENS)):
+        info = token_info.get(idx)
+        if not info:
+            # no data => skip
+            continue
+        rst = info.get("reset")
+        if not rst:
+            continue
+        if earliest is None or rst < earliest:
+            earliest = rst
+    if earliest is None:
+        # fallback => 1 hour
+        logging.warning("No valid reset times => fallback to sleep 3600s")
+        time.sleep(3600)
+        return
+
+    now_ts = int(time.time())
+    delta = earliest - now_ts + 30  # 30-second buffer
+    if delta<=0:
+        logging.warning("Earliest reset is in the past => no sleep needed.")
+        return
+    logging.warning("Sleeping %d seconds until the earliest token resets at %d (now=%d)",
+                    delta, earliest, now_ts)
+    time.sleep(delta)
+
+def do_sleep_based_on_reset():
+    """
+    If we can't parse => fallback 1 hour
+    (this is used if we specifically see a 403 for the current token 
+     and can't parse a reset. Or all tokens are near-limit but no reset found.)
+    But we replaced logic with sleep_until_earliest_reset above.
+    We'll keep fallback 1 hour if needed.
+    """
+    logging.warning("Cannot parse reset => fallback => sleep 3600s")
+    time.sleep(3600)
+
+def handle_rate_limit_func(resp):
+    """
+    Called after each request in robust_get_page. 
+    1) update token_info with X-RateLimit-Remaining, X-RateLimit-Reset
+    2) if current token near-limit => rotate
+    3) if all tokens near-limit => compute earliest reset => sleep => re-check
+    4) if 403 => forcibly rotate or sleep
+    """
+    global TOKENS, CURRENT_TOKEN_INDEX, session, token_info
+    if not TOKENS:
+        return
+
+    # 1) Store info for CURRENT_TOKEN_INDEX
+    update_token_info(CURRENT_TOKEN_INDEX, resp)
+
+    # Check near-limit
+    info = token_info.get(CURRENT_TOKEN_INDEX)
+    if info and info["remaining"]<5:
+        # try rotating
+        old_idx = CURRENT_TOKEN_INDEX
+        rotate_token()
+        if CURRENT_TOKEN_INDEX == old_idx:
+            # means only 1 token or we ended up same => check if all tokens near-limit
+            if get_all_tokens_near_limit():
+                # do earliest reset approach => preemptive
+                sleep_until_earliest_reset()
+                # after sleeping => re-check tokens => no special code needed here, 
+                # next request we'll see updated times
+    # if 403 => forcibly rotate or sleep
     if resp.status_code in (403,429):
         logging.warning("HTTP %d => forcibly rotate or sleep", resp.status_code)
         old_idx=CURRENT_TOKEN_INDEX
         rotate_token()
         if CURRENT_TOKEN_INDEX==old_idx:
-            do_sleep_based_on_reset(resp)
+            # all tokens near-limit => do earliest reset approach
+            if get_all_tokens_near_limit():
+                sleep_until_earliest_reset()
+            else:
+                # fallback if no data
+                do_sleep_based_on_reset()
 
 def main():
-    global TOKENS, session
-    cfg=load_config()
+    global TOKENS, session, token_info
+    cfg = load_config()
     setup_logging(cfg)
-    logging.info("Starting single-thread => robust approach => re-try 5xx => skip if fails repeatedly.")
+    logging.info("Starting single-thread => robust approach => parse X-RateLimit-Reset, do preemptive checks, no partial token logs")
 
-    conn=connect_db(cfg, create_db_if_missing=True)
+    conn = connect_db(cfg, create_db_if_missing=True)
     create_tables(conn)
 
-    TOKENS=cfg.get("tokens",[])
-    session=requests.Session()
+    TOKENS = cfg.get("tokens",[])
+    session = requests.Session()
+    token_info = {}  # reset this at start
     if TOKENS:
         session.headers["Authorization"] = f"token {TOKENS[0]}"
 
     max_retries = cfg.get("max_retries",20)
-    logging.info("Global max_retries => %d",max_retries)
+    logging.info("Global max_retries => %d", max_retries)
 
+    from repos import get_repo_list
     all_repos = get_repo_list()
+    from repo_baselines import get_baseline_info
+
     for (owner, repo) in all_repos:
         baseline_date, enabled = get_baseline_info(conn, owner, repo)
         logging.info("Repo %s/%s => baseline_date=%s, enabled=%s", owner, repo, baseline_date, enabled)
@@ -229,7 +325,7 @@ def main():
         )
 
     conn.close()
-    logging.info("All done => watchers, forks, stars, issues, pulls, events, comments, issue reactions => robust => re-tries 5xx => success.")
+    logging.info("All done => watchers, forks, stars, issues, pulls, events, comments, issue reactions => integrated preemptive approach with earliest reset => success.")
 
 if __name__=="__main__":
     main()
