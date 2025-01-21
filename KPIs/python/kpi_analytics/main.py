@@ -2,6 +2,7 @@
 
 import sys
 import os
+import io
 import math
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
@@ -28,7 +29,27 @@ from config import (
 )
 
 ###############################################################################
-# Utility to print tables with alignment
+# 1) Setup console capture so we can also write to debug_log.txt at the end
+###############################################################################
+original_stdout = sys.stdout  # keep a reference to original
+log_capture = io.StringIO()
+
+class DualOutput:
+    """
+    A file-like class that writes to both original stdout and a StringIO buffer.
+    """
+    def write(self, text):
+        original_stdout.write(text)   # show on screen
+        log_capture.write(text)       # capture in memory
+
+    def flush(self):
+        original_stdout.flush()
+        log_capture.flush()
+
+sys.stdout = DualOutput()
+
+###############################################################################
+# 2) Table-Printing Utility
 ###############################################################################
 def print_aligned_table(table_data, alignments=None):
     if not table_data:
@@ -74,26 +95,13 @@ def print_aligned_table(table_data, alignments=None):
         print(row_line)
 
 ###############################################################################
-# We'll produce a table for each repo's quarter-based data (existing prints),
-# where mergesRaw..newPullRaw are shown with NO decimals, while scaled columns
-# and derived Velocity/UIG/MAC remain 4 decimals.
+# 3) Print existing quarter data in a table, raw cols with no decimals
+#    scaled/derived at 4 decimals, plus scaling factor info
 ###############################################################################
 def print_existing_quarter_data_table(
     repo, sfM, sfI, sfF, sfS, sfP,
     quarter_list
 ):
-    """
-    quarter_list => list of tuples:
-      (q_idx,q_start,q_end,
-       mergesRaw, closedRaw, forksRaw, starsRaw,
-       newIssRaw,newCommRaw,newReactRaw,newPullRaw,
-       merges_s, closed_s, forks_s, stars_s,
-       newIss_s, newComm_s, newReact_s, newPull_s,
-       vel, uigv, macv)
-    We'll print a table showing these raw & scaled columns, with no decimals for raw columns
-    and 4 decimals for scaled/derived columns. The table title shows scaling factors.
-    """
-    # Title line
     title_line = [
         f"Existing Quarter Data for {repo}",
         f"(mergesFactor={sfM[repo]:.4f}, issuesFactor={sfI[repo]:.4f}, forksFactor={sfF[repo]:.4f}, starsFactor={sfS[repo]:.4f}, pullsFactor={sfP[repo]:.4f})"
@@ -121,7 +129,6 @@ def print_existing_quarter_data_table(
          vel, uigv, macv) = row_data
 
         qrange_str= f"Q{q_idx}({q_start:%Y-%m-%d}-{q_end:%Y-%m-%d})"
-        # no decimals for raw
         mergesRaw_str= f"{mergesRaw:.0f}"
         closedRaw_str= f"{issuesRaw:.0f}"
         forksRaw_str= f"{forksRaw:.0f}"
@@ -131,7 +138,6 @@ def print_existing_quarter_data_table(
         newReactRaw_str= f"{newReactRaw:.0f}"
         newPullRaw_str= f"{newPullRaw:.0f}"
 
-        # 4 decimals for scaled/derived
         def f4(x): return f"{x:.4f}"
         row= [
             qrange_str,
@@ -142,23 +148,14 @@ def print_existing_quarter_data_table(
             f4(vel), f4(uigv), f4(macv)
         ]
         table_data.append(row)
-
     print_aligned_table(table_data, align)
 
 def print_calculation_details(repo, quarter_calcs):
-    """
-    quarter_calcs => list of tuples:
-       (q_idx, q_range,
-        merges_s, closed_s, velocity_val,
-        forks_s, stars_s, uig_val,
-        sumIssCommReact_s, pull_s, mac_val)
-    We'll produce 3 small tables for Velocity, UIG, MAC details.
-    """
     header_vel= ["Q-Range","mergesScaled","closedScaled","Velocity=0.4*M +0.6*C"]
     table_vel= [header_vel]
     header_uig= ["Q-Range","forksScaled","starsScaled","UIG=0.4*F +0.6*S"]
     table_uig= [header_uig]
-    header_mac= ["Q-Range","(Iss+Comm+React)Scaled","pullScaled","MAC=0.8*(sum) +0.2*pull"]
+    header_mac= ["Q-Range","(Iss+Comm+React)Scaled","pullScaled","MAC=0.8*(sum)+0.2*pull"]
     table_mac= [header_mac]
 
     for row_data in quarter_calcs:
@@ -166,27 +163,9 @@ def print_calculation_details(repo, quarter_calcs):
          forks_s, stars_s, uig_val,
          sumIssCommReact_s, pull_s, mac_val)= row_data
         def f4(x): return f"{x:.4f}"
-        # velocity
-        table_vel.append([
-            q_range,
-            f4(merges_s),
-            f4(closed_s),
-            f4(velocity_val)
-        ])
-        # uig
-        table_uig.append([
-            q_range,
-            f4(forks_s),
-            f4(stars_s),
-            f4(uig_val)
-        ])
-        # mac
-        table_mac.append([
-            q_range,
-            f4(sumIssCommReact_s),
-            f4(pull_s),
-            f4(mac_val)
-        ])
+        table_vel.append([q_range, f4(merges_s), f4(closed_s), f4(velocity_val)])
+        table_uig.append([q_range, f4(forks_s), f4(stars_s), f4(uig_val)])
+        table_mac.append([q_range, f4(sumIssCommReact_s), f4(pull_s), f4(mac_val)])
 
     print(f"=== Detailed Calculations for {repo}: Velocity ===")
     print_aligned_table(table_vel, ["left","center","center","center"])
@@ -195,12 +174,145 @@ def print_calculation_details(repo, quarter_calcs):
     print(f"\n=== Detailed Calculations for {repo}: MAC ===")
     print_aligned_table(table_mac, ["left","center","center","center"])
 
+###############################################################################
+# 4) Standard "Target Reached" + SEI logic from prior snippet
+###############################################################################
+def compute_target_reached_data(repo_list, scaling_repo, quarter_data_dict):
+    target_data={}
+    if scaling_repo not in quarter_data_dict:
+        return target_data
+    all_q = sorted(quarter_data_dict[scaling_repo].keys())
+    for q_idx in all_q:
+        sum_val=0.0
+        count_val=0
+        for r in repo_list:
+            if r==scaling_repo:
+                continue
+            if q_idx in quarter_data_dict[r]:
+                sum_val+= quarter_data_dict[r][q_idx]
+                count_val+=1
+        if count_val==0:
+            continue
+        avg_val= sum_val/count_val
+        scaling_val= quarter_data_dict[scaling_repo].get(q_idx,0.0)
+        ratio=0.0
+        if abs(avg_val)>1e-9:
+            ratio= (scaling_val/avg_val)*100.0
+        else:
+            ratio=0.0
+        target_data[q_idx]= (avg_val, scaling_val, ratio)
+    return target_data
+
+def compute_sei_data(vel_dict, uig_dict, mac_dict):
+    sei_data={}
+    all_q = set(vel_dict.keys())|set(uig_dict.keys())|set(mac_dict.keys())
+    for q_idx in sorted(all_q):
+        if q_idx not in vel_dict or q_idx not in uig_dict or q_idx not in mac_dict:
+            continue
+        (vT,vS,vR)= vel_dict[q_idx]
+        (uT,uS,uR)= uig_dict[q_idx]
+        (mT,mS,mR)= mac_dict[q_idx]
+        ratio_weights=[]
+        ratio_values=[]
+        if abs(vT)>1e-9:
+            ratio_weights.append(0.3)
+            ratio_values.append(vR)
+        if abs(uT)>1e-9:
+            ratio_weights.append(0.2)
+            ratio_values.append(uR)
+        if abs(mT)>1e-9:
+            ratio_weights.append(0.5)
+            ratio_values.append(mR)
+        if len(ratio_weights)==0:
+            continue
+        wsum= sum(ratio_weights)
+        partial_sum=0.0
+        for i in range(len(ratio_weights)):
+            partial_sum+= ratio_weights[i]*ratio_values[i]
+        sei_ratio= partial_sum/wsum
+        scaled_sei= 0.5*mS +0.3*vS +0.2*uS
+        sei_data[q_idx]= (100.0, scaled_sei, sei_ratio)
+    return sei_data
+
+def print_combined_target_table(scaling_repo, quarter_dates, velocity_target, uig_target, mac_target, sei_data):
+    header= [
+      "Quarter",
+      "Velocity Target","Scaled Velocity","Velocity Ratio",
+      "UIG Target","Scaled UIG","UIG Ratio",
+      "MAC Target","Scaled MAC","MAC Ratio",
+      "SEI Target","Scaled SEI","SEI Ratio"
+    ]
+    align= ["left"]+["center"]*(len(header)-1)
+    table= [header]
+    if scaling_repo not in quarter_dates:
+        return
+    q_idxs= sorted(quarter_dates[scaling_repo].keys())
+    for q_idx in q_idxs:
+        (qs,qe)= quarter_dates[scaling_repo][q_idx]
+        q_label= f"Q{q_idx}({qs:%Y-%m-%d}-{qe:%Y-%m-%d})"
+        (vT,vS,vR)= velocity_target.get(q_idx,(0,0,0))
+        (uT,uS,uR)= uig_target.get(q_idx,(0,0,0))
+        (mT,mS,mR)= mac_target.get(q_idx,(0,0,0))
+        (sT,sS,sR)= sei_data.get(q_idx,(0,0,0))
+        def f4(x): return f"{x:.4f}"
+        row= [
+            q_label,
+            f4(vT), f4(vS), f4(vR),
+            f4(uT), f4(uS), f4(uR),
+            f4(mT), f4(mS), f4(mR),
+            f4(sT), f4(sS), f4(sR)
+        ]
+        table.append(row)
+    print_aligned_table(table, align)
+
+def print_metric_table(metric_name, data_dict, scaling_repo, quarter_dates):
+    header= [ "Quarter", f"{metric_name} Target", f"Scaled {metric_name}", f"{metric_name} Ratio"]
+    align= ["left","center","center","center"]
+    table= [header]
+    if scaling_repo not in quarter_dates:
+        return
+    q_idxs= sorted(quarter_dates[scaling_repo].keys())
+    for q_idx in q_idxs:
+        if q_idx not in data_dict:
+            continue
+        (tVal,sVal,rVal)= data_dict[q_idx]
+        (qs,qe)= quarter_dates[scaling_repo][q_idx]
+        q_label= f"Q{q_idx}({qs:%Y-%m-%d}-{qe:%Y-%m-%d})"
+        table.append([
+            q_label,
+            f"{tVal:.4f}",
+            f"{sVal:.4f}",
+            f"{rVal:.4f}"
+        ])
+    print_aligned_table(table, align)
+
+def print_sei_table(sei_data, scaling_repo, quarter_dates):
+    header= ["Quarter","SEI Target","Scaled SEI","SEI Ratio"]
+    align= ["left","center","center","center"]
+    table= [header]
+    if scaling_repo not in quarter_dates:
+        return
+    q_idxs= sorted(quarter_dates[scaling_repo].keys())
+    for q_idx in q_idxs:
+        if q_idx not in sei_data:
+            continue
+        (tVal, sVal, ratio)= sei_data[q_idx]
+        (qs,qe)= quarter_dates[scaling_repo][q_idx]
+        q_label= f"Q{q_idx}({qs:%Y-%m-%d}-{qe:%Y-%m-%d})"
+        table.append([
+            q_label,
+            f"{tVal:.4f}",
+            f"{sVal:.4f}",
+            f"{ratio:.4f}"
+        ])
+    print_aligned_table(table, align)
+
+
 def main():
     repos= [
-        "ni/labview-icon-editor",
-        "facebook/react",
         "tensorflow/tensorflow",
-        "dotnet/core"
+        "dotnet/core",
+        "facebook/react"
     ]
     scaling_repo= get_scaling_repo()
     if not scaling_repo:
@@ -308,8 +420,8 @@ def main():
         print(f"\n--- Additional Calculation Details for {repo} (Velocity, UIG, MAC) ---\n")
         print_calculation_details(repo, detail_calc_dict[repo])
 
-    # Then do the "Target Reached" logic for velocity, uig, mac, plus SEI
-    # (same code from before)...
+    # Next => compute "Target Reached" ...
+    non_scaling = [r for r in repos if r!=scaling_repo]
 
     def compute_target_reached_data(repo_list, scaling_repo, quarter_data_dict):
         target_data={}
@@ -348,15 +460,12 @@ def main():
             (mT,mS,mR)= mac_dict[q_idx]
             ratio_weights=[]
             ratio_values=[]
-            # velocity =>0.3
             if abs(vT)>1e-9:
                 ratio_weights.append(0.3)
                 ratio_values.append(vR)
-            # uig =>0.2
             if abs(uT)>1e-9:
                 ratio_weights.append(0.2)
                 ratio_values.append(uR)
-            # mac =>0.5
             if abs(mT)>1e-9:
                 ratio_weights.append(0.5)
                 ratio_values.append(mR)
@@ -365,13 +474,12 @@ def main():
             wsum= sum(ratio_weights)
             partial_sum=0.0
             for i in range(len(ratio_weights)):
-                partial_sum+= ratio_weights[i]*ratio_values[i]
+                partial_sum+= ratio_weights[i]* ratio_values[i]
             sei_ratio= partial_sum/wsum
             scaled_sei= 0.5*mS +0.3*vS +0.2*uS
             sei_data[q_idx]= (100.0, scaled_sei, sei_ratio)
         return sei_data
 
-    non_scaling = [r for r in repos if r!=scaling_repo]
     velocity_target= compute_target_reached_data(repos, scaling_repo, velocity_scaled)
     uig_target= compute_target_reached_data(repos, scaling_repo, uig_scaled)
     mac_target= compute_target_reached_data(repos, scaling_repo, mac_scaled)
@@ -463,7 +571,6 @@ def main():
     print("\n=== SEI Target Reached (Separate) ===")
     print_sei_table()
 
-    # produce bar charts
     import numpy as np
 
     if scaling_repo in quarter_dates:
@@ -491,8 +598,8 @@ def main():
         macT_list.append(mT)
         macS_list.append(mS)
 
-    x= np.arange(len(q_idxs))
     barw=0.12
+    x= np.arange(len(q_idxs))
     plt.figure(figsize=(10,5))
     plt.bar(x - 2*barw, velT_list, barw, label="Velocity Target", color='lightblue')
     plt.bar(x - 1*barw, velS_list, barw, label="Velocity Scaling", color='blue')
@@ -544,6 +651,32 @@ def main():
 
     print(f"\n=== Final Summary for {scaling_repo} ===")
     print("All tables & bar charts generated with quarter-based data in table form.\n")
+
+    ############################################################################
+    # 5) End of main => let's restore stdout and write the captured console
+    #    plus environment variables to debug_log.txt
+    ############################################################################
+    sys.stdout.flush()
+    global log_capture
+    console_text = log_capture.getvalue()
+
+    # restore original stdout
+    sys.stdout = original_stdout
+
+    # environment variables that might be relevant
+    scaling_repo_env = os.environ.get("SCALING_REPO","<not set>")
+    fiscal_q_env     = os.environ.get("NUM_FISCAL_QUARTERS","<not set>")
+    # add more if needed
+
+    debug_file = "debug_log.txt"
+    with open(debug_file, "w", encoding="utf-8") as f:
+        f.write("=== ENVIRONMENT VARIABLES ===\n")
+        f.write(f"SCALING_REPO={scaling_repo_env}\n")
+        f.write(f"NUM_FISCAL_QUARTERS={fiscal_q_env}\n")
+        f.write("\n=== CAPTURED CONSOLE OUTPUT ===\n")
+        f.write(console_text)
+
+    print(f"[INFO] Debug log saved to {debug_file}")
 
 if __name__=="__main__":
     main()
