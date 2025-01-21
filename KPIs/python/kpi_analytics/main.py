@@ -71,7 +71,7 @@ def main():
         print(f"Oldest date: {oldest_dt} => Quarters= {num_quarters} (partial if beyond now={now})\n")
 
         col_header = [
-            "Quarter", "mergesRaw", "issuesRaw", "forksRaw", "starsRaw",
+            "           Quarter       ", "mergesRaw", "issuesRaw", "forksRaw", "starsRaw",
             "newIssRaw", "newCommRaw", "newReactRaw", "newPullRaw",
             "Velocity", "UIG", "MAC"
         ]
