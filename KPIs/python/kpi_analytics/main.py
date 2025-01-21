@@ -311,8 +311,9 @@ def print_sei_table(sei_data, scaling_repo, quarter_dates):
 def main():
     repos= [
         "tensorflow/tensorflow",
-        "dotnet/core",
-        "facebook/react"
+ #       "dotnet/core",
+        "facebook/react",
+        "ni/labview-icon-editor"
     ]
     scaling_repo= get_scaling_repo()
     if not scaling_repo:
