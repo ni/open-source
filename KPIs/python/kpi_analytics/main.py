@@ -359,7 +359,8 @@ def main():
     from config import get_scaling_repo, get_num_fiscal_quarters
     repos= [
         "tensorflow/tensorflow",
-        "facebook/react"
+        "facebook/react", 
+        "dotnet/core"
     ]
     scaling_repo= get_scaling_repo()
     if not scaling_repo:
