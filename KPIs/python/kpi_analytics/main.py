@@ -298,8 +298,11 @@ def produce_stakeholder_summary(
 ###############################################################################
 def main():
     repos= [
-        "ni/labview-icon-editor",
-        "facebook/react"
+       # "ni/labview-icon-editor",
+        "facebook/react",
+        #"dotnet/core",
+        "tensorflow/tensorflow"
+        
     ]
     scaling_repo= get_scaling_repo()
     if not scaling_repo:
