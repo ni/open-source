@@ -313,7 +313,7 @@ def main():
         "tensorflow/tensorflow",
  #       "dotnet/core",
         "facebook/react",
-        "ni/labview-icon-editor"
+       # "ni/labview-icon-editor"
     ]
     scaling_repo= get_scaling_repo()
     if not scaling_repo:
