@@ -1,18 +1,39 @@
-# quarters.py
+#!/usr/bin/env python3
+"""
+quarters.py
 
-from dateutil.relativedelta import relativedelta
+Generates n consecutive 3-month windows from start_dt. 
+(If you want a real "fiscal approach," just adapt the logic here.)
+"""
+
 from datetime import datetime
+import calendar
 
-def generate_quarter_windows(start_date, num_quarters):
+def generate_quarter_windows(start_dt, n):
     """
-    Generate exactly num_quarters windows, each 3 months, 
-    from start_date, but do not skip partial quarters 
-    that extend beyond now -- we clamp them at now if needed.
+    Return list of (q_start, q_end) for n consecutive 3-month increments
+    from start_dt.
     """
     windows = []
-    current = start_date
-    for _ in range(num_quarters):
-        nxt = current + relativedelta(months=3)
-        windows.append((current, nxt))
-        current = nxt
+    cur = start_dt
+    for _ in range(n):
+        end = add_months(cur, 3)
+        windows.append((cur, end))
+        cur = end
     return windows
+
+def add_months(dt, months):
+    """
+    Simple function that increments dt.month by `months`. 
+    Clamps day if it exceeds last day of the new month.
+    """
+    year = dt.year
+    month = dt.month + months
+    day = dt.day
+    while month > 12:
+        month -= 12
+        year += 1
+    last_day = calendar.monthrange(year, month)[1]
+    if day > last_day:
+        day = last_day
+    return dt.replace(year=year, month=month, day=day)

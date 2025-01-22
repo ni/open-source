@@ -1,35 +1,65 @@
-# analytics/forks_stars.py
+#!/usr/bin/env python3
+"""
+analytics/forks_stars.py
 
-from db import get_connection
+Implements real DB queries for forks, stars.
+"""
 
-def count_forks(repo_name, start_dt, end_dt):
-    conn = get_connection()
-    cursor = conn.cursor()
-    query = """
-      SELECT COUNT(*)
-        FROM forks
-       WHERE repo_name=%s
-         AND created_at BETWEEN %s AND %s
+import mysql.connector
+import configparser
+
+def _get_db_connection():
+    config= configparser.ConfigParser()
+    config.read('db_config.ini')
+    db_cfg= config['mysql']
+    cnx= mysql.connector.connect(
+        host=db_cfg['host'],
+        user=db_cfg['user'],
+        password=db_cfg['password'],
+        database=db_cfg['database']
+    )
+    return cnx
+
+def count_forks(repo, start_dt, end_dt):
     """
-    cursor.execute(query, (repo_name, start_dt, end_dt))
-    row = cursor.fetchone()
-    cnt = row[0] if row else 0
-    cursor.close()
-    conn.close()
-    return cnt
-
-def count_stars(repo_name, start_dt, end_dt):
-    conn = get_connection()
-    cursor = conn.cursor()
-    query = """
-      SELECT COUNT(*)
-        FROM stars
-       WHERE repo_name=%s
-         AND starred_at BETWEEN %s AND %s
+    SELECT COUNT(*) FROM forks
+    WHERE repo_name=? 
+      AND created_at >= start_dt
+      AND created_at < end_dt
     """
-    cursor.execute(query, (repo_name, start_dt, end_dt))
-    row = cursor.fetchone()
-    cnt = row[0] if row else 0
+    cnx= _get_db_connection()
+    cursor= cnx.cursor()
+    query= """
+    SELECT COUNT(*)
+    FROM forks
+    WHERE repo_name=%s
+      AND created_at >= %s
+      AND created_at < %s
+    """
+    cursor.execute(query, (repo, start_dt, end_dt))
+    val= cursor.fetchone()[0]
     cursor.close()
-    conn.close()
-    return cnt
+    cnx.close()
+    return val
+
+def count_stars(repo, start_dt, end_dt):
+    """
+    SELECT COUNT(*) FROM stars
+    WHERE repo_name=? 
+      AND starred_at >= start_dt
+      AND starred_at < end_dt
+    """
+    cnx= _get_db_connection()
+    cursor= cnx.cursor()
+    query= """
+    SELECT COUNT(*)
+    FROM stars
+    WHERE repo_name=%s
+      AND starred_at >= %s
+      AND starred_at < %s
+    """
+    cursor.execute(query, (repo, start_dt, end_dt))
+    val= cursor.fetchone()[0]
+    cursor.close()
+    cnx.close()
+    return val

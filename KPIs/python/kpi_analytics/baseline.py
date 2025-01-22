@@ -1,37 +1,56 @@
-# baseline.py
+#!/usr/bin/env python3
+"""
+baseline.py
 
-from db import get_connection
+Finds the oldest date for each repo from the DB by looking at the earliest
+pull/issue creation date. If no data is found, returns None.
+"""
 
-def find_oldest_date_for_repo(repo_name):
+import mysql.connector
+import configparser
+import os
+
+def _get_db_connection():
     """
-    Return earliest creation date from issues, pulls, forks, stars,
-    issue_comments, issue_events, pull_events, comment_reactions, issue_reactions.
-    watchers = excluded.
+    Reads DB credentials from db_config.ini under section [mysql].
+    Adjust as needed.
     """
-    conn = get_connection()
-    cursor = conn.cursor()
+    config = configparser.ConfigParser()
+    config.read('db_config.ini')
+    db_cfg = config['mysql']
+    cnx = mysql.connector.connect(
+        host=db_cfg['host'],
+        user=db_cfg['user'],
+        password=db_cfg['password'],
+        database=db_cfg['database']
+    )
+    return cnx
 
-    queries = [
-        ("SELECT MIN(created_at) FROM issues WHERE repo_name=%s", repo_name),
-        ("SELECT MIN(created_at) FROM pulls WHERE repo_name=%s", repo_name),
-        ("SELECT MIN(created_at) FROM forks WHERE repo_name=%s", repo_name),
-        ("SELECT MIN(starred_at) FROM stars WHERE repo_name=%s", repo_name),
-        ("SELECT MIN(created_at) FROM issue_comments WHERE repo_name=%s", repo_name),
-        ("SELECT MIN(created_at) FROM issue_events WHERE repo_name=%s", repo_name),
-        ("SELECT MIN(created_at) FROM pull_events WHERE repo_name=%s", repo_name),
-        ("SELECT MIN(created_at) FROM comment_reactions WHERE repo_name=%s", repo_name),
-        ("SELECT MIN(created_at) FROM issue_reactions WHERE repo_name=%s", repo_name)
-    ]
+def find_oldest_date_for_repo(repo):
+    """
+    Return the earliest creation date found in 'pulls' or 'issues' for this repo.
+    If none found, return None.
+    """
+    cnx = _get_db_connection()
+    cursor = cnx.cursor()
+    query = """
+    SELECT MIN(all_min) AS oldest_date
+    FROM (
+        SELECT MIN(created_at) AS all_min
+        FROM pulls
+        WHERE repo_name=%s
 
-    oldest = None
-    for q, prm in queries:
-        cursor.execute(q, (prm,))
-        row = cursor.fetchone()
-        if row and row[0]:
-            dt = row[0]
-            if oldest is None or dt < oldest:
-                oldest = dt
+        UNION ALL
 
+        SELECT MIN(created_at) AS all_min
+        FROM issues
+        WHERE repo_name=%s
+    ) subq
+    """
+    cursor.execute(query, (repo, repo))
+    row = cursor.fetchone()
     cursor.close()
-    conn.close()
-    return oldest
+    cnx.close()
+    if row and row[0]:
+        return row[0]
+    return None

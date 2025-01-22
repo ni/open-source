@@ -1,0 +1,7 @@
+scaleFactors:
+  windowDays: 120
+aggregatorWeights:
+  velocity_merges_weight: 0.6
+  velocity_closed_weight: 0.4
+  mac_newIssues_weight: 0.8
+  mac_pulls_weight: 0.2
