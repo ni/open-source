@@ -7,7 +7,7 @@ import math
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 
-# Our existing modules:
+# Existing modules:
 from baseline import find_oldest_date_for_repo
 from quarters import generate_quarter_windows
 from merges_issues import (
@@ -29,19 +29,15 @@ from config import (
 )
 
 ###############################################################################
-# 1) Setup console capture so we can also write to debug_log.txt at the end
+# Capture console output for debug_log
 ###############################################################################
-original_stdout = sys.stdout  # keep a reference to original
+original_stdout = sys.stdout
 log_capture = io.StringIO()
 
 class DualOutput:
-    """
-    A file-like class that writes to both original stdout and a StringIO buffer.
-    """
     def write(self, text):
-        original_stdout.write(text)   # show on screen
-        log_capture.write(text)       # capture in memory
-
+        original_stdout.write(text)
+        log_capture.write(text)
     def flush(self):
         original_stdout.flush()
         log_capture.flush()
@@ -49,7 +45,7 @@ class DualOutput:
 sys.stdout = DualOutput()
 
 ###############################################################################
-# 2) Table-Printing Utility
+# Table-printing utility
 ###############################################################################
 def print_aligned_table(table_data, alignments=None):
     if not table_data:
@@ -78,7 +74,6 @@ def print_aligned_table(table_data, alignments=None):
         else:
             return cell_str.rjust(width)
 
-    # print header
     header_line = " | ".join(
         format_cell(str(table_data[0][i]), col_widths[i], alignments[i])
         for i in range(num_cols)
@@ -95,8 +90,7 @@ def print_aligned_table(table_data, alignments=None):
         print(row_line)
 
 ###############################################################################
-# 3) Print existing quarter data in a table, raw cols with no decimals
-#    scaled/derived at 4 decimals, plus scaling factor info
+# Existing quarter data table function (no decimals for raw, 4 decimals for scaled)
 ###############################################################################
 def print_existing_quarter_data_table(
     repo, sfM, sfI, sfF, sfS, sfP,
@@ -150,6 +144,9 @@ def print_existing_quarter_data_table(
         table_data.append(row)
     print_aligned_table(table_data, align)
 
+###############################################################################
+# Detailed calc for Velocity/UIG/MAC
+###############################################################################
 def print_calculation_details(repo, quarter_calcs):
     header_vel= ["Q-Range","mergesScaled","closedScaled","Velocity=0.4*M +0.6*C"]
     table_vel= [header_vel]
@@ -175,7 +172,7 @@ def print_calculation_details(repo, quarter_calcs):
     print_aligned_table(table_mac, ["left","center","center","center"])
 
 ###############################################################################
-# 4) Standard "Target Reached" + SEI logic from prior snippet
+# compute_target_reached_data + compute_sei_data as before
 ###############################################################################
 def compute_target_reached_data(repo_list, scaling_repo, quarter_data_dict):
     target_data={}
@@ -228,92 +225,81 @@ def compute_sei_data(vel_dict, uig_dict, mac_dict):
         wsum= sum(ratio_weights)
         partial_sum=0.0
         for i in range(len(ratio_weights)):
-            partial_sum+= ratio_weights[i]*ratio_values[i]
+            partial_sum+= ratio_weights[i]* ratio_values[i]
         sei_ratio= partial_sum/wsum
         scaled_sei= 0.5*mS +0.3*vS +0.2*uS
         sei_data[q_idx]= (100.0, scaled_sei, sei_ratio)
     return sei_data
 
-def print_combined_target_table(scaling_repo, quarter_dates, velocity_target, uig_target, mac_target, sei_data):
-    header= [
-      "Quarter",
-      "Velocity Target","Scaled Velocity","Velocity Ratio",
-      "UIG Target","Scaled UIG","UIG Ratio",
-      "MAC Target","Scaled MAC","MAC Ratio",
-      "SEI Target","Scaled SEI","SEI Ratio"
-    ]
-    align= ["left"]+["center"]*(len(header)-1)
-    table= [header]
+###############################################################################
+# New: A small function to produce a stakeholder summary (example logic).
+# (NEW) STAKEHOLDER SUMMARY
+###############################################################################
+def produce_stakeholder_summary(
+    velocity_target, uig_target, mac_target, sei_data,
+    quarter_dates, scaling_repo
+):
+    """
+    We'll produce an example textual summary highlighting some thresholds or
+    recommendations for a stakeholder to consider. This is just a sample
+    to show how you might do it.
+    """
+    print("\n=== STAKEHOLDER SUMMARY & RECOMMENDATIONS ===\n")
+    # We'll gather the last quarter for the scaling repo as a highlight
     if scaling_repo not in quarter_dates:
+        print("[No quarters for scaling repo, no summary available.]")
         return
     q_idxs= sorted(quarter_dates[scaling_repo].keys())
-    for q_idx in q_idxs:
-        (qs,qe)= quarter_dates[scaling_repo][q_idx]
-        q_label= f"Q{q_idx}({qs:%Y-%m-%d}-{qe:%Y-%m-%d})"
-        (vT,vS,vR)= velocity_target.get(q_idx,(0,0,0))
-        (uT,uS,uR)= uig_target.get(q_idx,(0,0,0))
-        (mT,mS,mR)= mac_target.get(q_idx,(0,0,0))
-        (sT,sS,sR)= sei_data.get(q_idx,(0,0,0))
-        def f4(x): return f"{x:.4f}"
-        row= [
-            q_label,
-            f4(vT), f4(vS), f4(vR),
-            f4(uT), f4(uS), f4(uR),
-            f4(mT), f4(mS), f4(mR),
-            f4(sT), f4(sS), f4(sR)
-        ]
-        table.append(row)
-    print_aligned_table(table, align)
-
-def print_metric_table(metric_name, data_dict, scaling_repo, quarter_dates):
-    header= [ "Quarter", f"{metric_name} Target", f"Scaled {metric_name}", f"{metric_name} Ratio"]
-    align= ["left","center","center","center"]
-    table= [header]
-    if scaling_repo not in quarter_dates:
+    if not q_idxs:
+        print("[No quarter indexes, no summary available.]")
         return
-    q_idxs= sorted(quarter_dates[scaling_repo].keys())
-    for q_idx in q_idxs:
-        if q_idx not in data_dict:
-            continue
-        (tVal,sVal,rVal)= data_dict[q_idx]
-        (qs,qe)= quarter_dates[scaling_repo][q_idx]
-        q_label= f"Q{q_idx}({qs:%Y-%m-%d}-{qe:%Y-%m-%d})"
-        table.append([
-            q_label,
-            f"{tVal:.4f}",
-            f"{sVal:.4f}",
-            f"{rVal:.4f}"
-        ])
-    print_aligned_table(table, align)
 
-def print_sei_table(sei_data, scaling_repo, quarter_dates):
-    header= ["Quarter","SEI Target","Scaled SEI","SEI Ratio"]
-    align= ["left","center","center","center"]
-    table= [header]
-    if scaling_repo not in quarter_dates:
-        return
-    q_idxs= sorted(quarter_dates[scaling_repo].keys())
-    for q_idx in q_idxs:
-        if q_idx not in sei_data:
-            continue
-        (tVal, sVal, ratio)= sei_data[q_idx]
-        (qs,qe)= quarter_dates[scaling_repo][q_idx]
-        q_label= f"Q{q_idx}({qs:%Y-%m-%d}-{qe:%Y-%m-%d})"
-        table.append([
-            q_label,
-            f"{tVal:.4f}",
-            f"{sVal:.4f}",
-            f"{ratio:.4f}"
-        ])
-    print_aligned_table(table, align)
+    last_q= q_idxs[-1]
+    # find the final quarter's velocity ratio, uig ratio, mac ratio, sei ratio
+    (vT, vS, vR)= velocity_target.get(last_q,(0,0,0))
+    (uT, uS, uR)= uig_target.get(last_q,(0,0,0))
+    (mT, mS, mR)= mac_target.get(last_q,(0,0,0))
+    (sT, sS, sRatio)= sei_data.get(last_q,(0,0,0))
 
+    # We'll do quick thresholds:
+    # e.g. if velocity ratio < 70 => "Below normal velocity"
+    # if velocity ratio>120 => "Highly above target"
+    # same for other metrics, just as an example
+    # Then print recommendations
+    def rating(ratio):
+        if ratio<70.0: return "Below target"
+        elif ratio>120.0: return "Above target"
+        else: return "Near target"
 
+    v_rating= rating(vR)
+    u_rating= rating(uR)
+    m_rating= rating(mR)
+    sei_rating= rating(sRatio)
+
+    print(f"Final Quarter (Q{last_q}) Performance for {scaling_repo}:")
+    print(f"  Velocity Ratio = {vR:.2f}% => {v_rating}")
+    print(f"  UIG Ratio      = {uR:.2f}% => {u_rating}")
+    print(f"  MAC Ratio      = {mR:.2f}% => {m_rating}")
+    print(f"  SEI Ratio      = {sRatio:.2f}% => {sei_rating}")
+
+    # Some example suggestions
+    print("\nSuggestions for Stakeholders:")
+    if vR<70:
+        print(" - Velocity is below normal. Consider redistributing tasks or automating merges.")
+    if mR<70:
+        print(" - MAC is below normal. Possibly encourage more contributor engagement.")
+    if sRatio>120:
+        print(" - SEI is significantly above target. This is a great sign. Maintain the momentum!")
+    if (vR>120 and uR>120 and mR>120):
+        print(" - All metrics are above target. The team is outperforming expectations.\n")
+
+    print("(You can refine these thresholds, logic, and text to fit your actual stakeholders' needs.)")
+
+###############################################################################
 def main():
     repos= [
-        "tensorflow/tensorflow",
- #       "dotnet/core",
-        "facebook/react",
-       # "ni/labview-icon-editor"
+        "ni/labview-icon-editor",
+        "facebook/react"
     ]
     scaling_repo= get_scaling_repo()
     if not scaling_repo:
@@ -410,7 +396,7 @@ def main():
 
             q_idx+=1
 
-    # Print each repo's quarter data in a table
+    # Print existing data tables + detail
     for repo in repos:
         if repo not in existing_data_dict or len(existing_data_dict[repo])==0:
             continue
@@ -421,7 +407,7 @@ def main():
         print(f"\n--- Additional Calculation Details for {repo} (Velocity, UIG, MAC) ---\n")
         print_calculation_details(repo, detail_calc_dict[repo])
 
-    # Next => compute "Target Reached" ...
+    # Next => "Target Reached" logic
     non_scaling = [r for r in repos if r!=scaling_repo]
 
     def compute_target_reached_data(repo_list, scaling_repo, quarter_data_dict):
@@ -480,6 +466,11 @@ def main():
             scaled_sei= 0.5*mS +0.3*vS +0.2*uS
             sei_data[q_idx]= (100.0, scaled_sei, sei_ratio)
         return sei_data
+
+    velocity_target={}
+    uig_target={}
+    mac_target={}
+    sei_data={}
 
     velocity_target= compute_target_reached_data(repos, scaling_repo, velocity_scaled)
     uig_target= compute_target_reached_data(repos, scaling_repo, uig_scaled)
@@ -572,6 +563,7 @@ def main():
     print("\n=== SEI Target Reached (Separate) ===")
     print_sei_table()
 
+    # produce bar charts
     import numpy as np
 
     if scaling_repo in quarter_dates:
@@ -616,7 +608,6 @@ def main():
     plt.close()
 
     # separate bar chart for SEI => 2 bars/quarter => target vs. scaled
-    # gather from sei_data
     sei_q_idxs= sorted(sei_data.keys())
     if sei_q_idxs:
         s_labels=[]
@@ -650,30 +641,25 @@ def main():
         plt.savefig(f"sei_chart_{scaling_repo.replace('/','_')}.png")
         plt.close()
 
-    print(f"\n=== Final Summary for {scaling_repo} ===")
+    print(f"\n=== Final Summary for {scaling_repo} ===\n")
     print("All tables & bar charts generated with quarter-based data in table form.\n")
 
-    ############################################################################
-    # 5) End of main => let's restore stdout and write the captured console
-    #    plus environment variables to debug_log.txt
-    ############################################################################
-    sys.stdout.flush()
-    global log_capture
-    console_text = log_capture.getvalue()
+    # (NEW) STAKEHOLDER SUMMARY & RECOMMENDATIONS
+    produce_stakeholder_summary(velocity_target, uig_target, mac_target, sei_data, quarter_dates, scaling_repo)
 
-    # restore original stdout
+    # end => environment + debug log
+    sys.stdout.flush()
+    console_text = log_capture.getvalue()
     sys.stdout = original_stdout
 
-    # environment variables that might be relevant
-    scaling_repo_env = os.environ.get("SCALING_REPO","<not set>")
-    fiscal_q_env     = os.environ.get("NUM_FISCAL_QUARTERS","<not set>")
-    # add more if needed
-
+    import os
     debug_file = "debug_log.txt"
     with open(debug_file, "w", encoding="utf-8") as f:
         f.write("=== ENVIRONMENT VARIABLES ===\n")
-        f.write(f"SCALING_REPO={scaling_repo_env}\n")
-        f.write(f"NUM_FISCAL_QUARTERS={fiscal_q_env}\n")
+        env_scaling= os.environ.get("SCALING_REPO","<not set>")
+        env_quarters= os.environ.get("NUM_FISCAL_QUARTERS","<not set>")
+        f.write(f"SCALING_REPO={env_scaling}\n")
+        f.write(f"NUM_FISCAL_QUARTERS={env_quarters}\n")
         f.write("\n=== CAPTURED CONSOLE OUTPUT ===\n")
         f.write(console_text)
 
