@@ -120,54 +120,15 @@ Q3(2024-11-03-2025-01-22) |        69.0000         |  42.0000   |        63.6000
 
 ===== [TARGET REACHED] for Scaling Repo = ni/labview-icon-editor =====
 
-=== Combined Table (Velocity, UIG, MAC, SEI) ===
-Quarter                   | Velocity Target | Scaled Velocity | Velocity Ratio | UIG Target | Scaled UIG | UIG Ratio | MAC Target | Scaled MAC | MAC Ratio | SEI Target | Scaled SEI | SEI Ratio
---------------------------+-----------------+-----------------+----------------+------------+------------+-----------+------------+------------+-----------+------------+------------+----------
-Q1(2024-05-03-2024-08-03) |     7.3650      |     4.0000      |    54.3106     |   9.0517   |   7.4000   |  81.7529  |  26.8188   |  50.0000   | 186.4363  |  100.0000  |  27.6800   | 125.8619 
-Q2(2024-08-03-2024-11-03) |     10.5671     |     13.6000     |    128.7007    |   3.4631   |   5.0000   | 144.3803  |  30.9292   |  66.8000   | 215.9770  |  100.0000  |  38.4800   | 175.4748 
-Q3(2024-11-03-2025-01-22) |     18.2033     |     42.2000     |    231.8257    |   7.5005   |   3.2000   |  42.6638  |  58.1461   |  63.6000   | 109.3796  |  100.0000  |  45.1000   | 132.7702 
 
-=== Velocity Target Reached (Separate) ===
-Quarter                   | Velocity Target | Scaled Velocity | Velocity Ratio
---------------------------+-----------------+-----------------+---------------
-Q1(2024-05-03-2024-08-03) |     7.3650      |     4.0000      |    54.3106    
-Q2(2024-08-03-2024-11-03) |     10.5671     |     13.6000     |    128.7007   
-Q3(2024-11-03-2025-01-22) |     18.2033     |     42.2000     |    231.8257   
+=== (NEW) INDIVIDUAL METRIC COMPARISON CHARTS: Non-Scaling vs. Scaling ===
 
-=== UIG Target Reached (Separate) ===
-Quarter                   | UIG Target | Scaled UIG | UIG Ratio
---------------------------+------------+------------+----------
-Q1(2024-05-03-2024-08-03) |   9.0517   |   7.4000   |  81.7529 
-Q2(2024-08-03-2024-11-03) |   3.4631   |   5.0000   | 144.3803 
-Q3(2024-11-03-2025-01-22) |   7.5005   |   3.2000   |  42.6638 
+...Plotting Velocity comparisons for each non-scaling repo...
+...Plotting UIG comparisons for each non-scaling repo...
+...Plotting MAC comparisons for each non-scaling repo...
+...Plotting SEI comparisons (scaling-only or zero for non-scaling) ...
 
-=== MAC Target Reached (Separate) ===
-Quarter                   | MAC Target | Scaled MAC | MAC Ratio
---------------------------+------------+------------+----------
-Q1(2024-05-03-2024-08-03) |  26.8188   |  50.0000   | 186.4363 
-Q2(2024-08-03-2024-11-03) |  30.9292   |  66.8000   | 215.9770 
-Q3(2024-11-03-2025-01-22) |  58.1461   |  63.6000   | 109.3796 
-
-=== SEI Target Reached (Separate) ===
-Quarter                   | SEI Target | Scaled SEI | SEI Ratio
---------------------------+------------+------------+----------
-Q1(2024-05-03-2024-08-03) |  100.0000  |  27.6800   | 125.8619 
-Q2(2024-08-03-2024-11-03) |  100.0000  |  38.4800   | 175.4748 
-Q3(2024-11-03-2025-01-22) |  100.0000  |  45.1000   | 132.7702 
+=== Done generating individual comparison plots. ===
 
 === Final Summary for ni/labview-icon-editor ===
 
-All tables & bar charts generated with quarter-based data in table form.
-
-
-=== STAKEHOLDER SUMMARY & RECOMMENDATIONS ===
-
-Final Quarter (Q3) Performance for ni/labview-icon-editor:
-  Velocity Ratio = 231.83% => Above target
-  UIG Ratio      = 42.66% => Below target
-  MAC Ratio      = 109.38% => Near target
-  SEI Ratio      = 132.77% => Above target
-
-Suggestions for Stakeholders:
- - SEI is significantly above target. This is a great sign. Maintain the momentum!
-(You can refine these thresholds, logic, and text to fit your actual stakeholders' needs.)
