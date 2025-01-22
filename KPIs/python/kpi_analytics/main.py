@@ -5,9 +5,10 @@ import os
 import io
 import math
 import matplotlib.pyplot as plt
+import numpy as np
 from datetime import datetime, timedelta
 
-# Existing modules from your codebase
+# Existing modules (unchanged)
 from baseline import find_oldest_date_for_repo
 from quarters import generate_quarter_windows
 from merges_issues import (
@@ -29,7 +30,7 @@ from config import (
 )
 
 ###############################################################################
-# Capture console output for debug_log
+# 1) Capture console output for debug_log
 ###############################################################################
 original_stdout = sys.stdout
 log_capture = io.StringIO()
@@ -45,7 +46,7 @@ class DualOutput:
 sys.stdout = DualOutput()
 
 ###############################################################################
-# Table-printing utility
+# 2) Print table utility
 ###############################################################################
 def print_aligned_table(table_data, alignments=None):
     if not table_data:
@@ -90,7 +91,7 @@ def print_aligned_table(table_data, alignments=None):
         print(row_line)
 
 ###############################################################################
-# Print existing quarter data in table, no decimals for raw, 4 decimals for scaled
+# 3) Existing quarter data in table form (raw => no decimals, scaled => 4 decimals)
 ###############################################################################
 def print_existing_quarter_data_table(
     repo, sfM, sfI, sfF, sfS, sfP,
@@ -145,12 +146,12 @@ def print_existing_quarter_data_table(
     print_aligned_table(table_data, align)
 
 ###############################################################################
-# Detailed calc for Velocity/UIG/MAC
+# 4) Detailed Calculation Tables (Velocity, UIG, MAC)
 ###############################################################################
 def print_calculation_details(repo, quarter_calcs):
-    header_vel= ["Q-Range","mergesScaled","closedScaled","Velocity=0.4*M +0.6*C"]
+    header_vel= ["Q-Range","mergesScaled","closedScaled","Velocity=0.4*M+0.6*C"]
     table_vel= [header_vel]
-    header_uig= ["Q-Range","forksScaled","starsScaled","UIG=0.4*F +0.6*S"]
+    header_uig= ["Q-Range","forksScaled","starsScaled","UIG=0.4*F+0.6*S"]
     table_uig= [header_uig]
     header_mac= ["Q-Range","(Iss+Comm+React)Scaled","pullScaled","MAC=0.8*(sum)+0.2*pull"]
     table_mac= [header_mac]
@@ -172,45 +173,71 @@ def print_calculation_details(repo, quarter_calcs):
     print_aligned_table(table_mac, ["left","center","center","center"])
 
 ###############################################################################
-# compute_target_reached_data + compute_sei_data
+# 5) compute_target_reached_data + compute_sei_data, same as before
 ###############################################################################
 def compute_target_reached_data(repo_list, scaling_repo, quarter_data_dict):
+    """
+    This aggregates the scaled metric (like velocity) from each non-scaling repo,
+    computing an average => targetVal, then comparing scalingVal => ratio.
+    We skip if scaling doesn't exist, or if no non-scaling data. But user wants
+    partial coverage, so we keep it if the non-scaler has data.
+    Actually to handle "rows that have no data from the scaling repo," we still
+    produce an entry if the non-scaler has data. We'll do a union of indexes.
+    """
     target_data={}
-    # quarter_data_dict[repo][q_idx] = scaled_value
-    # We skip none, but if scaling_repo has q_idx, we unify. We'll do normal logic
-    if scaling_repo not in quarter_data_dict:
-        return target_data
-    all_q = sorted(quarter_data_dict[scaling_repo].keys())
-    for q_idx in all_q:
+    # gather union of quarter indexes across scaling + non-scaling
+    union_q_idx= set()
+    for r in repo_list:
+        union_q_idx |= set(quarter_data_dict[r].keys())
+    union_q_idx= sorted(union_q_idx)
+
+    for q_idx in union_q_idx:
+        # gather sum from non-scaling
         sum_val=0.0
         count_val=0
         for r in repo_list:
             if r==scaling_repo:
                 continue
             if q_idx in quarter_data_dict[r]:
-                sum_val+= quarter_data_dict[r][q_idx]
+                sum_val += quarter_data_dict[r][q_idx]
                 count_val+=1
-        if count_val==0:
-            continue
-        avg_val= sum_val/count_val
-        scaling_val= quarter_data_dict[scaling_repo].get(q_idx,0.0)
-        ratio=0.0
+        avg_val= 0.0
+        if count_val>0:
+            avg_val= sum_val/count_val
+
+        # scalingVal => if missing => 0.0
+        if q_idx in quarter_data_dict[scaling_repo]:
+            scaling_val= quarter_data_dict[scaling_repo][q_idx]
+        else:
+            scaling_val= 0.0  # user wants to see projection if scaling is missing
+
+        ratio= 0.0
         if abs(avg_val)>1e-9:
             ratio= (scaling_val/avg_val)*100.0
         else:
             ratio=0.0
+
         target_data[q_idx]= (avg_val, scaling_val, ratio)
+
     return target_data
 
 def compute_sei_data(vel_dict, uig_dict, mac_dict):
+    """
+    We'll do a union of quarter indexes from velocity, uig, mac dict
+    so that we produce a row for partial coverage too.
+    If scaling is missing, we treat that portion as 0 => skip? or use 0.
+    For clarity, we'll do the same approach => if there's no velocity entry,
+    that portion is 0 => in ratio, it won't matter.
+    """
     sei_data={}
     all_q = set(vel_dict.keys())|set(uig_dict.keys())|set(mac_dict.keys())
-    for q_idx in sorted(all_q):
-        if q_idx not in vel_dict or q_idx not in uig_dict or q_idx not in mac_dict:
-            continue
-        (vT,vS,vR)= vel_dict[q_idx]
-        (uT,uS,uR)= uig_dict[q_idx]
-        (mT,mS,mR)= mac_dict[q_idx]
+    all_q= sorted(all_q)
+    for q_idx in all_q:
+        vT,vS,vR = vel_dict.get(q_idx,(0,0,0))
+        uT,uS,uR = uig_dict.get(q_idx,(0,0,0))
+        mT,mS,mR = mac_dict.get(q_idx,(0,0,0))
+
+        # Weighted ratio => 0.3 velocity ratio, 0.2 uig ratio, 0.5 mac ratio if >0 target
         ratio_weights=[]
         ratio_values=[]
         if abs(vT)>1e-9:
@@ -222,8 +249,15 @@ def compute_sei_data(vel_dict, uig_dict, mac_dict):
         if abs(mT)>1e-9:
             ratio_weights.append(0.5)
             ratio_values.append(mR)
+
         if len(ratio_weights)==0:
+            # no metric => produce something
+            # let's define ratio=0 if scaling=0, or partial
+            # scaledSei => 0.5*mS +0.3*vS +0.2*uS
+            scaled_sei= (0.5*mS +0.3*vS +0.2*uS)
+            sei_data[q_idx]= (100.0, scaled_sei, 0.0)
             continue
+
         wsum= sum(ratio_weights)
         partial_sum=0.0
         for i in range(len(ratio_weights)):
@@ -234,7 +268,67 @@ def compute_sei_data(vel_dict, uig_dict, mac_dict):
     return sei_data
 
 ###############################################################################
-# Simple stakeholder summary function (unchanged from previous snippet)
+# 6) Additional bar charts for each metric per non-scaling repo
+#    comparing that repo vs. scaling repo side by side.
+###############################################################################
+def plot_metric_comparison_for_repo(
+    repo, scaling_repo,
+    metric_name,
+    metric_dict_repo,  # {quarterIdx: (avg, scalingVal, ratio)} if we store them or direct scaled?
+    metric_dict_scaling # same structure for scaling, or we do direct scaled
+):
+    """
+    We'll unify quarter indexes from both dicts. Then produce 2 bars per quarter:
+    - 'repo' bar
+    - 'scaling' bar
+    If missing => 0. We'll call the output: {metric_name}_comparison_{repo.replace('/','_')}.png
+    """
+    # gather union of q_idx
+    union_q_idx= set(metric_dict_repo.keys()) | set(metric_dict_scaling.keys())
+    union_q_idx= sorted(union_q_idx)
+
+    q_labels=[]
+    repo_vals=[]
+    scaling_vals=[]
+
+    for q_idx in union_q_idx:
+        q_labels.append(f"Q{q_idx}")
+        # we might store data as (avgVal, scalVal, ratio) => but we just want the 'scalVal' portion if it's a direct store
+        # or in your code, you might store "scaled" in index 1. We'll adapt if the structure is (val, scalingVal, ratio)
+        # Actually for "this repo" we want the second item from metric_dict_repo? Wait, we might have used target structure?
+        # Let's assume we stored => metric_dict_repo[q_idx] = scaledValue. We'll do that approach for simpler code.
+        # But you currently store => target_data => (avgVal, scalingVal, ratio). That is for "target" perspective, not direct scaled?
+        # If we want direct scaled velocity, we might better pass velocity_scaled[repo], velocity_scaled[scaling_repo].
+        # We'll do the simpler approach: pass direct scaled dict => i.e. velocity_scaled[repo], velocity_scaled[scaling_repo].
+        # Then if missing => 0. We'll update the code to do that for clarity.
+
+        if q_idx in metric_dict_repo:
+            repo_val= metric_dict_repo[q_idx]
+        else:
+            repo_val= 0.0
+        if q_idx in metric_dict_scaling:
+            scaling_val= metric_dict_scaling[q_idx]
+        else:
+            scaling_val= 0.0
+
+        repo_vals.append(repo_val)
+        scaling_vals.append(scaling_val)
+
+    x= np.arange(len(union_q_idx))
+    barw=0.4
+    plt.figure(figsize=(9,5))
+    plt.bar(x - barw/2, repo_vals, barw, label=f"{repo}", color='orange')
+    plt.bar(x + barw/2, scaling_vals, barw, label=f"{scaling_repo}", color='gray')
+    plt.xticks(x, q_labels, rotation=45, ha='right')
+    plt.title(f"{metric_name} Comparison: {repo} vs. {scaling_repo}")
+    plt.legend()
+    plt.tight_layout()
+    out_file= f"{metric_name.lower()}_comparison_{repo.replace('/','_')}.png"
+    plt.savefig(out_file)
+    plt.close()
+
+###############################################################################
+# 7) Provide a short "stakeholder summary" function
 ###############################################################################
 def produce_stakeholder_summary(
     velocity_target, uig_target, mac_target, sei_data,
@@ -271,142 +365,21 @@ def produce_stakeholder_summary(
     print(f"  MAC Ratio      = {mR:.2f}% => {m_rating}")
     print(f"  SEI Ratio      = {sRatio:.2f}% => {sei_rating}")
 
+    print("\nSuggestions for Stakeholders:")
     if vR<70:
-        print(" - Velocity is below normal. Consider redistributing tasks or automating merges.")
+        print(" - Velocity is below normal. Consider rebalancing tasks or analyzing bottlenecks.")
     if mR<70:
-        print(" - MAC is below normal. Possibly encourage more contributor engagement.")
+        print(" - MAC is below normal. Encourage more contributor involvement or reduce friction.")
     if sRatio>120:
-        print(" - SEI is significantly above target. Great sign, maintain momentum!")
+        print(" - SEI is significantly above target. Good job—sustain this performance!")
     if (vR>120 and uR>120 and mR>120):
-        print(" - All metrics are above target. Team is outperforming expectations.\n")
+        print(" - All metrics are above target. This might indicate extraordinary performance.\n")
 
-    print("(Refine thresholds & text for your real stakeholder logic.)")
-
-
-###############################################################################
-# (NEW) Functions to produce a per-metric comparison chart for each non-scaling repo
-# that includes quarters from both the non-scaling repo and the scaling repo.
-###############################################################################
-def union_of_quarters(repo1, repo2, quarter_dict):
-    """
-    Return a sorted list of quarter indexes that appear in either repo1 or repo2
-    from the quarter_dict => quarter_dict[repo][q_idx] = scaled_value
-    """
-    set1 = set(quarter_dict[repo1].keys()) if repo1 in quarter_dict else set()
-    set2 = set(quarter_dict[repo2].keys()) if repo2 in quarter_dict else set()
-    return sorted(set1 | set2)
-
-def plot_metric_comparison(metric_name, scaling_repo, metric_data, quarter_dates, repos):
-    """
-    For each non-scaling repo => produce a chart comparing that repo's metric to
-    the scaling repo, with 2 bars/quarter index. We'll unify the quarter indexes
-    from both. If a quarter is missing for one, we do 0. This allows 'projection' rows
-    where scaling repo has no data but non-scaling does, or vice versa.
-    metric_data[repo][q_idx] = scaled_value for that metric.
-    We'll produce e.g. <metric_name>_<nonScaling>_vs_<scalingRepo>.png
-    """
-    import numpy as np
-
-    for nr in repos:
-        if nr == scaling_repo:
-            continue
-        if nr not in metric_data:
-            continue
-        # union quarter indexes
-        union_q = union_of_quarters(nr, scaling_repo, metric_data)
-        if not union_q:
-            continue
-
-        # build arrays
-        nr_values=[]
-        sc_values=[]
-        labels=[]
-        for q_idx in union_q:
-            val_nr = metric_data[nr].get(q_idx, 0.0)
-            val_sc = metric_data[scaling_repo].get(q_idx, 0.0)
-            nr_values.append(val_nr)
-            sc_values.append(val_sc)
-            # build label
-            # if we have quarter_dates => we can try to unify. We'll pick the
-            # non-scaling repo's date if scaling doesn't have that quarter or vice versa
-            # we'll do a fallback => "Q{q_idx}"
-            q_label="Q{}".format(q_idx)
-            # optional: try to see if nr in quarter_dates => quarter_dates[nr][q_idx]
-            # or scaling repo in quarter_dates => quarter_dates[scaling_repo][q_idx]
-            # for now, keep it simple
-            labels.append(q_label)
-
-        x= np.arange(len(union_q))
-        barw=0.3
-        plt.figure(figsize=(8,4))
-        plt.bar(x - barw/2, nr_values, barw, label=f"{nr}", color='orange')
-        plt.bar(x + barw/2, sc_values, barw, label=f"{scaling_repo}", color='blue')
-        plt.xticks(x, labels, rotation=45, ha='right')
-        plt.title(f"{metric_name} Comparison: {nr} vs. {scaling_repo}")
-        plt.legend()
-        plt.tight_layout()
-        fname= f"{metric_name}_{nr.replace('/','_')}_vs_{scaling_repo.replace('/','_')}.png"
-        plt.savefig(fname)
-        plt.close()
-
-def plot_sei_comparison(sei_data, scaling_repo, quarter_dates, repos):
-    """
-    SEI is typically only for scaling repo, so there's no direct data for non-scaling.
-    We can produce a bar chart for each non-scaling showing 2 bars if we want 0 for them,
-    or we can skip. Below we do skip, or produce just a single bar chart if you prefer.
-    We'll produce a single chart per non-scaling with 2 bars => that non-scaling=0, scaling=the real data.
-    """
-    import numpy as np
-
-    if scaling_repo not in sei_data:
-        # Actually sei_data is a dict q_idx->(100.0, scaled_sei, ratio)
-        # not separate by repo. We do a single approach
-        pass
-
-    # We'll produce one chart per non-scaling repo => if user wants to compare with 0
-    # or skip if you prefer. Let's show how to do it with 2 bars => non-scaling =0
-    for nr in repos:
-        if nr==scaling_repo:
-            continue
-        # union quarter indexes => but scaling is the only one who has SEI
-        # we do
-        union_q= set()
-        # if we store SEI as sei_data[q_idx], we do not have a dict per repo
-        # so let's create sc_list from that. non-scaling => 0
-        all_q = sorted(sei_data.keys())
-        if not all_q:
-            continue
-        x= np.arange(len(all_q))
-        s_values=[]
-        nr_values=[]
-        labels=[]
-        for i,q_idx in enumerate(all_q):
-            (tVal, sVal, ratio)= sei_data[q_idx]
-            s_values.append(sVal)
-            nr_values.append(0.0) # user wants to compare => do 0
-            labels.append(f"Q{q_idx}")
-
-        plt.figure(figsize=(8,4))
-        barw=0.3
-        plt.bar(x - barw/2, nr_values, barw, label=nr, color='gray')
-        plt.bar(x + barw/2, s_values, barw, label=scaling_repo, color='orange')
-        plt.xticks(x, labels, rotation=45, ha='right')
-        plt.title(f"SEI Comparison: {nr} (0) vs. {scaling_repo}")
-        plt.legend()
-        plt.tight_layout()
-        fname= f"SEI_{nr.replace('/','_')}_vs_{scaling_repo.replace('/','_')}.png"
-        plt.savefig(fname)
-        plt.close()
-
-
-###############################################################################
-# Minimal stakeholder approach from prior snippet
 ###############################################################################
 def main():
     repos= [
-       # "ni/labview-icon-editor",
+        #"ni/labview-icon-editor",
         "facebook/react",
-        #"dotnet/core",
         "tensorflow/tensorflow"
     ]
     scaling_repo= get_scaling_repo()
@@ -426,6 +399,9 @@ def main():
     quarter_dates={}
     existing_data_dict={}
     detail_calc_dict={}
+
+    # (We'll define SEI "scaled" dict after we compute target data.)
+    # But if you want direct "sei" scaled, we can do it. We'll do it after the target step.
 
     for repo in repos:
         velocity_scaled[repo]={}
@@ -504,7 +480,7 @@ def main():
 
             q_idx+=1
 
-    # Print existing data
+    # Print existing data tables
     for repo in repos:
         if repo not in existing_data_dict or len(existing_data_dict[repo])==0:
             continue
@@ -515,78 +491,16 @@ def main():
         print(f"\n--- Additional Calculation Details for {repo} (Velocity, UIG, MAC) ---\n")
         print_calculation_details(repo, detail_calc_dict[repo])
 
-    # Now "Target Reached" logic
+    # compute "Target Reached"
     non_scaling = [r for r in repos if r!=scaling_repo]
 
-    vel_target_dict= {}
-    uig_target_dict= {}
-    mac_target_dict= {}
-    # For SEI => we compute from velocity_target, uig_target, mac_target
-    # but your usage for "target reached" is separate from the new bar charts we do below
-    def compute_target_reached_data_local(repo_list, scaling_repo, quarter_data_dict):
-        t_data={}
-        if scaling_repo not in quarter_data_dict:
-            return t_data
-        all_q = sorted(quarter_data_dict[scaling_repo].keys())
-        for q_idx in all_q:
-            sum_val=0.0
-            count_val=0
-            for r in repo_list:
-                if r==scaling_repo:
-                    continue
-                if q_idx in quarter_data_dict[r]:
-                    sum_val+= quarter_data_dict[r][q_idx]
-                    count_val+=1
-            if count_val==0:
-                continue
-            avg_val= sum_val/count_val
-            scaling_val= quarter_data_dict[scaling_repo].get(q_idx,0.0)
-            ratio=0.0
-            if abs(avg_val)>1e-9:
-                ratio= (scaling_val/avg_val)*100.0
-            else:
-                ratio=0.0
-            t_data[q_idx]= (avg_val, scaling_val, ratio)
-        return t_data
+    # We'll define a dictionary for velocity/mac/uig that we can use to produce "target" data
+    velocity_target= compute_target_reached_data(repos, scaling_repo, velocity_scaled)
+    uig_target= compute_target_reached_data(repos, scaling_repo, uig_scaled)
+    mac_target= compute_target_reached_data(repos, scaling_repo, mac_scaled)
+    sei_data= compute_sei_data(velocity_target, uig_target, mac_target)
 
-    vel_target_dict= compute_target_reached_data_local(repos, scaling_repo, velocity_scaled)
-    uig_target_dict= compute_target_reached_data_local(repos, scaling_repo, uig_scaled)
-    mac_target_dict= compute_target_reached_data_local(repos, scaling_repo, mac_scaled)
-
-    def compute_sei_data_local(vel_d, uig_d, mac_d):
-        sei_data_local={}
-        all_q= set(vel_d.keys())| set(uig_d.keys())| set(mac_d.keys())
-        for q_idx in sorted(all_q):
-            if q_idx not in vel_d or q_idx not in uig_d or q_idx not in mac_d:
-                continue
-            (vT,vS,vR)= vel_d[q_idx]
-            (uT,uS,uR)= uig_d[q_idx]
-            (mT,mS,mR)= mac_d[q_idx]
-            ratio_weights=[]
-            ratio_values=[]
-            if abs(vT)>1e-9:
-                ratio_weights.append(0.3)
-                ratio_values.append(vR)
-            if abs(uT)>1e-9:
-                ratio_weights.append(0.2)
-                ratio_values.append(uR)
-            if abs(mT)>1e-9:
-                ratio_weights.append(0.5)
-                ratio_values.append(mR)
-            if len(ratio_weights)==0:
-                continue
-            wsum= sum(ratio_weights)
-            partial_sum=0.0
-            for i in range(len(ratio_weights)):
-                partial_sum+= ratio_weights[i]* ratio_values[i]
-            sei_ratio= partial_sum/wsum
-            scaled_sei= 0.5*mS +0.3*vS +0.2*uS
-            sei_data_local[q_idx]= (100.0, scaled_sei, sei_ratio)
-        return sei_data_local
-
-    sei_data_dict= compute_sei_data_local(vel_target_dict, uig_target_dict, mac_target_dict)
-
-    # ... (print combined table, etc.)
+    # We'll produce the combined table, separate tables, etc. same as before
     def print_combined_target_table():
         header= [
           "Quarter",
@@ -597,71 +511,209 @@ def main():
         ]
         align= ["left"]+["center"]*(len(header)-1)
         table= [header]
-        # etc. same approach
-        # We'll skip repeating the entire logic for brevity, but you'd fill it out
-        # or reuse from your prior snippet
-        pass
+        if scaling_repo not in quarter_dates:
+            return
+        # union of quarter indexes if you want partial coverage or just scaling
+        q_idxs= sorted(set(quarter_dates[scaling_repo].keys()) | set(velocity_target.keys()) | set(uig_target.keys()) | set(mac_target.keys()) | set(sei_data.keys()))
+        for q_idx in q_idxs:
+            # if scaling_repo doesn't have that quarter => label partial
+            if q_idx in quarter_dates[scaling_repo]:
+                (qs,qe)= quarter_dates[scaling_repo][q_idx]
+                q_label= f"Q{q_idx}({qs:%Y-%m-%d}-{qe:%Y-%m-%d})"
+            else:
+                q_label= f"Q{q_idx}(No scaling data)"
 
-    # We'll skip re-implementing the entire "print" for brevity
+            vT,vS,vR= velocity_target.get(q_idx,(0,0,0))
+            uT,uS,uR= uig_target.get(q_idx,(0,0,0))
+            mT,mS,mR= mac_target.get(q_idx,(0,0,0))
+            sT,sS,sRatio= sei_data.get(q_idx,(0,0,0))
+            def f4(x): return f"{x:.4f}"
+            row= [
+                q_label,
+                f4(vT), f4(vS), f4(vR),
+                f4(uT), f4(uS), f4(uR),
+                f4(mT), f4(mS), f4(mR),
+                f4(sT), f4(sS), f4(sRatio)
+            ]
+            table.append(row)
+        print_aligned_table(table, align)
 
-    # (We'll produce the stakeholder summary too, same approach.)
-    def produce_stakeholder_summary_local():
-        pass
+    def print_metric_table(metric_name, data_dict):
+        header= [ "Quarter", f"{metric_name} Target", f"Scaled {metric_name}", f"{metric_name} Ratio"]
+        align= ["left","center","center","center"]
+        table= [header]
+        if scaling_repo not in quarter_dates:
+            pass
+        # union of indexes
+        all_q = sorted(set(quarter_dates.get(scaling_repo,{}).keys())|set(data_dict.keys()))
+        for q_idx in all_q:
+            if q_idx in data_dict:
+                (tVal,sVal,rVal)= data_dict[q_idx]
+            else:
+                (tVal,sVal,rVal)= (0,0,0)
+            if q_idx in quarter_dates.get(scaling_repo,{}):
+                (qs,qe)= quarter_dates[scaling_repo][q_idx]
+                q_label= f"Q{q_idx}({qs:%Y-%m-%d}-{qe:%Y-%m-%d})"
+            else:
+                q_label= f"Q{q_idx}(No scaling data)"
+
+            table.append([
+                q_label,
+                f"{tVal:.4f}",
+                f"{sVal:.4f}",
+                f"{rVal:.4f}"
+            ])
+        print_aligned_table(table, align)
+
+    def print_sei_table():
+        header= ["Quarter","SEI Target","Scaled SEI","SEI Ratio"]
+        align= ["left","center","center","center"]
+        table= [header]
+        # union
+        all_q= sorted(set(quarter_dates.get(scaling_repo,{}).keys())| set(sei_data.keys()))
+        for q_idx in all_q:
+            (tVal,sVal,ratio)= sei_data.get(q_idx,(0,0,0))
+            if q_idx in quarter_dates.get(scaling_repo,{}):
+                (qs,qe)= quarter_dates[scaling_repo][q_idx]
+                q_label= f"Q{q_idx}({qs:%Y-%m-%d}-{qe:%Y-%m-%d})"
+            else:
+                q_label= f"Q{q_idx}(No scaling data)"
+            table.append([
+                q_label,
+                f"{tVal:.4f}",
+                f"{sVal:.4f}",
+                f"{ratio:.4f}"
+            ])
+        print_aligned_table(table, align)
 
     print(f"\n===== [TARGET REACHED] for Scaling Repo = {scaling_repo} =====\n")
-    # You can re-invoke your combined table prints here if you want
+    print("=== Combined Table (Velocity, UIG, MAC, SEI) ===")
+    print_combined_target_table()
 
-    # (NEW) We produce the new per-metric comparison charts
-    # => 1) velocity_scaled, 2) uig_scaled, 3) mac_scaled, 4) sei_data (scaling only)
-    # We'll define them similarly:
-    print("\n=== (NEW) INDIVIDUAL METRIC COMPARISON CHARTS: Non-Scaling vs. Scaling ===\n")
+    print("\n=== Velocity Target Reached (Separate) ===")
+    print_metric_table("Velocity", velocity_target)
+    print("\n=== UIG Target Reached (Separate) ===")
+    print_metric_table("UIG", uig_target)
+    print("\n=== MAC Target Reached (Separate) ===")
+    print_metric_table("MAC", mac_target)
+    print("\n=== SEI Target Reached (Separate) ===")
+    print_sei_table()
 
-    # a) Velocity
-    print("...Plotting Velocity comparisons for each non-scaling repo...")
-    plot_metric_comparison(
-        metric_name="Velocity",
-        scaling_repo=scaling_repo,
-        metric_data=velocity_scaled,
-        quarter_dates=quarter_dates,
-        repos=repos
-    )
+    # existing "combined" bar charts remain
+    # We also produce the new "individual" plots
+    print("\n=== Creating Individual Metric Comparison Plots (Non-scaling vs Scaling) ===\n")
 
-    # b) UIG
-    print("...Plotting UIG comparisons for each non-scaling repo...")
-    plot_metric_comparison(
-        metric_name="UIG",
-        scaling_repo=scaling_repo,
-        metric_data=uig_scaled,
-        quarter_dates=quarter_dates,
-        repos=repos
-    )
+    # We'll produce direct scaled dict => velocity_scaled[repo], velocity_scaled[scaling_repo], etc.
+    # For each non-scaling repo, for each metric => produce 1 chart
+    for r in repos:
+        if r==scaling_repo:
+            continue
+        print(f"Generating Velocity/UIG/MAC/SEI charts for {r} vs. {scaling_repo}...")
 
-    # c) MAC
-    print("...Plotting MAC comparisons for each non-scaling repo...")
-    plot_metric_comparison(
-        metric_name="MAC",
-        scaling_repo=scaling_repo,
-        metric_data=mac_scaled,
-        quarter_dates=quarter_dates,
-        repos=repos
-    )
+        # velocity => velocity_scaled[r], velocity_scaled[scaling_repo]
+        # if missing => 0, union of q_idx
+        plot_metric_comparison_for_repo(
+            r, scaling_repo,
+            "Velocity",
+            velocity_scaled[r],
+            velocity_scaled.get(scaling_repo, {})
+        )
+        plot_metric_comparison_for_repo(
+            r, scaling_repo,
+            "UIG",
+            uig_scaled[r],
+            uig_scaled.get(scaling_repo, {})
+        )
+        plot_metric_comparison_for_repo(
+            r, scaling_repo,
+            "MAC",
+            mac_scaled[r],
+            mac_scaled.get(scaling_repo, {})
+        )
 
-    # d) SEI
-    print("...Plotting SEI comparisons (scaling-only or zero for non-scaling) ...")
-    plot_sei_comparison(
-        sei_data=sei_data_dict,  # from compute_sei_data_local
-        scaling_repo=scaling_repo,
-        quarter_dates=quarter_dates,
-        repos=repos
-    )
+        # For SEI => we didn't store direct scaled SEI per repo, only for scaling. But user wants "compare them?"
+        # If we want to define a "SEI" for that non-scaling repo, we can do the aggregator approach or skip. The user only asked
+        # for "SEI" per repo? We can do it if we define the same formula for non-scaling. We'll do a quick approach:
+        # eq => SEI = 0.5*(mac) +0.3*(velocity) +0.2*(uig). We'll just produce it from velocity_scaled[r], etc.
+        # Then compare that to the scaling repo's "SEI" from your compute. We'll define a small function now:
+        non_scaling_sei = {}
+        # union of q_idx => velocity_scaled[r], uig_scaled[r], mac_scaled[r]
+        union_q = set(velocity_scaled[r].keys())|set(uig_scaled[r].keys())|set(mac_scaled[r].keys())
+        for q_idx in union_q:
+            vel_val = velocity_scaled[r].get(q_idx,0.0)
+            uig_val = uig_scaled[r].get(q_idx,0.0)
+            mac_val = mac_scaled[r].get(q_idx,0.0)
+            # weighting => 0.3 velocity +0.2 uig +0.5 mac
+            non_scaling_sei[q_idx]= 0.5*mac_val +0.3*vel_val +0.2*uig_val
 
-    print("\n=== Done generating individual comparison plots. ===")
+        # for scaling => we do the same approach or we might do the partial approach from the "sei_data"
+        # but "sei_data" is a dict => (100, scaledSEI, ratio). The scaledSEI is index 1 => we'll parse that out
+        scaling_sei_dict= {}
+        for q_idx,(targetVal, scaledSeiVal, ratioVal) in sei_data.items():
+            scaling_sei_dict[q_idx] = scaledSeiVal
+
+        plot_metric_comparison_for_repo(
+            r, scaling_repo,
+            "SEI",
+            non_scaling_sei,
+            scaling_sei_dict
+        )
 
     print(f"\n=== Final Summary for {scaling_repo} ===\n")
-    # produce_stakeholder_summary(...) if you want. 
-    # We'll skip for brevity.
+    print("All tables & bar charts generated with quarter-based data in table form.\n")
 
-    # end => environment + debug log
+    # "stakeholder summary" function => optional
+    def produce_stakeholder_summary(
+        velocity_target, uig_target, mac_target, sei_data,
+        quarter_dates, scaling_repo
+    ):
+        print("\n=== STAKEHOLDER SUMMARY & RECOMMENDATIONS ===\n")
+        if scaling_repo not in quarter_dates:
+            print("[No quarters for scaling repo, no summary available.]")
+            return
+        q_idxs= sorted(quarter_dates[scaling_repo].keys())
+        if not q_idxs:
+            print("[No quarter indexes, no summary available.]")
+            return
+
+        last_q= q_idxs[-1]
+        (vT, vS, vR)= velocity_target.get(last_q,(0,0,0))
+        (uT, uS, uR)= uig_target.get(last_q,(0,0,0))
+        (mT, mS, mR)= mac_target.get(last_q,(0,0,0))
+        (sT, sS, sRatio)= sei_data.get(last_q,(0,0,0))
+
+        def rating(ratio):
+            if ratio<70.0: return "Below target"
+            elif ratio>120.0: return "Above target"
+            else: return "Near target"
+
+        v_rating= rating(vR)
+        u_rating= rating(uR)
+        m_rating= rating(mR)
+        sei_rating= rating(sRatio)
+
+        print(f"Final Quarter (Q{last_q}) Performance for {scaling_repo}:")
+        print(f"  Velocity Ratio = {vR:.2f}% => {v_rating}")
+        print(f"  UIG Ratio      = {uR:.2f}% => {u_rating}")
+        print(f"  MAC Ratio      = {mR:.2f}% => {m_rating}")
+        print(f"  SEI Ratio      = {sRatio:.2f}% => {sei_rating}")
+
+        print("\nSuggestions for Stakeholders:")
+        if vR<70:
+            print(" - Velocity below normal => re-check merges & PR flow.")
+        if mR<70:
+            print(" - MAC below normal => reduce friction or encourage more contributor engagement.")
+        if sRatio>120:
+            print(" - SEI well above target => momentum is strong, keep the strategy!")
+        if (vR>120 and uR>120 and mR>120):
+            print(" - All metrics are above target => performance is outstanding.\n")
+
+    # produce final summary / recommendations
+    produce_stakeholder_summary(
+        velocity_target, uig_target, mac_target, sei_data,
+        quarter_dates, scaling_repo
+    )
+
     sys.stdout.flush()
     console_text = log_capture.getvalue()
     sys.stdout = original_stdout
