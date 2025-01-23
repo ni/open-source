@@ -21,19 +21,16 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
                     time.sleep(5)
                 else:
                     logging.warning("HTTP %d => attempt %d => break => %s",
-                                    resp.status_code, attempt, url)
+                                    resp.status_code,attempt,url)
                     return (resp,False)
                 break
-            except requests.exceptions.ConnectionError as e:
-                logging.warning("Conn error => local mini-retry %d/%d => %s",
-                                local_attempt,mini_retry_attempts,url)
+            except requests.exceptions.ConnectionError:
+                logging.warning("Conn error => local mini-retry => %s",url)
                 time.sleep(3)
                 local_attempt+=1
-
         if local_attempt>mini_retry_attempts:
-            logging.warning("Exhausted local mini-retry => give up => %s",url)
+            logging.warning("Exhausted local mini-retry => break => %s",url)
             return (None,False)
-
     logging.warning("Exceeded max_retries => give up => %s",url)
     return (None,False)
 
@@ -42,6 +39,7 @@ def list_pulls_single_thread(conn, owner, repo, baseline_date, enabled,
     if enabled==0:
         logging.info("Repo %s/%s => disabled => skip pulls",owner,repo)
         return
+
     page=1
     while True:
         old_base=baseline_date
@@ -63,6 +61,9 @@ def list_pulls_single_thread(conn, owner, repo, baseline_date, enabled,
             "page":page,
             "per_page":100
         }
+        if baseline_date:
+            params["since"]=baseline_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+
         (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
         if not success:
             logging.warning("Pulls => cannot get page %d => break => %s/%s",page,owner,repo)
@@ -75,11 +76,12 @@ def list_pulls_single_thread(conn, owner, repo, baseline_date, enabled,
             if "pull_request" not in item:
                 continue
             c_created_str=item.get("created_at")
-            if c_created_str:
-                cdt=datetime.strptime(c_created_str,"%Y-%m-%dT%H:%M:%SZ")
-                if baseline_date and cdt>baseline_date:
-                    continue
-                insert_pull_record(conn, f"{owner}/{repo}", item["number"], cdt)
+            if not c_created_str:
+                continue
+            cdt=datetime.strptime(c_created_str,"%Y-%m-%dT%H:%M:%SZ")
+            if cdt<baseline_date:
+                continue
+            insert_pull_record(conn,f"{owner}/{repo}",item["number"],cdt)
 
         if len(data)<100:
             break

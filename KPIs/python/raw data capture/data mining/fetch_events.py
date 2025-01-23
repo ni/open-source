@@ -1,8 +1,8 @@
 # fetch_events.py
 """
-Fetch issue_events => skip if event.created_at>baseline_date
-Fetch pull_events => skip if event.created_at>baseline_date
-Same local mini-retry + robust approach
+Fetch issue_events => skip if event.created_at < baseline_date
+Fetch pull_events => skip if event.created_at < baseline_date
+Same local mini-retry => robust approach
 """
 
 import logging
@@ -23,7 +23,7 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
                     return (resp,True)
                 elif resp.status_code in (403,429,500,502,503,504):
                     logging.warning("HTTP %d => attempt %d/%d => re-try => %s",
-                                    resp.status_code,attempt,max_retries,url)
+                                    resp.status_code, attempt, max_retries, url)
                     time.sleep(5)
                 else:
                     logging.warning("HTTP %d => attempt %d => break => %s",
@@ -31,8 +31,7 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
                     return (resp,False)
                 break
             except requests.exceptions.ConnectionError:
-                logging.warning("Conn error => local mini-retry %d/%d => %s",
-                                local_attempt,mini_retry_attempts,url)
+                logging.warning("Conn error => local mini-retry => %s",url)
                 time.sleep(3)
                 local_attempt+=1
         if local_attempt>mini_retry_attempts:
@@ -50,11 +49,14 @@ def fetch_issue_events_for_all_issues(conn, owner, repo, baseline_date, enabled,
     c.execute("SELECT issue_number FROM issues WHERE repo_name=%s",(f"{owner}/{repo}",))
     rows=c.fetchall()
     c.close()
+
     for (issue_num,) in rows:
-        fetch_issue_events_single_thread(conn, owner, repo, issue_num,
-                                         baseline_date, enabled,
-                                         session, handle_rate_limit_func,
-                                         max_retries)
+        fetch_issue_events_single_thread(
+            conn, owner, repo, issue_num,
+            baseline_date, enabled,
+            session, handle_rate_limit_func,
+            max_retries
+        )
 
 def fetch_issue_events_single_thread(conn, owner, repo, issue_number,
                                      baseline_date, enabled,
@@ -87,11 +89,12 @@ def fetch_issue_events_single_thread(conn, owner, repo, issue_number,
 
         for evt in data:
             cstr=evt.get("created_at")
-            if cstr:
-                cdt=datetime.strptime(cstr,"%Y-%m-%dT%H:%M:%SZ")
-                if baseline_date and cdt>baseline_date:
-                    continue
-                insert_issue_event_record(conn,f"{owner}/{repo}",issue_number,evt,cdt)
+            if not cstr:
+                continue
+            cdt=datetime.strptime(cstr,"%Y-%m-%dT%H:%M:%SZ")
+            if cdt<baseline_date:
+                continue
+            insert_issue_event_record(conn,f"{owner}/{repo}",issue_number,evt,cdt)
 
         if len(data)<100:
             break
@@ -99,7 +102,7 @@ def fetch_issue_events_single_thread(conn, owner, repo, issue_number,
 
 def insert_issue_event_record(conn, repo_name, issue_num, evt_json, created_dt):
     import json
-    raw_str=json.dumps(evt_json, ensure_ascii=False)
+    raw_str=json.dumps(evt_json,ensure_ascii=False)
     event_id=evt_json["id"]
     c=conn.cursor()
     sql="""
@@ -121,17 +124,20 @@ def fetch_pull_events_for_all_pulls(conn, owner, repo, baseline_date, enabled,
     c.execute("SELECT pull_number FROM pulls WHERE repo_name=%s",(f"{owner}/{repo}",))
     rows=c.fetchall()
     c.close()
+
     for (pull_num,) in rows:
-        fetch_pull_events_single_thread(conn, owner, repo, pull_num,
-                                        baseline_date, enabled,
-                                        session, handle_rate_limit_func,
-                                        max_retries)
+        fetch_pull_events_single_thread(
+            conn, owner, repo, pull_num,
+            baseline_date, enabled,
+            session, handle_rate_limit_func,
+            max_retries
+        )
 
 def fetch_pull_events_single_thread(conn, owner, repo, pull_number,
                                     baseline_date, enabled,
                                     session, handle_rate_limit_func, max_retries):
     if enabled==0:
-        logging.info("Repo %s/%s => disabled => skip pull_events => PR #%d",owner,repo,pull_number)
+        logging.info("Repo %s/%s => disabled => skip => pull_events => PR #%d",owner,repo,pull_number)
         return
     page=1
     while True:
@@ -158,11 +164,12 @@ def fetch_pull_events_single_thread(conn, owner, repo, pull_number,
 
         for evt in data:
             cstr=evt.get("created_at")
-            if cstr:
-                cdt=datetime.strptime(cstr,"%Y-%m-%dT%H:%M:%SZ")
-                if baseline_date and cdt>baseline_date:
-                    continue
-                insert_pull_event_record(conn,f"{owner}/{repo}",pull_number,evt,cdt)
+            if not cstr:
+                continue
+            cdt=datetime.strptime(cstr,"%Y-%m-%dT%H:%M:%SZ")
+            if cdt<baseline_date:
+                continue
+            insert_pull_event_record(conn,f"{owner}/{repo}",pull_number,evt,cdt)
 
         if len(data)<100:
             break

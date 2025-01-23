@@ -1,4 +1,9 @@
 # fetch_issues.py
+"""
+Fetch issues => skip if issue.created_at < baseline_date
+Local mini-retry for ConnectionError, robust re-try for 403/429/5xx
+"""
+
 import logging
 import time
 import requests
@@ -6,43 +11,32 @@ from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
 
 def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
-    """
-    We do both:
-     - re-try if status code in (403,429,500..)
-     - local mini-retry if ConnectionError occurs
-    """
-    mini_retry_attempts = 3  # local mini retry for network errors
-
-    for attempt in range(1, max_retries+1):
+    mini_retry_attempts=3
+    for attempt in range(1,max_retries+1):
         local_attempt=1
         while local_attempt<=mini_retry_attempts:
             try:
-                resp = session.get(url, params=params)
+                resp=session.get(url, params=params)
                 handle_rate_limit_func(resp)
-                # check status code:
                 if resp.status_code==200:
-                    return (resp, True)
+                    return (resp,True)
                 elif resp.status_code in (403,429,500,502,503,504):
-                    logging.warning("HTTP %d => attempt %d/%d => will retry => %s",
+                    logging.warning("HTTP %d => attempt %d/%d => retry => %s",
                                     resp.status_code, attempt, max_retries, url)
                     time.sleep(5)
                 else:
                     logging.warning("HTTP %d => attempt %d => break => %s",
                                     resp.status_code, attempt, url)
-                    return (resp, False)
-                break  # if we get here, we handled code => next attempt
-            except requests.exceptions.ConnectionError as e:
-                logging.warning("Connection error => local mini-retry %d/%d => %s",
-                                local_attempt, mini_retry_attempts, url)
+                    return (resp,False)
+                break
+            except requests.exceptions.ConnectionError:
+                logging.warning("Conn error => local mini-retry => %s",url)
                 time.sleep(3)
                 local_attempt+=1
-
         if local_attempt>mini_retry_attempts:
-            # exhausted local mini-retries => fail
-            logging.warning("Exhausted local mini-retry => give up => %s",url)
+            logging.warning("Exhausted local mini-retry => break => %s",url)
             return (None,False)
-
-    logging.warning("Exceeded max_retries => give up => %s", url)
+    logging.warning("Exceeded max_retries => give up => %s",url)
     return (None,False)
 
 def list_issues_single_thread(conn, owner, repo, baseline_date, enabled,
@@ -60,7 +54,8 @@ def list_issues_single_thread(conn, owner, repo, baseline_date, enabled,
             break
         if new_base!=baseline_date:
             baseline_date=new_base
-            logging.info("Repo %s/%s => baseline changed => now %s (issues).",owner,repo,baseline_date)
+            logging.info("Repo %s/%s => baseline changed => now %s (issues).",
+                         owner,repo,baseline_date)
 
         url=f"https://api.github.com/repos/{owner}/{repo}/issues"
         params={
@@ -70,9 +65,12 @@ def list_issues_single_thread(conn, owner, repo, baseline_date, enabled,
             "page":page,
             "per_page":100
         }
+        if baseline_date:
+            params["since"]=baseline_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+
         (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
         if not success:
-            logging.warning("Issues => can't get page %d => break => %s/%s",page,owner,repo)
+            logging.warning("Issues => cannot get page %d => break => %s/%s",page,owner,repo)
             break
         data=resp.json()
         if not data:
@@ -80,14 +78,14 @@ def list_issues_single_thread(conn, owner, repo, baseline_date, enabled,
 
         for item in data:
             if "pull_request" in item:
-                # skip pulls
                 continue
             c_created_str=item.get("created_at")
-            if c_created_str:
-                cdt=datetime.strptime(c_created_str,"%Y-%m-%dT%H:%M:%SZ")
-                if baseline_date and cdt>baseline_date:
-                    continue
-                insert_issue_record(conn,f"{owner}/{repo}",item["number"],cdt)
+            if not c_created_str:
+                continue
+            cdt=datetime.strptime(c_created_str,"%Y-%m-%dT%H:%M:%SZ")
+            if cdt<baseline_date:
+                continue
+            insert_issue_record(conn,f"{owner}/{repo}",item["number"],cdt)
 
         if len(data)<100:
             break
@@ -101,6 +99,6 @@ def insert_issue_record(conn, repo_name, issue_number, created_dt):
     ON DUPLICATE KEY UPDATE
       created_at=VALUES(created_at)
     """
-    c.execute(sql,(repo_name, issue_number, created_dt))
+    c.execute(sql,(repo_name,issue_number,created_dt))
     conn.commit()
     c.close()

@@ -1,11 +1,4 @@
 # fetch_forks_stars_watchers.py
-"""
-Fetch watchers => no created_at => only raw info
-Fetch forks => skip if fork.created_at>baseline_date
-Fetch stars => skip if starred_at>baseline_date
-Local mini-retry + robust
-"""
-
 import logging
 import time
 import requests
@@ -28,12 +21,11 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
                     time.sleep(5)
                 else:
                     logging.warning("HTTP %d => attempt %d => break => %s",
-                                    resp.status_code, attempt, url)
+                                    resp.status_code,attempt,url)
                     return (resp,False)
                 break
             except requests.exceptions.ConnectionError:
-                logging.warning("Conn error => local mini-retry %d/%d => %s",
-                                local_attempt,mini_retry_attempts,url)
+                logging.warning("Conn error => local mini-retry => %s",url)
                 time.sleep(3)
                 local_attempt+=1
         if local_attempt>mini_retry_attempts:
@@ -44,6 +36,9 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
 
 def list_watchers_single_thread(conn, owner, repo, enabled,
                                 session, handle_rate_limit_func, max_retries):
+    """
+    watchers => full fetch, no date skip because watchers have no created_at.
+    """
     if enabled==0:
         logging.info("Repo %s/%s => disabled => skip watchers",owner,repo)
         return
@@ -54,12 +49,12 @@ def list_watchers_single_thread(conn, owner, repo, enabled,
         params={"page":page,"per_page":100}
         (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
         if not success:
-            logging.warning("Watchers => cannot get page %d => break => %s/%s",
-                            page,owner,repo)
+            logging.warning("Watchers => can't get page %d => break => %s/%s",page,owner,repo)
             break
         data=resp.json()
         if not data:
             break
+
         for user_obj in data:
             insert_watcher_record(conn, full_repo_name, user_obj)
 
@@ -114,7 +109,7 @@ def list_forks_single_thread(conn, owner, repo, baseline_date, enabled,
             if not cstr:
                 continue
             cdt=datetime.strptime(cstr,"%Y-%m-%dT%H:%M:%SZ")
-            if baseline_date and cdt>baseline_date:
+            if cdt<baseline_date:
                 continue
             insert_fork_record(conn, full_repo_name, fork)
 
@@ -169,16 +164,16 @@ def list_stars_single_thread(conn, owner, repo, baseline_date, enabled,
         if not data:
             break
 
+        import json
         for stargazer in data:
             sstr=stargazer.get("starred_at")
             if not sstr:
                 continue
             sdt=datetime.strptime(sstr,"%Y-%m-%dT%H:%M:%SZ")
-            if baseline_date and sdt>baseline_date:
+            if sdt<baseline_date:
                 continue
-            import json
             raw_str=json.dumps(stargazer, ensure_ascii=False)
-            insert_star_record(conn,full_repo_name,stargazer, sdt)
+            insert_star_record(conn, full_repo_name, stargazer, sdt)
 
         if len(data)<100:
             break
