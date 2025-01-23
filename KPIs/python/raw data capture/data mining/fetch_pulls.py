@@ -34,56 +34,60 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
     logging.warning("Exceeded max_retries => give up => %s",url)
     return (None,False)
 
-def list_pulls_single_thread(conn, owner, repo, baseline_date, enabled,
-                             session, handle_rate_limit_func, max_retries):
+def get_max_pull_number(conn, repo_name):
+    c=conn.cursor()
+    c.execute("SELECT MAX(pull_number) FROM pulls WHERE repo_name=%s",(repo_name,))
+    row=c.fetchone()
+    c.close()
+    if row and row[0]:
+        return row[0]
+    return 0
+
+def list_pulls_single_thread(conn, owner, repo, enabled,
+                             session, handle_rate_limit_func,
+                             max_retries):
     if enabled==0:
         logging.info("Repo %s/%s => disabled => skip pulls",owner,repo)
         return
+    repo_name=f"{owner}/{repo}"
+    highest_known=get_max_pull_number(conn,repo_name)
+    logging.debug(f"[DEBUG] {repo_name} => highest_known_pull={highest_known}")
 
     page=1
     while True:
-        old_base=baseline_date
+        old_val=highest_known
         old_en=enabled
-        new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,old_base,old_en)
+        new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,None,old_en)
         if new_en==0:
             logging.info("Repo %s/%s => toggled disabled => stop pulls mid-run",owner,repo)
             break
-        if new_base!=baseline_date:
-            baseline_date=new_base
-            logging.info("Repo %s/%s => baseline changed => now %s (pulls).",
-                         owner,repo,baseline_date)
 
         url=f"https://api.github.com/repos/{owner}/{repo}/issues"
-        params={
-            "state":"all",
-            "sort":"created",
-            "direction":"asc",
-            "page":page,
-            "per_page":100
-        }
-        if baseline_date:
-            params["since"]=baseline_date.strftime("%Y-%m-%dT%H:%M:%SZ")
-
+        params={"state":"all","sort":"created","direction":"asc","page":page,"per_page":100}
         (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
         if not success:
-            logging.warning("Pulls => cannot get page %d => break => %s/%s",page,owner,repo)
+            logging.warning("Pulls => page %d => skip => %s",page,repo_name)
             break
         data=resp.json()
         if not data:
             break
 
+        new_count=0
         for item in data:
             if "pull_request" not in item:
                 continue
+            pull_num=item["number"]
+            if pull_num<=highest_known:
+                continue
             c_created_str=item.get("created_at")
-            if not c_created_str:
-                continue
-            cdt=datetime.strptime(c_created_str,"%Y-%m-%dT%H:%M:%SZ")
-            if cdt<baseline_date:
-                continue
-            insert_pull_record(conn,f"{owner}/{repo}",item["number"],cdt)
-
-        if len(data)<100:
+            cdt=None
+            if c_created_str:
+                cdt=datetime.strptime(c_created_str,"%Y-%m-%dT%H:%M:%SZ")
+            insert_pull_record(conn,repo_name,pull_num,cdt)
+            new_count+=1
+            if pull_num>highest_known:
+                highest_known=pull_num
+        if new_count<100:
             break
         page+=1
 

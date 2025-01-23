@@ -5,19 +5,6 @@ import requests
 from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
 
-def get_last_page(resp):
-    link_header=resp.headers.get("Link")
-    if not link_header:
-        return None
-    parts=link_header.split(',')
-    for part in parts:
-        if 'rel="last"' in part:
-            import re
-            match=re.search(r'[?&]page=(\d+)',part)
-            if match:
-                return int(match.group(1))
-    return None
-
 def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
     mini_retry_attempts=3
     for attempt in range(1,max_retries+1):
@@ -47,80 +34,68 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
     logging.warning("Exceeded max_retries => give up => %s",url)
     return (None,False)
 
-def fetch_issue_reactions_for_all_issues(conn, owner, repo,
-                                         start_date, end_date,
-                                         enabled, session,
-                                         handle_rate_limit_func, max_retries):
+def get_max_reaction_id_for_issue(conn, repo_name, issue_num):
+    c=conn.cursor()
+    c.execute("""
+       SELECT MAX(reaction_id) FROM issue_reactions
+       WHERE repo_name=%s AND issue_number=%s
+    """,(repo_name,issue_num))
+    row=c.fetchone()
+    c.close()
+    if row and row[0]:
+        return row[0]
+    return 0
+
+def fetch_issue_reactions_for_all_issues(conn, owner, repo, enabled,
+                                         session, handle_rate_limit_func,
+                                         max_retries):
     if enabled==0:
         logging.info("Repo %s/%s => disabled => skip issue_reactions",owner,repo)
         return
-
+    repo_name=f"{owner}/{repo}"
     c=conn.cursor()
-    c.execute("SELECT issue_number FROM issues WHERE repo_name=%s",(f"{owner}/{repo}",))
+    c.execute("SELECT issue_number FROM issues WHERE repo_name=%s",(repo_name,))
     rows=c.fetchall()
     c.close()
-
     for (issue_num,) in rows:
-        fetch_issue_reactions_single_thread(
-            conn, owner, repo,
-            issue_num,
-            start_date, end_date,
-            enabled, session,
-            handle_rate_limit_func, max_retries
-        )
+        fetch_issue_reactions_single_thread(conn, repo_name, issue_num,
+                                            enabled, session,
+                                            handle_rate_limit_func,
+                                            max_retries)
 
-def fetch_issue_reactions_single_thread(conn, owner, repo,
-                                        issue_number,
-                                        start_date, end_date,
+def fetch_issue_reactions_single_thread(conn, repo_name, issue_num,
                                         enabled, session,
                                         handle_rate_limit_func, max_retries):
     if enabled==0:
-        logging.info("Repo %s/%s => disabled => skip => issue_reactions => #%d",owner,repo,issue_number)
+        logging.info("%s => disabled => skip => issue_reactions => #%d",repo_name,issue_num)
         return
-
-    # date-range log
-    logging.debug(f"[DEBUG] {owner}/{repo} issue_reactions for #{issue_number} [{start_date} - {end_date}]")
-
-    old_base=start_date
-    old_en=enabled
-    new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,old_base,old_en)
-    if new_en==0:
-        logging.info("Repo %s/%s => toggled disabled => skip => issue_reactions => #%d",owner,repo,issue_number)
-        return
-    if new_base!=start_date:
-        start_date=new_base
-
+    highest_rid=get_max_reaction_id_for_issue(conn,repo_name,issue_num)
     old_accept=session.headers.get("Accept","")
     session.headers["Accept"]="application/vnd.github.squirrel-girl-preview+json"
-    url=f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}/reactions"
+    url=f"https://api.github.com/repos/{repo_name}/issues/{issue_num}/reactions"
     (resp,success)=robust_get_page(session,url,{},handle_rate_limit_func,max_retries)
     session.headers["Accept"]=old_accept
     if not success:
-        logging.warning("Issue Reactions => skip => issue #%d => %s/%s",
-                        issue_number,owner,repo)
         return
     data=resp.json()
     if not data:
         return
 
-    # no pages for sub-lists typically. If you want to do multiple pages, you'd pass per_page=100. For now, we do 1 page
-    # So no last_page progress here unless we design a multi-page approach for issue reactions
-    # We'll do a single log
-    logging.debug(f"[DEBUG] {owner}/{repo} issue_reactions => 100.0000% done (since single page)")
-
+    new_count=0
     for reac in data:
-        reac_created_str=reac.get("created_at")
-        if not reac_created_str:
+        reac_id=reac["id"]
+        if reac_id<=highest_rid:
             continue
-        rdt=datetime.strptime(reac_created_str,"%Y-%m-%dT%H:%M:%SZ")
-        if rdt<start_date:
-            continue
-        if rdt>end_date:
-            continue
-        insert_issue_reaction(conn,f"{owner}/{repo}",issue_number,reac,rdt)
+        c_str=reac.get("created_at")
+        cdt=None
+        if c_str:
+            cdt=datetime.strptime(c_str,"%Y-%m-%dT%H:%M:%SZ")
+        insert_issue_reaction(conn,repo_name,issue_num,reac_id,cdt,reac)
+        new_count+=1
+        if reac_id>highest_rid:
+            highest_rid=reac_id
 
-def insert_issue_reaction(conn, repo_name, issue_num, reac_json, created_dt):
-    reac_id=reac_json["id"]
+def insert_issue_reaction(conn, repo_name, issue_num, reac_id, created_dt, reac_json):
     import json
     raw_str=json.dumps(reac_json,ensure_ascii=False)
     c=conn.cursor()

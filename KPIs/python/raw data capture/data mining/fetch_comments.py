@@ -5,19 +5,6 @@ import requests
 from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
 
-def get_last_page(resp):
-    link_header=resp.headers.get("Link")
-    if not link_header:
-        return None
-    parts=link_header.split(',')
-    for part in parts:
-        if 'rel="last"' in part:
-            import re
-            match=re.search(r'[?&]page=(\d+)',part)
-            if match:
-                return int(match.group(1))
-    return None
-
 def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
     mini_retry_attempts=3
     for attempt in range(1,max_retries+1):
@@ -38,173 +25,89 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
                     return (resp,False)
                 break
             except requests.exceptions.ConnectionError:
-                logging.warning("Connection error => local mini-retry => %s", url)
+                logging.warning("Conn error => local mini-retry => %s",url)
                 time.sleep(3)
                 local_attempt+=1
         if local_attempt>mini_retry_attempts:
-            logging.warning("Exhausted local mini-retry => break => %s", url)
+            logging.warning("Exhausted local mini-retry => break => %s",url)
             return (None,False)
     logging.warning("Exceeded max_retries => give up => %s",url)
     return (None,False)
 
-def fetch_comments_for_all_issues(conn, owner, repo, start_date, end_date,
-                                  enabled, session,
-                                  handle_rate_limit_func, max_retries):
+def get_max_comment_id_for_issue(conn, repo_name, issue_num):
+    c=conn.cursor()
+    c.execute("""
+        SELECT MAX(comment_id) FROM issue_comments
+        WHERE repo_name=%s AND issue_number=%s
+    """,(repo_name,issue_num))
+    row=c.fetchone()
+    c.close()
+    if row and row[0]:
+        return row[0]
+    return 0
+
+def fetch_comments_for_all_issues(conn, owner, repo, enabled,
+                                  session, handle_rate_limit_func, max_retries):
     if enabled==0:
         logging.info("Repo %s/%s => disabled => skip all comments",owner,repo)
         return
+    repo_name=f"{owner}/{repo}"
     c=conn.cursor()
-    c.execute("SELECT issue_number FROM issues WHERE repo_name=%s",(f"{owner}/{repo}",))
+    c.execute("SELECT issue_number FROM issues WHERE repo_name=%s",(repo_name,))
     rows=c.fetchall()
     c.close()
     for (issue_num,) in rows:
-        list_issue_comments_single_thread(
-            conn, owner, repo,
-            issue_num,
-            start_date, end_date,
-            enabled, session,
-            handle_rate_limit_func,
-            max_retries
-        )
+        list_issue_comments_single_thread(conn, repo_name, issue_num,
+                                          enabled, session,
+                                          handle_rate_limit_func, max_retries)
 
-def list_issue_comments_single_thread(conn, owner, repo,
-                                      issue_number,
-                                      start_date, end_date,
+def list_issue_comments_single_thread(conn, repo_name, issue_num,
                                       enabled, session,
                                       handle_rate_limit_func, max_retries):
     if enabled==0:
-        logging.info("Repo %s/%s => disabled => skip => issue #%d comments",owner,repo,issue_number)
+        logging.info("%s => disabled => skip => issue #%d comments",repo_name,issue_num)
         return
-
-    # date-range log
-    logging.debug(f"[DEBUG] {owner}/{repo} issue_comments for #{issue_number} [{start_date} - {end_date}]")
-
+    highest_cid=get_max_comment_id_for_issue(conn,repo_name,issue_num)
     page=1
-    last_page=None
-
     while True:
-        old_base=start_date
-        old_en=enabled
-        new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,old_base,old_en)
-        if new_en==0:
-            logging.info("Repo %s/%s => toggled disabled => stop => issue #%d comments mid-run",
-                         owner,repo,issue_number)
-            break
-        if new_base!=start_date:
-            start_date=new_base
-            logging.info("Repo %s/%s => baseline changed => now start_date=%s (comments for #%d)",
-                         owner,repo,start_date,issue_number)
-
-        url=f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}/comments"
-        params={
-            "page":page,
-            "per_page":50,
-            "sort":"created",
-            "direction":"asc"
-        }
+        url=f"https://api.github.com/repos/{repo_name}/issues/{issue_num}/comments"
+        params={"page":page,"per_page":50,"sort":"created","direction":"asc"}
         (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
         if not success:
-            logging.warning("Comments => can't get page %d => issue #%d => %s/%s",page,issue_number,owner,repo)
             break
-
         data=resp.json()
         if not data:
             break
-
-        if last_page is None:
-            last_page=get_last_page(resp)
-        if last_page:
-            progress=(page/last_page)*100
-            logging.debug(f"[DEBUG] {owner}/{repo} issue_comments => {progress:.4f}% done (issue #{issue_number})")
-
+        new_count=0
         for cmt in data:
-            c_created_str=cmt.get("created_at")
-            if not c_created_str:
+            c_id=cmt["id"]
+            if c_id<=highest_cid:
                 continue
-            cdt=datetime.strptime(c_created_str,"%Y-%m-%dT%H:%M:%SZ")
-            # skip older or beyond
-            if cdt<start_date:
-                continue
-            if cdt>end_date:
-                continue
-
-            insert_comment_record(conn,f"{owner}/{repo}",issue_number,cmt)
-
-            # also fetch comment reactions => skip older than start_date or beyond end_date
-            fetch_comment_reactions_single_thread(
-                conn, owner, repo, issue_number, cmt["id"],
-                start_date, end_date, new_en,
-                session, handle_rate_limit_func, max_retries
-            )
-
-        if len(data)<50:
+            c_str=cmt.get("created_at")
+            cdt=None
+            if c_str:
+                cdt=datetime.strptime(c_str,"%Y-%m-%dT%H:%M:%SZ")
+            insert_comment_record(conn,repo_name,issue_num,c_id,cdt,cmt)
+            new_count+=1
+            if c_id>highest_cid:
+                highest_cid=c_id
+        if new_count<50:
             break
         page+=1
 
-def insert_comment_record(conn, repo_name, issue_num, cmt_json):
-    cmt_id=cmt_json["id"]
-    c_created_str=cmt_json["created_at"]
-    cdt=datetime.strptime(c_created_str,"%Y-%m-%dT%H:%M:%SZ")
+def insert_comment_record(conn, repo_name, issue_num, comment_id, created_dt, cmt_json):
     body=cmt_json.get("body","")
     import json
-
     c=conn.cursor()
     sql="""
-    INSERT INTO issue_comments (repo_name, issue_number, comment_id, created_at, body)
-    VALUES (%s,%s,%s,%s,%s)
+    INSERT INTO issue_comments
+      (repo_name, issue_number, comment_id, created_at, body)
+    VALUES
+      (%s,%s,%s,%s,%s)
     ON DUPLICATE KEY UPDATE
       created_at=VALUES(created_at),
       body=VALUES(body)
     """
-    c.execute(sql,(repo_name,issue_num,cmt_id,cdt,body))
-    conn.commit()
-    c.close()
-
-def fetch_comment_reactions_single_thread(conn, owner, repo, issue_number, comment_id,
-                                         start_date, end_date, enabled,
-                                         session, handle_rate_limit_func, max_retries):
-    if enabled==0:
-        logging.info("Repo %s/%s => disabled => skip => comment #%d => reactions",owner,repo,comment_id)
-        return
-
-    # no date-range log for each comment, but you could if desired
-    url=f"https://api.github.com/repos/{owner}/{repo}/issues/comments/{comment_id}/reactions"
-    (resp,success)=robust_get_page(session,url,{},handle_rate_limit_func,max_retries)
-    if not success:
-        logging.warning("Comment Reactions => skip => cmt_id=%d => issue #%d => %s/%s",
-                        comment_id,issue_number,owner,repo)
-        return
-    data=resp.json()
-    if not data:
-        return
-
-    from datetime import datetime
-    import json
-    for reac in data:
-        reac_created_str=reac.get("created_at")
-        if not reac_created_str:
-            continue
-        rdt=datetime.strptime(reac_created_str,"%Y-%m-%dT%H:%M:%SZ")
-        if rdt<start_date:
-            continue
-        if rdt>end_date:
-            continue
-
-        reac_id=reac["id"]
-        raw_str=json.dumps(reac,ensure_ascii=False)
-        insert_comment_reaction(conn,f"{owner}/{repo}",issue_number,comment_id,reac_id,rdt,raw_str)
-
-def insert_comment_reaction(conn, repo_name, issue_num, comment_id, reac_id, created_dt, raw_json):
-    c=conn.cursor()
-    sql="""
-    INSERT INTO comment_reactions
-      (repo_name, issue_number, comment_id, reaction_id, created_at, raw_json)
-    VALUES
-      (%s,%s,%s,%s,%s,%s)
-    ON DUPLICATE KEY UPDATE
-      created_at=VALUES(created_at),
-      raw_json=VALUES(raw_json)
-    """
-    c.execute(sql,(repo_name, issue_num, comment_id, reac_id, created_dt, raw_json))
+    c.execute(sql,(repo_name, issue_num, comment_id, created_dt, body))
     conn.commit()
     c.close()

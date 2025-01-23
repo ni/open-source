@@ -3,13 +3,11 @@
 
 import os
 import sys
-import time
 import logging
 import yaml
-import requests
 from logging.handlers import TimedRotatingFileHandler
-from datetime import datetime, timedelta
 
+import requests
 from requests.adapters import HTTPAdapter, Retry
 
 from db import connect_db, create_tables
@@ -26,13 +24,7 @@ def load_config():
     if os.path.isfile("config.yaml"):
         with open("config.yaml","r",encoding="utf-8") as f:
             cfg=yaml.safe_load(f)
-    cfg.setdefault("mysql",{
-        "host":"localhost",
-        "port":3306,
-        "user":"root",
-        "password":"root",
-        "db":"my_kpis_analytics_db"
-    })
+    cfg.setdefault("mysql",{"host":"localhost","port":3306,"user":"root","password":"root","db":"my_kpis_db"})
     cfg.setdefault("tokens",[])
     cfg.setdefault("logging",{
         "file_name":"myapp.log",
@@ -42,16 +34,16 @@ def load_config():
         "file_level":"DEBUG"
     })
     cfg.setdefault("max_retries",20)
-    cfg.setdefault("days_to_capture",365)
+    # if we want date-based skip for stars or baseline_date, set days_to_capture here
     return cfg
 
 def setup_logging(cfg):
-    log_conf=cfg.get("logging",{})
-    log_file=log_conf.get("file_name","myapp.log")
-    rotate_when=log_conf.get("rotate_when","midnight")
-    backup_count=log_conf.get("backup_count",7)
-    console_level=log_conf.get("console_level","DEBUG")
-    file_level=log_conf.get("file_level","DEBUG")
+    log_conf=cfg["logging"]
+    log_file=log_conf["file_name"]
+    rotate_when=log_conf["rotate_when"]
+    backup_count=log_conf["backup_count"]
+    console_level=log_conf["console_level"]
+    file_level=log_conf["file_level"]
 
     logger=logging.getLogger()
     logger.setLevel(logging.DEBUG)
@@ -90,154 +82,58 @@ def rotate_token():
     CURRENT_TOKEN_INDEX=(CURRENT_TOKEN_INDEX+1)%len(TOKENS)
     new_token=TOKENS[CURRENT_TOKEN_INDEX]
     session.headers["Authorization"]=f"token {new_token}"
-    logging.info("Rotated token from idx %d to %d => not showing partial token string",
-                 old_idx,CURRENT_TOKEN_INDEX)
+    logging.info("Rotated token from idx %d to %d => not showing partial token", old_idx, CURRENT_TOKEN_INDEX)
 
 def main():
     global TOKENS, session, token_info, CURRENT_TOKEN_INDEX
     cfg=load_config()
     setup_logging(cfg)
-    logging.info("Starting script => date-range display + progress with 4 decimals => watchers full fetch => DB creation logs")
+    logging.info("Starting => integrated numeric approach => watchers full => single-thread => no concurrency")
 
     conn=connect_db(cfg, create_db_if_missing=True)
     create_tables(conn)
 
-    TOKENS=cfg.get("tokens",[])
+    TOKENS=cfg["tokens"]
     session=setup_session_with_retry()
     token_info={}
-
     if TOKENS:
         session.headers["Authorization"]=f"token {TOKENS[0]}"
 
-    max_retries=cfg.get("max_retries",20)
-    days_to_capture=cfg.get("days_to_capture",365)
+    max_retries=cfg["max_retries"]
 
     all_repos=get_repo_list()
     for (owner,repo) in all_repos:
-        # fetch official repo creation date
-        repo_created_dt=fetch_repo_creation_date(owner,repo)
-        if not repo_created_dt:
-            logging.warning("Repo %s/%s => no creation date => skip",owner,repo)
+        base,en = get_baseline_info(conn,owner,repo)
+        if en==0:
+            logging.info("Repo %s/%s => disabled => skip",owner,repo)
             continue
 
-        # define a date range => start= repo_created_dt, end= start + days_to_capture
-        start_date = repo_created_dt
-        end_date = repo_created_dt + timedelta(days=days_to_capture)
+        logging.info("Repo %s/%s => watchers => full => numeric skip => daily runs",owner,repo)
 
-        old_base, enabled = get_baseline_info(conn,owner,repo)
-        if enabled==0:
-            logging.info("Repo %s/%s => disabled => skip run",owner,repo)
-            continue
-
-        # store end_date if you want => or store start_date
-        set_baseline_date(conn,owner,repo,end_date)
-
-        logging.info("Repo %s/%s => creation=%s => final end_date=%s => watchers,forks,stars,issues,pulls,events",
-                     owner,repo,start_date,end_date)
-
-        from fetch_forks_stars_watchers import (
-            list_watchers_single_thread,
-            list_forks_single_thread,
-            list_stars_single_thread
-        )
-        list_watchers_single_thread(
-            conn, owner, repo,
-            enabled,
-            session,
-            handle_rate_limit_func,
-            max_retries,
-            start_date, 
-            end_date
-        )
-        list_forks_single_thread(
-            conn, owner, repo,
-            start_date, end_date, enabled,
-            session,
-            handle_rate_limit_func,
-            max_retries
-        )
-        list_stars_single_thread(
-            conn, owner, repo,
-            start_date, end_date, enabled,
-            session,
-            handle_rate_limit_func,
-            max_retries
-        )
+        # watchers/forks/stars
+        from fetch_forks_stars_watchers import list_watchers_single_thread, list_forks_single_thread, list_stars_single_thread
+        list_watchers_single_thread(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
+        list_forks_single_thread(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
+        list_stars_single_thread(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
 
         from fetch_issues import list_issues_single_thread
-        list_issues_single_thread(
-            conn, owner, repo,
-            start_date, end_date, enabled,
-            session,
-            handle_rate_limit_func,
-            max_retries
-        )
+        list_issues_single_thread(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
 
         from fetch_pulls import list_pulls_single_thread
-        list_pulls_single_thread(
-            conn, owner, repo,
-            start_date, end_date, enabled,
-            session,
-            handle_rate_limit_func,
-            max_retries
-        )
+        list_pulls_single_thread(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
 
         from fetch_events import fetch_issue_events_for_all_issues, fetch_pull_events_for_all_pulls
-        fetch_issue_events_for_all_issues(
-            conn, owner, repo,
-            start_date, end_date, enabled,
-            session, handle_rate_limit_func,
-            max_retries
-        )
-        fetch_pull_events_for_all_pulls(
-            conn, owner, repo,
-            start_date, end_date, enabled,
-            session, handle_rate_limit_func,
-            max_retries
-        )
+        fetch_issue_events_for_all_issues(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
+        fetch_pull_events_for_all_pulls(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
 
         from fetch_comments import fetch_comments_for_all_issues
-        fetch_comments_for_all_issues(
-            conn, owner, repo,
-            start_date, end_date, enabled,
-            session, handle_rate_limit_func,
-            max_retries
-        )
+        fetch_comments_for_all_issues(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
 
         from fetch_issue_reactions import fetch_issue_reactions_for_all_issues
-        fetch_issue_reactions_for_all_issues(
-            conn, owner, repo,
-            start_date, end_date, enabled,
-            session, handle_rate_limit_func,
-            max_retries
-        )
+        fetch_issue_reactions_for_all_issues(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
 
     conn.close()
-    logging.info("All done => single-thread date-range, watch console logs for DB creation and progress messages.")
-
-def fetch_repo_creation_date(owner,repo):
-    """
-    GET /repos/{owner}/{repo}, parse created_at
-    """
-    url=f"https://api.github.com/repos/{owner}/{repo}"
-    try:
-        resp=session.get(url)
-        handle_rate_limit_func(resp)
-        if resp.status_code==200:
-            data=resp.json()
-            created_str=data.get("created_at")
-            if created_str:
-                dt=datetime.strptime(created_str,"%Y-%m-%dT%H:%M:%SZ")
-                return dt
-            else:
-                logging.warning("No 'created_at' => skip => %s/%s",owner,repo)
-                return None
-        else:
-            logging.warning("Cannot fetch repo => status=%d => skip => %s/%s",resp.status_code,owner,repo)
-            return None
-    except Exception as e:
-        logging.warning("Error => fetch_repo_creation_date => %s/%s => %s",owner,repo,e)
-        return None
+    logging.info("All done => integrated numeric approach => watchers full => single-thread => done")
 
 def handle_rate_limit_func(resp):
     global TOKENS, CURRENT_TOKEN_INDEX, session, token_info
@@ -251,7 +147,6 @@ def handle_rate_limit_func(resp):
         if CURRENT_TOKEN_INDEX==old_idx:
             if get_all_tokens_near_limit():
                 sleep_until_earliest_reset()
-
     if resp.status_code in (403,429):
         logging.warning("HTTP %d => forcibly rotate or sleep",resp.status_code)
         old_idx=CURRENT_TOKEN_INDEX
@@ -288,8 +183,8 @@ def get_all_tokens_near_limit():
     return True
 
 def sleep_until_earliest_reset():
-    global token_info,TOKENS
     import time
+    global token_info,TOKENS
     if not TOKENS:
         return
     earliest=None
@@ -316,6 +211,3 @@ def do_sleep_based_on_reset():
     import time
     logging.warning("Cannot parse reset => fallback => sleep 3600s")
     time.sleep(3600)
-
-if __name__=="__main__":
-    main()

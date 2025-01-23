@@ -11,9 +11,9 @@ def get_repo_list():
     """
     return [
         #("ni","labview-icon-editor"),
-        #("ni","actor-framework"),
+        ("ni","actor-framework"),
         ("dotnet","core"),
-        #("facebook","react"),
+        ("facebook","react"),
         #("tensorflow","tensorflow"),
         #("EPICS/reconos"),
         #("OpenFOAM/OpenFOAM-dev"),
