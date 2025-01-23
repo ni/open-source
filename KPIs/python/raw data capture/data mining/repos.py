@@ -10,9 +10,27 @@ def get_repo_list():
     For example: [("owner1","repo1"), ("owner2","repo2")]
     """
     return [
-        ("ni","labview-icon-editor"),
-        ("ni","actor-framework"),
+        #("ni","labview-icon-editor"),
+        #("ni","actor-framework"),
         ("dotnet","core"),
-        ("facebook","react"),
-        ("tensorflow","tensorflow"),
+        #("facebook","react"),
+        #("tensorflow","tensorflow"),
+        #("EPICS/reconos"),
+        #("OpenFOAM/OpenFOAM-dev"),
+        #("FreeCAD/freecad"),
+        #("fritzing/fritzing-app"),
+        #("qucs/qucs"),
+        #("OpenSCAD/openscad"),
+        #("Node-RED/nodered"),
+        #("OpenPLC/OpenPLC-IDE"),
+        #("Eclipse/mraa"),
     ]
+
+#(KiCad (not open source),
+#(GNU Radio
+#(EPICS/reconos"),
+#("OpenFOAM/OpenFOAM-dev"),
+#("FreeCAD/freecad"),
+#("fritzing/fritzing-app"),
+#("qucs/qucs"),
+#("OpenSCAD/openscad"),

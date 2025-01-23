@@ -42,7 +42,7 @@ def load_config():
         "file_level":"DEBUG"
     })
     cfg.setdefault("max_retries",20)
-    cfg.setdefault("days_to_capture",730)  # default 2 years
+    cfg.setdefault("days_to_capture",365)
     return cfg
 
 def setup_logging(cfg):
@@ -91,13 +91,13 @@ def rotate_token():
     new_token=TOKENS[CURRENT_TOKEN_INDEX]
     session.headers["Authorization"]=f"token {new_token}"
     logging.info("Rotated token from idx %d to %d => not showing partial token string",
-                 old_idx, CURRENT_TOKEN_INDEX)
+                 old_idx,CURRENT_TOKEN_INDEX)
 
 def main():
     global TOKENS, session, token_info, CURRENT_TOKEN_INDEX
     cfg=load_config()
     setup_logging(cfg)
-    logging.info("Starting final single-thread approach => date-based skip => watchers full fetch => ensure DB is created")
+    logging.info("Starting script => date-range display + progress with 4 decimals => watchers full fetch => DB creation logs")
 
     conn=connect_db(cfg, create_db_if_missing=True)
     create_tables(conn)
@@ -110,30 +110,30 @@ def main():
         session.headers["Authorization"]=f"token {TOKENS[0]}"
 
     max_retries=cfg.get("max_retries",20)
-    days_to_capture=cfg.get("days_to_capture",730)
+    days_to_capture=cfg.get("days_to_capture",365)
 
     all_repos=get_repo_list()
-
     for (owner,repo) in all_repos:
-        # Step 1) fetch official repo creation date
+        # fetch official repo creation date
         repo_created_dt=fetch_repo_creation_date(owner,repo)
         if not repo_created_dt:
-            logging.warning("Repo %s/%s => no creation date => skip", owner,repo)
+            logging.warning("Repo %s/%s => no creation date => skip",owner,repo)
             continue
 
-        # Step 2) baseline_date = creation date + days_to_capture
-        final_baseline=repo_created_dt+timedelta(days=days_to_capture)
+        # define a date range => start= repo_created_dt, end= start + days_to_capture
+        start_date = repo_created_dt
+        end_date = repo_created_dt + timedelta(days=days_to_capture)
 
-        # Step 3) read existing baseline/enabled
-        old_base, enabled=get_baseline_info(conn,owner,repo)
+        old_base, enabled = get_baseline_info(conn,owner,repo)
         if enabled==0:
-            logging.info("Repo %s/%s => disabled => skip run", owner,repo)
+            logging.info("Repo %s/%s => disabled => skip run",owner,repo)
             continue
 
-        # Overwrite baseline_date each time
-        set_baseline_date(conn,owner,repo,final_baseline)
-        logging.info("Repo %s/%s => creation_date=%s => final_baseline=%s => watchers,forks,stars,issues,pulls,events,comments",
-                     owner,repo,repo_created_dt,final_baseline)
+        # store end_date if you want => or store start_date
+        set_baseline_date(conn,owner,repo,end_date)
+
+        logging.info("Repo %s/%s => creation=%s => final end_date=%s => watchers,forks,stars,issues,pulls,events",
+                     owner,repo,start_date,end_date)
 
         from fetch_forks_stars_watchers import (
             list_watchers_single_thread,
@@ -141,22 +141,24 @@ def main():
             list_stars_single_thread
         )
         list_watchers_single_thread(
-            conn,owner,repo,
+            conn, owner, repo,
             enabled,
             session,
             handle_rate_limit_func,
-            max_retries
+            max_retries,
+            start_date, 
+            end_date
         )
         list_forks_single_thread(
-            conn,owner,repo,
-            final_baseline, enabled,
+            conn, owner, repo,
+            start_date, end_date, enabled,
             session,
             handle_rate_limit_func,
             max_retries
         )
         list_stars_single_thread(
-            conn,owner,repo,
-            final_baseline, enabled,
+            conn, owner, repo,
+            start_date, end_date, enabled,
             session,
             handle_rate_limit_func,
             max_retries
@@ -164,16 +166,17 @@ def main():
 
         from fetch_issues import list_issues_single_thread
         list_issues_single_thread(
-            conn,owner,repo,
-            final_baseline, enabled,
+            conn, owner, repo,
+            start_date, end_date, enabled,
             session,
             handle_rate_limit_func,
             max_retries
         )
+
         from fetch_pulls import list_pulls_single_thread
         list_pulls_single_thread(
-            conn,owner,repo,
-            final_baseline, enabled,
+            conn, owner, repo,
+            start_date, end_date, enabled,
             session,
             handle_rate_limit_func,
             max_retries
@@ -181,44 +184,40 @@ def main():
 
         from fetch_events import fetch_issue_events_for_all_issues, fetch_pull_events_for_all_pulls
         fetch_issue_events_for_all_issues(
-            conn,owner,repo,
-            final_baseline, enabled,
-            session,
-            handle_rate_limit_func,
+            conn, owner, repo,
+            start_date, end_date, enabled,
+            session, handle_rate_limit_func,
             max_retries
         )
         fetch_pull_events_for_all_pulls(
-            conn,owner,repo,
-            final_baseline, enabled,
-            session,
-            handle_rate_limit_func,
+            conn, owner, repo,
+            start_date, end_date, enabled,
+            session, handle_rate_limit_func,
             max_retries
         )
 
         from fetch_comments import fetch_comments_for_all_issues
         fetch_comments_for_all_issues(
-            conn,owner,repo,
-            final_baseline, enabled,
-            session,
-            handle_rate_limit_func,
+            conn, owner, repo,
+            start_date, end_date, enabled,
+            session, handle_rate_limit_func,
             max_retries
         )
 
         from fetch_issue_reactions import fetch_issue_reactions_for_all_issues
         fetch_issue_reactions_for_all_issues(
-            conn,owner,repo,
-            final_baseline, enabled,
-            session,
-            handle_rate_limit_func,
+            conn, owner, repo,
+            start_date, end_date, enabled,
+            session, handle_rate_limit_func,
             max_retries
         )
 
     conn.close()
-    logging.info("All done => final date-based skip. Check logs for DB creation steps, etc.")
+    logging.info("All done => single-thread date-range, watch console logs for DB creation and progress messages.")
 
 def fetch_repo_creation_date(owner,repo):
     """
-    GET /repos/{owner}/{repo}, parse 'created_at'.
+    GET /repos/{owner}/{repo}, parse created_at
     """
     url=f"https://api.github.com/repos/{owner}/{repo}"
     try:
@@ -231,13 +230,13 @@ def fetch_repo_creation_date(owner,repo):
                 dt=datetime.strptime(created_str,"%Y-%m-%dT%H:%M:%SZ")
                 return dt
             else:
-                logging.warning("No 'created_at' field => skip")
+                logging.warning("No 'created_at' => skip => %s/%s",owner,repo)
                 return None
         else:
-            logging.warning("Repo fetch => status %d => skip %s",resp.status_code,url)
+            logging.warning("Cannot fetch repo => status=%d => skip => %s/%s",resp.status_code,owner,repo)
             return None
     except Exception as e:
-        logging.warning("Error fetching repo creation date => %s => %s",url,e)
+        logging.warning("Error => fetch_repo_creation_date => %s/%s => %s",owner,repo,e)
         return None
 
 def handle_rate_limit_func(resp):
@@ -254,7 +253,7 @@ def handle_rate_limit_func(resp):
                 sleep_until_earliest_reset()
 
     if resp.status_code in (403,429):
-        logging.warning("HTTP %d => forcibly rotate or sleep", resp.status_code)
+        logging.warning("HTTP %d => forcibly rotate or sleep",resp.status_code)
         old_idx=CURRENT_TOKEN_INDEX
         rotate_token()
         if CURRENT_TOKEN_INDEX==old_idx:
@@ -279,7 +278,7 @@ def update_token_info(token_idx, resp):
         token_info[token_idx]={"remaining":remaining,"reset":reset_ts}
 
 def get_all_tokens_near_limit():
-    global token_info, TOKENS
+    global token_info,TOKENS
     if not TOKENS:
         return False
     for idx in range(len(TOKENS)):

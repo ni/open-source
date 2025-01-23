@@ -1,15 +1,22 @@
 # fetch_events.py
-"""
-Fetch issue_events => skip if event.created_at < baseline_date
-Fetch pull_events => skip if event.created_at < baseline_date
-Same local mini-retry => robust approach
-"""
-
 import logging
 import time
 import requests
 from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
+
+def get_last_page(resp):
+    link_header=resp.headers.get("Link")
+    if not link_header:
+        return None
+    parts=link_header.split(',')
+    for part in parts:
+        if 'rel="last"' in part:
+            import re
+            match=re.search(r'[?&]page=(\d+)',part)
+            if match:
+                return int(match.group(1))
+    return None
 
 def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
     mini_retry_attempts=3
@@ -23,11 +30,11 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
                     return (resp,True)
                 elif resp.status_code in (403,429,500,502,503,504):
                     logging.warning("HTTP %d => attempt %d/%d => re-try => %s",
-                                    resp.status_code, attempt, max_retries, url)
+                                    resp.status_code,attempt,max_retries,url)
                     time.sleep(5)
                 else:
                     logging.warning("HTTP %d => attempt %d => break => %s",
-                                    resp.status_code, attempt, url)
+                                    resp.status_code,attempt,url)
                     return (resp,False)
                 break
             except requests.exceptions.ConnectionError:
@@ -40,41 +47,49 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
     logging.warning("Exceeded max_retries => give up => %s",url)
     return (None,False)
 
-def fetch_issue_events_for_all_issues(conn, owner, repo, baseline_date, enabled,
-                                      session, handle_rate_limit_func, max_retries):
+def fetch_issue_events_for_all_issues(conn, owner, repo,
+                                      start_date, end_date,
+                                      enabled, session,
+                                      handle_rate_limit_func, max_retries):
     if enabled==0:
         logging.info("Repo %s/%s => disabled => skip issue_events",owner,repo)
         return
+
+    # load all issues from DB
     c=conn.cursor()
     c.execute("SELECT issue_number FROM issues WHERE repo_name=%s",(f"{owner}/{repo}",))
     rows=c.fetchall()
     c.close()
 
     for (issue_num,) in rows:
-        fetch_issue_events_single_thread(
-            conn, owner, repo, issue_num,
-            baseline_date, enabled,
-            session, handle_rate_limit_func,
-            max_retries
-        )
+        fetch_issue_events_single_thread(conn, owner, repo, issue_num,
+                                         start_date, end_date,
+                                         enabled, session,
+                                         handle_rate_limit_func,
+                                         max_retries)
 
 def fetch_issue_events_single_thread(conn, owner, repo, issue_number,
-                                     baseline_date, enabled,
-                                     session, handle_rate_limit_func, max_retries):
+                                     start_date, end_date,
+                                     enabled,
+                                     session, handle_rate_limit_func,
+                                     max_retries):
     if enabled==0:
         logging.info("Repo %s/%s => disabled => skip => issue_events => #%d",owner,repo,issue_number)
         return
+
+    logging.debug(f"[DEBUG] {owner}/{repo} issue_events for #{issue_number} [{start_date} - {end_date}]")
+
     page=1
+    last_page=None
+
     while True:
-        old_base=baseline_date
+        old_base=start_date
         old_en=enabled
         new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,old_base,old_en)
         if new_en==0:
             logging.info("Repo %s/%s => toggled disabled => stop => issue_events => #%d mid-run",
                          owner,repo,issue_number)
             break
-        if new_base!=baseline_date:
-            baseline_date=new_base
 
         url=f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}/events"
         params={"page":page,"per_page":100}
@@ -87,12 +102,20 @@ def fetch_issue_events_single_thread(conn, owner, repo, issue_number,
         if not data:
             break
 
+        if last_page is None:
+            last_page=get_last_page(resp)
+        if last_page:
+            progress=(page/last_page)*100
+            logging.debug(f"[DEBUG] {owner}/{repo} issue_events => {progress:.4f}% done (issue #{issue_number})")
+
         for evt in data:
             cstr=evt.get("created_at")
             if not cstr:
                 continue
             cdt=datetime.strptime(cstr,"%Y-%m-%dT%H:%M:%SZ")
-            if cdt<baseline_date:
+            if cdt<start_date:
+                continue
+            if cdt>end_date:
                 continue
             insert_issue_event_record(conn,f"{owner}/{repo}",issue_number,evt,cdt)
 
@@ -111,15 +134,18 @@ def insert_issue_event_record(conn, repo_name, issue_num, evt_json, created_dt):
     VALUES
       (%s,%s,%s,%s,%s)
     """
-    c.execute(sql,(repo_name, issue_num, event_id, created_dt, raw_str))
+    c.execute(sql,(repo_name,issue_num,event_id,created_dt,raw_str))
     conn.commit()
     c.close()
 
-def fetch_pull_events_for_all_pulls(conn, owner, repo, baseline_date, enabled,
-                                    session, handle_rate_limit_func, max_retries):
+def fetch_pull_events_for_all_pulls(conn, owner, repo,
+                                    start_date, end_date,
+                                    enabled, session,
+                                    handle_rate_limit_func, max_retries):
     if enabled==0:
         logging.info("Repo %s/%s => disabled => skip pull_events",owner,repo)
         return
+
     c=conn.cursor()
     c.execute("SELECT pull_number FROM pulls WHERE repo_name=%s",(f"{owner}/{repo}",))
     rows=c.fetchall()
@@ -127,32 +153,40 @@ def fetch_pull_events_for_all_pulls(conn, owner, repo, baseline_date, enabled,
 
     for (pull_num,) in rows:
         fetch_pull_events_single_thread(
-            conn, owner, repo, pull_num,
-            baseline_date, enabled,
-            session, handle_rate_limit_func,
+            conn, owner, repo,
+            pull_num,
+            start_date, end_date,
+            enabled, session,
+            handle_rate_limit_func,
             max_retries
         )
 
 def fetch_pull_events_single_thread(conn, owner, repo, pull_number,
-                                    baseline_date, enabled,
-                                    session, handle_rate_limit_func, max_retries):
+                                    start_date, end_date,
+                                    enabled,
+                                    session, handle_rate_limit_func,
+                                    max_retries):
     if enabled==0:
-        logging.info("Repo %s/%s => disabled => skip => pull_events => PR #%d",owner,repo,pull_number)
+        logging.info("Repo %s/%s => disabled => skip => pull_events => #%d",owner,repo,pull_number)
         return
+
+    logging.debug(f"[DEBUG] {owner}/{repo} pull_events for PR #{pull_number} [{start_date} - {end_date}]")
+
     page=1
+    last_page=None
+
     while True:
-        old_base=baseline_date
+        old_base=start_date
         old_en=enabled
         new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,old_base,old_en)
         if new_en==0:
             logging.info("Repo %s/%s => toggled disabled => stop => pull_events => #%d mid-run",
                          owner,repo,pull_number)
             break
-        if new_base!=baseline_date:
-            baseline_date=new_base
 
         url=f"https://api.github.com/repos/{owner}/{repo}/issues/{pull_number}/events"
         params={"page":page,"per_page":100}
+
         (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
         if not success:
             logging.warning("Pull Events => can't get page %d => PR #%d => %s/%s",
@@ -162,12 +196,20 @@ def fetch_pull_events_single_thread(conn, owner, repo, pull_number,
         if not data:
             break
 
+        if last_page is None:
+            last_page=get_last_page(resp)
+        if last_page:
+            progress=(page/last_page)*100
+            logging.debug(f"[DEBUG] {owner}/{repo} pull_events => {progress:.4f}% done (PR #{pull_number})")
+
         for evt in data:
             cstr=evt.get("created_at")
             if not cstr:
                 continue
             cdt=datetime.strptime(cstr,"%Y-%m-%dT%H:%M:%SZ")
-            if cdt<baseline_date:
+            if cdt<start_date:
+                continue
+            if cdt>end_date:
                 continue
             insert_pull_event_record(conn,f"{owner}/{repo}",pull_number,evt,cdt)
 
@@ -177,7 +219,7 @@ def fetch_pull_events_single_thread(conn, owner, repo, pull_number,
 
 def insert_pull_event_record(conn, repo_name, pull_num, evt_json, created_dt):
     import json
-    raw_str=json.dumps(evt_json, ensure_ascii=False)
+    raw_str=json.dumps(evt_json,ensure_ascii=False)
     event_id=evt_json["id"]
     c=conn.cursor()
     sql="""
