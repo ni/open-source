@@ -1,12 +1,13 @@
 # db.py
 """
-1) connect_db(cfg, create_db_if_missing=True):
-   - Connects to MySQL
-   - Creates DB if missing => avoids unknown DB error
+Connects to MySQL, creates or uses an existing DB,
+and builds the required tables if not present.
 
-2) create_tables(conn):
-   - Builds all relevant tables
-   - We set issue_comments.body to LONGTEXT => handle large comments
+Tables:
+ - repo_baselines: manages 'baseline_date' and 'enabled' per repo
+ - issues, pulls, forks, etc.: each storing data from GitHub
+ - comment_reactions, issue_reactions, events...
+Using LONGTEXT for big fields (e.g., comment bodies).
 """
 
 import logging
@@ -16,7 +17,7 @@ def connect_db(cfg, create_db_if_missing=True):
     db_conf = cfg["mysql"]
     db_name = db_conf["db"]
 
-    # Connect w/o specifying db => create if missing
+    # Connect w/o specifying DB => create if missing
     tmp_conn = mysql.connector.connect(
         host=db_conf["host"],
         port=db_conf["port"],
@@ -99,7 +100,7 @@ def create_tables(conn):
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
 
-    # LONGTEXT => handle very large comment bodies
+    # LONGTEXT for comment bodies
     c.execute("""
     CREATE TABLE IF NOT EXISTS issue_comments (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -130,7 +131,7 @@ def create_tables(conn):
       id INT AUTO_INCREMENT PRIMARY KEY,
       repo_name VARCHAR(255) NOT NULL,
       user_login VARCHAR(255) NOT NULL,
-      raw_json   JSON,
+      raw_json JSON,
       UNIQUE KEY (repo_name, user_login)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
@@ -149,10 +150,10 @@ def create_tables(conn):
     c.execute("""
     CREATE TABLE IF NOT EXISTS forks (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      repo_name   VARCHAR(255) NOT NULL,
-      fork_id     BIGINT UNSIGNED NOT NULL,
-      created_at  DATETIME,
-      raw_json    JSON,
+      repo_name VARCHAR(255) NOT NULL,
+      fork_id BIGINT UNSIGNED NOT NULL,
+      created_at DATETIME,
+      raw_json JSON,
       UNIQUE KEY (repo_name, fork_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)

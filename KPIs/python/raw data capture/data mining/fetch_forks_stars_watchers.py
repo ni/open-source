@@ -1,32 +1,45 @@
 # fetch_forks_stars_watchers.py
 """
-Fetch watchers => no date => if enabled=1
-Fetch forks => skip if created_at>baseline_date
+Fetch watchers => no created_at => only raw info
+Fetch forks => skip if fork.created_at>baseline_date
 Fetch stars => skip if starred_at>baseline_date
-We re-try 403,429,500,502,503,504 => skip after max_retries
+Local mini-retry + robust
 """
 
 import logging
 import time
-import json
+import requests
 from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
 
 def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
-    for attempt in range(1, max_retries+1):
-        resp=session.get(url, params=params)
-        handle_rate_limit_func(resp)
-
-        if resp.status_code==200:
-            return (resp,True)
-        elif resp.status_code in (403,429,500,502,503,504):
-            logging.warning("HTTP %d => attempt %d/%d => will retry => %s",
-                            resp.status_code, attempt, max_retries, url)
-            time.sleep(5)
-        else:
-            logging.warning("HTTP %d => attempt %d => break => %s",resp.status_code, attempt, url)
-            return (resp,False)
-    logging.warning("Exceeded max_retries => giving up => %s",url)
+    mini_retry_attempts=3
+    for attempt in range(1,max_retries+1):
+        local_attempt=1
+        while local_attempt<=mini_retry_attempts:
+            try:
+                resp=session.get(url, params=params)
+                handle_rate_limit_func(resp)
+                if resp.status_code==200:
+                    return (resp,True)
+                elif resp.status_code in (403,429,500,502,503,504):
+                    logging.warning("HTTP %d => attempt %d/%d => retry => %s",
+                                    resp.status_code,attempt,max_retries,url)
+                    time.sleep(5)
+                else:
+                    logging.warning("HTTP %d => attempt %d => break => %s",
+                                    resp.status_code, attempt, url)
+                    return (resp,False)
+                break
+            except requests.exceptions.ConnectionError:
+                logging.warning("Conn error => local mini-retry %d/%d => %s",
+                                local_attempt,mini_retry_attempts,url)
+                time.sleep(3)
+                local_attempt+=1
+        if local_attempt>mini_retry_attempts:
+            logging.warning("Exhausted local mini-retry => break => %s",url)
+            return (None,False)
+    logging.warning("Exceeded max_retries => give up => %s",url)
     return (None,False)
 
 def list_watchers_single_thread(conn, owner, repo, enabled,
@@ -38,18 +51,15 @@ def list_watchers_single_thread(conn, owner, repo, enabled,
     full_repo_name=f"{owner}/{repo}"
     while True:
         url=f"https://api.github.com/repos/{owner}/{repo}/subscribers"
-        params={
-            "page":page,
-            "per_page":100
-        }
+        params={"page":page,"per_page":100}
         (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
         if not success:
-            logging.warning("Watchers => cannot get page %d => break => %s/%s",page,owner,repo)
+            logging.warning("Watchers => cannot get page %d => break => %s/%s",
+                            page,owner,repo)
             break
         data=resp.json()
         if not data:
             break
-
         for user_obj in data:
             insert_watcher_record(conn, full_repo_name, user_obj)
 
@@ -59,6 +69,7 @@ def list_watchers_single_thread(conn, owner, repo, enabled,
 
 def insert_watcher_record(conn, repo_name, user_json):
     user_login=user_json["login"]
+    import json
     raw_str=json.dumps(user_json, ensure_ascii=False)
     c=conn.cursor()
     sql="""
@@ -79,21 +90,17 @@ def list_forks_single_thread(conn, owner, repo, baseline_date, enabled,
     page=1
     full_repo_name=f"{owner}/{repo}"
     while True:
-        new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,baseline_date,enabled)
+        old_base=baseline_date
+        old_en=enabled
+        new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,old_base,old_en)
         if new_en==0:
             logging.info("Repo %s/%s => toggled disabled => stop forks mid-run",owner,repo)
             break
         if new_base!=baseline_date:
             baseline_date=new_base
-            logging.info("Repo %s/%s => baseline changed => now %s (forks).",
-                         owner,repo,baseline_date)
 
         url=f"https://api.github.com/repos/{owner}/{repo}/forks"
-        params={
-            "sort":"oldest",
-            "page":page,
-            "per_page":100
-        }
+        params={"sort":"oldest","page":page,"per_page":100}
         (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
         if not success:
             logging.warning("Forks => can't get page %d => break => %s/%s",page,owner,repo)
@@ -101,6 +108,7 @@ def list_forks_single_thread(conn, owner, repo, baseline_date, enabled,
         data=resp.json()
         if not data:
             break
+
         for fork in data:
             cstr=fork.get("created_at")
             if not cstr:
@@ -116,9 +124,10 @@ def list_forks_single_thread(conn, owner, repo, baseline_date, enabled,
 
 def insert_fork_record(conn, repo_name, fork_json):
     fork_id=fork_json["id"]
-    created_str=fork_json["created_at"]
-    created_dt=datetime.strptime(created_str,"%Y-%m-%dT%H:%M:%SZ")
-    raw_str=json.dumps(fork_json,ensure_ascii=False)
+    cstr=fork_json["created_at"]
+    cdt=datetime.strptime(cstr,"%Y-%m-%dT%H:%M:%SZ")
+    import json
+    raw_str=json.dumps(fork_json, ensure_ascii=False)
     c=conn.cursor()
     sql="""
     INSERT INTO forks (repo_name, fork_id, created_at, raw_json)
@@ -127,7 +136,7 @@ def insert_fork_record(conn, repo_name, fork_json):
       created_at=VALUES(created_at),
       raw_json=VALUES(raw_json)
     """
-    c.execute(sql,(repo_name,fork_id,created_dt,raw_str))
+    c.execute(sql,(repo_name,fork_id,cdt,raw_str))
     conn.commit()
     c.close()
 
@@ -136,25 +145,22 @@ def list_stars_single_thread(conn, owner, repo, baseline_date, enabled,
     if enabled==0:
         logging.info("Repo %s/%s => disabled => skip stars",owner,repo)
         return
-
     old_accept=session.headers.get("Accept","")
     session.headers["Accept"]="application/vnd.github.v3.star+json"
     page=1
     full_repo_name=f"{owner}/{repo}"
     while True:
-        new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,baseline_date,enabled)
+        old_base=baseline_date
+        old_en=enabled
+        new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,old_base,old_en)
         if new_en==0:
             logging.info("Repo %s/%s => toggled disabled => stop stars mid-run",owner,repo)
             break
         if new_base!=baseline_date:
             baseline_date=new_base
-            logging.info("Repo %s/%s => baseline changed => now %s (stars).",owner,repo,baseline_date)
 
         url=f"https://api.github.com/repos/{owner}/{repo}/stargazers"
-        params={
-            "page":page,
-            "per_page":100
-        }
+        params={"page":page,"per_page":100}
         (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
         if not success:
             logging.warning("Stars => can't get page %d => break => %s/%s",page,owner,repo)
@@ -170,8 +176,9 @@ def list_stars_single_thread(conn, owner, repo, baseline_date, enabled,
             sdt=datetime.strptime(sstr,"%Y-%m-%dT%H:%M:%SZ")
             if baseline_date and sdt>baseline_date:
                 continue
-            raw_str=json.dumps(stargazer,ensure_ascii=False)
-            insert_star_record(conn, full_repo_name, stargazer, sdt)
+            import json
+            raw_str=json.dumps(stargazer, ensure_ascii=False)
+            insert_star_record(conn,full_repo_name,stargazer, sdt)
 
         if len(data)<100:
             break
@@ -180,7 +187,8 @@ def list_stars_single_thread(conn, owner, repo, baseline_date, enabled,
 
 def insert_star_record(conn, repo_name, star_json, starred_dt):
     user_login=star_json["user"]["login"]
-    raw_str=json.dumps(star_json,ensure_ascii=False)
+    import json
+    raw_str=json.dumps(star_json, ensure_ascii=False)
     c=conn.cursor()
     sql="""
     INSERT INTO stars (repo_name, user_login, starred_at, raw_json)
