@@ -2,12 +2,11 @@
 # main.py
 """
 Single-thread orchestrator with:
- - Preemptive checks if all tokens near-limit => parse X-RateLimit-Reset => earliest reset => sleep
- - Dictionary token_info => store each token's remaining, reset
- - No partial token strings in logs
- - re-check all tokens after sleeping
- - re-try logic for 403,429,500,502,503,504
- - single-run approach
+ - HTTPAdapter + Retry for solution #1 => re-try on certain statuses w/ exponential backoff
+ - Local mini-retry for ConnectionError in robust_get_page => solution #3
+ - Automatic baseline_date => we compute 'now - days_to_capture' for each repo
+
+We still read enabled from DB, but baseline_date is overwritten by computed date.
 """
 
 import os
@@ -17,6 +16,9 @@ import logging
 import yaml
 import requests
 from logging.handlers import TimedRotatingFileHandler
+from datetime import datetime, timedelta
+
+from requests.adapters import HTTPAdapter, Retry
 
 from db import connect_db, create_tables
 from repo_baselines import get_baseline_info
@@ -25,7 +27,6 @@ from repos import get_repo_list
 CURRENT_TOKEN_INDEX = 0
 TOKENS = []
 session = None
-token_info = {}  # e.g. token_info[token_idx] = {"remaining": ..., "reset": ...}
 
 def load_config():
     cfg = {}
@@ -48,6 +49,8 @@ def load_config():
         "file_level": "DEBUG"
     })
     cfg.setdefault("max_retries", 20)
+    # new => days_to_capture => default 30
+    cfg.setdefault("days_to_capture", 30)
     return cfg
 
 def setup_logging(cfg):
