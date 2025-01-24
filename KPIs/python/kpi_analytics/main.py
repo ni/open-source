@@ -1,16 +1,12 @@
 #!/usr/bin/env python3
 """
-main.py
+main.py - Final integrated solution
 
-Orchestrates quarter-based data, aggregator logic, partial coverage, and prints
-detailed BFS-style debug prints like the sample provided.
-
-Restores:
- - ENVIRONMENT VARIABLES print
- - BFS style 'Existing Quarter Data for {repo} | (mergesFactor=..., ...)' 
- - Detailed aggregator tables for velocity, UIG, MAC
-
-Generates final SEI chart & prints a final summary.
+- BFS debug prints for raw & aggregator data
+- Creates separate PNGs for each raw variable + aggregator metrics
+- Single PNG: bar chart on left, table on right
+- Removes text_props=..., instead sets _text properties after creation
+  to fix older Matplotlib TypeError.
 """
 
 import sys
@@ -45,9 +41,6 @@ from merges_issues import (
 from forks_stars import count_forks, count_stars
 from comments_reactions import count_issue_comments, count_all_reactions
 
-###############################################################################
-# Capture console => debug_log
-###############################################################################
 original_stdout= sys.stdout
 log_capture= io.StringIO()
 
@@ -60,6 +53,7 @@ class DualOutput:
         log_capture.flush()
 
 sys.stdout= DualOutput()
+
 
 def print_aligned_table(table_data, alignments=None):
     if not table_data:
@@ -88,7 +82,6 @@ def print_aligned_table(table_data, alignments=None):
         else:
             return cell_str.rjust(width)
 
-    # Print header
     header_line= " | ".join(
         format_cell(str(table_data[0][i]), col_widths[i], alignments[i])
         for i in range(num_cols)
@@ -96,13 +89,13 @@ def print_aligned_table(table_data, alignments=None):
     print(header_line)
     sep_line= "-+-".join("-"*col_widths[i] for i in range(num_cols))
     print(sep_line)
-    # Print rows
     for row in table_data[1:]:
         row_line= " | ".join(
             format_cell(str(row[i]), col_widths[i], alignments[i])
             for i in range(num_cols)
         )
         print(row_line)
+
 
 def BFS_print_repo_table(
     repo, mergesFactor, closedFactor, forksFactor, starsFactor,
@@ -112,26 +105,13 @@ def BFS_print_repo_table(
     velocity_data, uig_data, mac_data,
     quarter_dates
     ):
-    """
-    Prints:
-     Existing Quarter Data for {repo} | (mergesFactor=..., closedFactor=..., etc.)
-     Then a BFS table with columns:
-      Q-Range, mergesRaw, closedRaw, forksRaw, starsRaw, newIssRaw, newCommRaw, newReactRaw, newPullRaw,
-      mergesScaled, closedScaled, forksScaled, starsScaled, newIssScaled, newCommScaled, newReactScaled, newPullScaled,
-      Velocity, UIG, MAC
-    Then a "detailed aggregator" subtable for velocity, uig, mac.
 
-    partial_flag => if partial, label with (partial).
-    """
-    # Print factor line
     fac_str= (f"(mergesFactor={mergesFactor[repo]:.4f}, closedFactor={closedFactor[repo]:.4f}, "
               f"forksFactor={forksFactor[repo]:.4f}, starsFactor={starsFactor[repo]:.4f}, "
               f"newIssuesFactor={newIssuesFactor[repo]:.4f}, commentsFactor={commentsFactor[repo]:.4f}, "
-              f"reactionsFactor={reactionsFactor[repo]:.4f}, pullsFactor={pullsFactor[repo]:.4f})"
-             )
+              f"reactionsFactor={reactionsFactor[repo]:.4f}, pullsFactor={pullsFactor[repo]:.4f})")
     print(f"Existing Quarter Data for {repo} | {fac_str}")
 
-    # BFS big table
     BFS_data= [[
         "Q-Range","mergesRaw","closedRaw","forksRaw","starsRaw",
         "newIssRaw","newCommRaw","newReactRaw","newPullRaw",
@@ -158,8 +138,8 @@ def BFS_print_repo_table(
         pullRaw= pull_data[repo].get(q_idx,0.0)
 
         vel= velocity_data[repo].get(q_idx,0.0)
-        uig= uig_data[repo].get(q_idx,0.0)
-        mac= mac_data[repo].get(q_idx,0.0)
+        uigv= uig_data[repo].get(q_idx,0.0)
+        macv= mac_data[repo].get(q_idx,0.0)
 
         mergesScale= mergesRaw* mergesFactor[repo]
         closedScale= closedRaw* closedFactor[repo]
@@ -178,16 +158,14 @@ def BFS_print_repo_table(
             f"{mergesScale:.4f}", f"{closedScale:.4f}", f"{forksScale:.4f}", f"{starsScale:.4f}",
             f"{newIssScale:.4f}", f"{commScale:.4f}", f"{reacScale:.4f}", f"{pullScale:.4f}",
 
-            f"{vel:.4f}", f"{uig:.4f}", f"{mac:.4f}"
+            f"{vel:.4f}", f"{uigv:.4f}", f"{macv:.4f}"
         ])
 
     print_aligned_table(BFS_data, BFS_align)
-    print()  # spacing
+    print()
 
-    # Additional aggregator detail for velocity
     print(f"--- Additional Calculation Details for {repo} (Velocity, UIG, MAC) ---\n")
-
-    # velocity detail table
+    # Velocity
     print(f"=== Detailed Calculations for {repo}: Velocity ===")
     vtab= [["Q-Range","mergesScaled","closedScaled","Velocity=0.4*M+0.6*C"]]
     for q_idx in sorted_quarters:
@@ -204,7 +182,7 @@ def BFS_print_repo_table(
     print_aligned_table(vtab, ["left","center","center","center"])
     print()
 
-    # uig detail table
+    # UIG
     print(f"=== Detailed Calculations for {repo}: UIG ===")
     uitab= [["Q-Range","forksScaled","starsScaled","UIG=0.4*F+0.6*S"]]
     for q_idx in sorted_quarters:
@@ -215,13 +193,11 @@ def BFS_print_repo_table(
         forksScale= forks_data[repo].get(q_idx,0.0)* forksFactor[repo]
         starsScale= stars_data[repo].get(q_idx,0.0)* starsFactor[repo]
         uigv= uig_data[repo].get(q_idx,0.0)
-        uitab.append([
-            label_str, f"{forksScale:.4f}", f"{starsScale:.4f}", f"{uigv:.4f}"
-        ])
+        uitab.append([label_str, f"{forksScale:.4f}", f"{starsScale:.4f}", f"{uigv:.4f}"])
     print_aligned_table(uitab, ["left","center","center","center"])
     print()
 
-    # mac detail table
+    # MAC
     print(f"=== Detailed Calculations for {repo}: MAC ===")
     mctab= [["Q-Range","(Iss+Comm+React)Scaled","pullScaled","MAC=0.8*(sum)+0.2*pull"]]
     for q_idx in sorted_quarters:
@@ -229,178 +205,153 @@ def BFS_print_repo_table(
         label_str= f"Q{q_idx}({qs:%Y-%m-%d}..{qe:%Y-%m-%d})"
         if part_flag:
             label_str+= " (partial)"
-        issScale= newIss_data[repo].get(q_idx,0.0)* newIssuesFactor[repo]
-        comScale= comm_data[repo].get(q_idx,0.0)* commentsFactor[repo]
-        reaScale= reac_data[repo].get(q_idx,0.0)* reactionsFactor[repo]
-        su= issScale+ comScale+ reaScale
-        pullScale= pull_data[repo].get(q_idx,0.0)* pullsFactor[repo]
+        issScale= (newIss_data[repo].get(q_idx,0.0)* newIssuesFactor[repo])
+        comScale= (comm_data[repo].get(q_idx,0.0)* commentsFactor[repo])
+        reaScale= (reac_data[repo].get(q_idx,0.0)* reactionsFactor[repo])
+        summ= issScale+ comScale+ reaScale
+        pullScale= (pull_data[repo].get(q_idx,0.0)* pullsFactor[repo])
         macv= mac_data[repo].get(q_idx,0.0)
-        mctab.append([
-            label_str,
-            f"{su:.4f}",
-            f"{pullScale:.4f}",
-            f"{macv:.4f}"
-        ])
+        mctab.append([label_str, f"{summ:.4f}", f"{pullScale:.4f}", f"{macv:.4f}"])
     print_aligned_table(mctab, ["left","center","center","center"])
     print()
 
-def produce_raw_comparison_chart(scaling_repo, metricName, quarter_data, quarter_dates, repos):
-    """
-    Summaries => compute_target_reached_data, then produce a bar chart for
-    'target' vs. scaling repo's metric
-    """
-    from scale_factors import compute_target_reached_data
-    t_dict= compute_target_reached_data(repos, scaling_repo, quarter_data)
-    union_q= set()
-    for r in repos:
-        union_q |= set(quarter_data[r].keys())
-    union_q= sorted(union_q)
+def quarter_fy_ranges(fy):
+    import datetime
+    return {
+      "Q1": (datetime.datetime(fy-1,10,1), datetime.datetime(fy-1,12,31,23,59,59)),
+      "Q2": (datetime.datetime(fy,1,1), datetime.datetime(fy,3,31,23,59,59)),
+      "Q3": (datetime.datetime(fy,4,1), datetime.datetime(fy,6,30,23,59,59)),
+      "Q4": (datetime.datetime(fy,7,1), datetime.datetime(fy,9,30,23,59,59)),
+    }
+
+def find_fy(d):
+    if d.month>=10:
+        return d.year+1
+    return d.year
+
+def largest_overlap_quarter(dt_start, dt_end):
+    import datetime
+    fy= find_fy(dt_start)
+    Q= quarter_fy_ranges(fy)
+    best_label="Q?"
+    best_ov= 0
+    for qlbl,(qs,qe) in Q.items():
+        overlap_start= max(dt_start, qs)
+        overlap_end= min(dt_end, qe)
+        overlap= (overlap_end - overlap_start).total_seconds()
+        if overlap> best_ov:
+            best_ov= overlap
+            best_label= qlbl
+    return best_label
+
+def produce_chart_with_table(
+    quarter_ranges,   # list of (start_dt, end_dt, partial_flag)
+    bar_values,       # numeric
+    scaling_repo,
+    all_repos,
+    oldest_map,       # {repo: (oldest_date, final_end, partialAny)}
+    chart_title,
+    filename
+):
+    # auto font scaling
+    base_font= 10
+    if len(all_repos)> 10:
+        base_font= 8
+    if len(all_repos)> 20:
+        base_font= 6
+
+    import matplotlib
+    matplotlib.rcParams.update({'font.size': base_font})
+
+    import matplotlib.pyplot as plt
+    from matplotlib.table import Table
+    fig= plt.figure(figsize=(14,8))
+    ax_chart= fig.add_axes([0.05,0.1,0.55,0.8])
+    ax_table= fig.add_axes([0.65,0.1,0.3,0.8])
+    ax_table.set_axis_off()
 
     x_labels=[]
-    target_vals=[]
-    scaling_vals=[]
-
-    def quarter_label(rp,q_idx):
-        if rp in quarter_dates and q_idx in quarter_dates[rp]:
-            (st_dt, en_dt, partial_flag)= quarter_dates[rp][q_idx]
-            label_str= f"Q{q_idx}({st_dt:%Y-%m-%d}-{en_dt:%Y-%m-%d})"
-            if partial_flag:
-                label_str+= "(partial)"
-            return label_str
-        else:
-            return f"Q{q_idx}(No data)"
-
-    for q_idx in union_q:
-        avgv, scv, ratio= t_dict.get(q_idx,(0,0,0))
-        x_labels.append(quarter_label(scaling_repo,q_idx))
-        target_vals.append(avgv)
-        scaling_vals.append(scv)
-
-    out_file= f"{metricName.lower()}_comparison_{scaling_repo.replace('/','_')}.png"
-    if os.path.exists(out_file):
-        os.remove(out_file)
+    for (st,ed,part_f) in quarter_ranges:
+        qlbl= largest_overlap_quarter(st,ed)
+        x_labels.append(qlbl)
 
     import numpy as np
-    x= np.arange(len(x_labels))
-    barw=0.4
-    fig, ax= plt.subplots(figsize=(10,6))
-    ax.bar(x- barw/2, target_vals, barw, label=f"{metricName} Target", color='steelblue')
-    ax.bar(x+ barw/2, scaling_vals, barw, label=f"{metricName} {scaling_repo}", color='orange')
-    ax.set_title(f"{metricName} Target vs. {metricName} {scaling_repo}")
-    ax.set_xticks(x)
-    ax.set_xticklabels(x_labels, rotation=45, ha='right')
-    ax.set_ylabel(metricName)
-    ax.legend()
+    x= np.arange(len(quarter_ranges))
+    ax_chart.bar(x, bar_values, 0.6, color='steelblue')
+    ax_chart.set_title(chart_title)
+    ax_chart.set_xticks(x)
+    ax_chart.set_xticklabels(x_labels, rotation=0)
 
-    plt.tight_layout()
-    plt.savefig(out_file)
-    plt.close()
+    tbl= Table(ax_table, bbox=[0,0,1,1])
+    col_labels= ["Repo","OldestDate","WindowEnd"]
+    table_data= [col_labels]
 
-    print(f"\n=== {metricName} Target vs. {metricName} {scaling_repo} ===")
-    table_data= [
-      ["Quarter", f"{metricName} Target", f"{metricName} ({scaling_repo})"]
-    ]
-    for i,q_idx in enumerate(union_q):
-        lbl= x_labels[i]
-        tv= f"{target_vals[i]:.2f}"
-        sv= f"{scaling_vals[i]:.2f}"
-        table_data.append([lbl, tv, sv])
-    print_aligned_table(table_data, ["left","center","center"])
+    # top row => scaling
+    if scaling_repo in oldest_map:
+        (odt, wend, pf)= oldest_map[scaling_repo]
+        odt_str= odt.strftime("%Y-%m-%d %H:%M:%S")
+        wend_str= wend.strftime("%Y-%m-%d %H:%M:%S")
+        if pf:
+            wend_str+= " (partial)"
+        table_data.append([scaling_repo+" (scaling)", odt_str, wend_str])
 
-def produce_sei_comparison_chart(scaling_repo, velocity_data, uig_data, mac_data, quarter_dates, repos):
-    from scale_factors import compute_target_reached_data, compute_sei_data
-    vel_tr= compute_target_reached_data(repos, scaling_repo, velocity_data)
-    uig_tr= compute_target_reached_data(repos, scaling_repo, uig_data)
-    mac_tr= compute_target_reached_data(repos, scaling_repo, mac_data)
-    sei_d= compute_sei_data(vel_tr, uig_tr, mac_tr)
+    # then => non-scaling
+    for rp in all_repos:
+        if rp== scaling_repo:
+            continue
+        if rp not in oldest_map:
+            continue
+        (odt, wend, pf)= oldest_map[rp]
+        odt_str= odt.strftime("%Y-%m-%d %H:%M:%S")
+        wend_str= wend.strftime("%Y-%m-%d %H:%M:%S")
+        if pf:
+            wend_str+= " (partial)"
+        table_data.append([rp, odt_str, wend_str])
 
-    union_q= set()
-    for rr in repos:
-        union_q |= set(velocity_data[rr].keys())| set(uig_data[rr].keys())| set(mac_data[rr].keys())
-    union_q= sorted(union_q)
+    nrows= len(table_data)
+    ncols= len(table_data[0])
+    row_h= 1.0/ nrows
+    col_w= 1.0/ ncols
 
-    # build "seiScaled" for each repo => 0.5*(mac) +0.3*(velocity)+ 0.2*(uig)
-    sei_scaled={}
-    for r in repos:
-        sei_scaled[r]= {}
-        uq= set(velocity_data[r].keys())| set(uig_data[r].keys())| set(mac_data[r].keys())
-        for q_idx in uq:
-            v_s= velocity_data[r].get(q_idx,0.0)
-            u_s= uig_data[r].get(q_idx,0.0)
-            m_s= mac_data[r].get(q_idx,0.0)
-            val= 0.5*m_s + 0.3*v_s + 0.2*u_s
-            sei_scaled[r][q_idx]= val
+    for irow in range(nrows):
+        for icol in range(ncols):
+            cell_txt= table_data[irow][icol]
+            cell= tbl.add_cell(row=irow, col=icol,
+                width=col_w, height=row_h,
+                text= cell_txt,
+                loc='center',
+                facecolor= 'white'
+            )
+            if irow==0:
+                cell.set_facecolor('lightgray')
+            # We handle fonts *after* creation
+            # to avoid text_props error
+            # e.g.:
+            if irow==0:
+                cell._text.set_weight('bold')
+            cell._text.set_fontsize(base_font)
 
-    non_scaling= [rr for rr in repos if rr!=scaling_repo]
-    sei_target={}
-    for q_idx in union_q:
-        sumv= 0.0
-        cc=0
-        for nr in non_scaling:
-            if q_idx in sei_scaled[nr]:
-                sumv+= sei_scaled[nr][q_idx]
-                cc+=1
-        avgv=0.0
-        if cc>0:
-            avgv= sumv/ cc
-        sei_target[q_idx]= avgv
+    ax_table.add_table(tbl)
+    ax_table.set_xlim(0,1)
+    ax_table.set_ylim(0,1)
 
-    scaling_sei={}
-    for q_idx in union_q:
-        scaling_sei[q_idx]= sei_scaled[scaling_repo].get(q_idx,0.0)
+    fig.savefig(filename)
+    plt.close(fig)
+    print(f"[INFO] Created {filename} with chart + table: {chart_title}")
 
-    out_file= f"sei_comparison_{scaling_repo.replace('/','_')}.png"
-    if os.path.exists(out_file):
-        os.remove(out_file)
-
-    x_labels=[]
-    t_vals=[]
-    s_vals=[]
-
-    def quarter_label(rp,qx):
-        if rp in quarter_dates and qx in quarter_dates[rp]:
-            (st_dt,en_dt,part)= quarter_dates[rp][qx]
-            label_str= f"Q{qx}({st_dt:%Y-%m-%d}-{en_dt:%Y-%m-%d})"
-            if part:
-                label_str+= "(partial)"
-            return label_str
-        return f"Q{qx}(No data)"
-
-    sorted_q= sorted(union_q)
-    for q_idx in sorted_q:
-        x_labels.append( quarter_label(scaling_repo,q_idx) )
-        t_vals.append( sei_target[q_idx] )
-        s_vals.append( scaling_sei[q_idx] )
-
-    import numpy as np
-    x= np.arange(len(x_labels))
-    barw=0.4
-    fig, ax= plt.subplots(figsize=(10,6))
-    ax.bar(x- barw/2, t_vals, barw, label="SEI Target", color='steelblue')
-    ax.bar(x+ barw/2, s_vals, barw, label=f"SEI {scaling_repo}", color='orange')
-    ax.set_title(f"SEI Target vs. SEI {scaling_repo}")
-    ax.set_xticks(x)
-    ax.set_xticklabels(x_labels, rotation=45, ha='right')
-    ax.set_ylabel("SEI Value")
-    ax.legend()
-
-    plt.tight_layout()
-    plt.savefig(out_file)
-    plt.close()
-
-    print(f"\n=== SEI Target vs. SEI {scaling_repo} ===")
-    table_data= [
-      ["Quarter","SEI Target", f"SEI ({scaling_repo})"]
-    ]
-    for i,q_idx in enumerate(sorted_q):
-        lbl= x_labels[i]
-        tv= f"{t_vals[i]:.4f}"
-        sv= f"{s_vals[i]:.4f}"
-        table_data.append([lbl, tv, sv])
-    print_aligned_table(table_data, ["left","center","center"])
+def build_ranges_for_repo(r, data_dict, quarter_dates):
+    if r not in quarter_dates:
+        return [], []
+    qkeys= sorted(quarter_dates[r].keys())
+    qr=[]
+    vals=[]
+    for q_idx in qkeys:
+        (qs,qe,pf)= quarter_dates[r][q_idx]
+        qr.append((qs,qe,pf))
+        vals.append(data_dict[r].get(q_idx,0.0))
+    return qr, vals
 
 def main():
-    # 1) Print ENV variables at top
     env_scaling= os.environ.get("SCALING_REPO","<not set>")
     env_quarters= os.environ.get("NUM_FISCAL_QUARTERS","<not set>")
     print("=== ENVIRONMENT VARIABLES ===")
@@ -409,28 +360,23 @@ def main():
 
     print("=== CAPTURED CONSOLE OUTPUT ===\n")
 
-    from aggregator import load_aggregator_weights, velocity, user_interest_growth, monthly_active_contributors
-    from scale_factors import compute_scale_factors
-
-    # default repos
-    repos= ["facebook/react","tensorflow/tensorflow","dotnet/core"]
+    repos= ["ni/labview-icon-editor","facebook/react","tensorflow/tensorflow","dotnet/core"]
     scaling_repo= get_scaling_repo() or "ni/labview-icon-editor"
     if scaling_repo not in repos:
         repos.append(scaling_repo)
 
     q_count= get_num_fiscal_quarters() or 4
     aggregator_weights= load_aggregator_weights()
-
-    # compute scale factors
+    from scale_factors import compute_scale_factors
     (sfM, sfCl, sfF, sfS, sfNi, sfCo, sfRe, sfP)= compute_scale_factors(scaling_repo, repos)
 
     now= datetime.utcnow()
 
-    # aggregator data structures
-    velocity_data={}; uig_data={}; mac_data={}
-    merges_data={}; closed_data={}; forks_data={}; stars_data={}
-    newIss_data={}; comm_data={}; reac_data={}; pull_data={}
+    velocity_data={} ; uig_data={} ; mac_data={}
+    merges_data={} ; closed_data={} ; forks_data={} ; stars_data={}
+    newIss_data={} ; comm_data={} ; reac_data={} ; pull_data={}
     quarter_dates={}
+    oldest_map={}
 
     for r in repos:
         velocity_data[r]= {}
@@ -447,18 +393,21 @@ def main():
 
         oldest= find_oldest_date_for_repo(r)
         if not oldest:
-            print(f"[WARN] No data for {r}, skipping aggregator for this repo.\n")
+            print(f"[WARN] No data for {r}, skipping BFS aggregator.\n")
             continue
 
         raw_quarters= generate_quarter_windows(oldest, q_count)
         quarter_dates[r]={}
         idx=1
+        final_end= oldest
+        any_partial= False
+
         for (qs,qe) in raw_quarters:
             if qs> now:
                 break
-            partial_flag=False
+            p_flag= False
             if qe> now:
-                partial_flag=True
+                p_flag= True
                 qe= now
             if qs>=qe:
                 continue
@@ -481,27 +430,26 @@ def main():
             reac_s= reacRaw* sfRe[r]
             pull_s= pullRaw* sfP[r]
 
-            # compute openIssueRatio / openPRRatio
-            openIssStart= count_open_issues_at_date(r, qs)
-            openIssEnd= count_open_issues_at_date(r, qe)
-            openIssAvg= (openIssStart+ openIssEnd)/2
-            denom_iss= openIssAvg+ closedRaw
+            # aggregator
+            oIss_start= count_open_issues_at_date(r, qs)
+            oIss_end= count_open_issues_at_date(r, qe)
+            oIss_avg= (oIss_start+ oIss_end)/2
+            denom_iss= oIss_avg+ closedRaw
             if denom_iss<1e-9:
-                openIssueRatio= 1.0
+                openIssRatio=1.0
             else:
-                openIssueRatio= openIssAvg/ denom_iss
+                openIssRatio= oIss_avg/ denom_iss
 
-            openPRStart= count_open_prs_at_date(r, qs)
-            openPREnd= count_open_prs_at_date(r, qe)
-            openPRAvg= (openPRStart+ openPREnd)/2
-            # treat mergesRaw as "closed pr" for ratio
-            denom_pr= openPRAvg+ mergesRaw
+            oPR_start= count_open_prs_at_date(r, qs)
+            oPR_end= count_open_prs_at_date(r, qe)
+            oPR_avg= (oPR_start+ oPR_end)/2
+            denom_pr= oPR_avg+ mergesRaw
             if denom_pr<1e-9:
                 openPRRatio=1.0
             else:
-                openPRRatio= openPRAvg/ denom_pr
+                openPRRatio= oPR_avg/ denom_pr
 
-            vel= velocity(merges_s, closed_s, openIssueRatio, openPRRatio, aggregator_weights)
+            vel= velocity(merges_s, closed_s, openIssRatio, openPRRatio, aggregator_weights)
             uigv= user_interest_growth(forks_s, stars_s)
             macv= monthly_active_contributors(newIss_s, comm_s, reac_s, pull_s, aggregator_weights)
 
@@ -518,61 +466,154 @@ def main():
             reac_data[r][idx]= reacRaw
             pull_data[r][idx]= pullRaw
 
-            quarter_dates[r][idx]= (qs,qe,partial_flag)
+            quarter_dates[r][idx]= (qs,qe,p_flag)
+            final_end= qe
+            if p_flag:
+                any_partial= True
+
             idx+=1
 
-    # BFS print for each repo
+        oldest_map[r]= (oldest, final_end, any_partial)
+
+    # BFS debug
     for r in repos:
+        if r not in quarter_dates:
+            continue
         if not quarter_dates[r]:
             continue
         BFS_print_repo_table(
             repo=r,
             mergesFactor= sfM, closedFactor= sfCl, forksFactor= sfF, starsFactor= sfS,
             newIssuesFactor= sfNi, commentsFactor= sfCo, reactionsFactor= sfRe, pullsFactor= sfP,
-            merges_data= merges_data, closed_data= closed_data, forks_data= forks_data,
-            stars_data= stars_data, newIss_data= newIss_data, comm_data= comm_data,
-            reac_data= reac_data, pull_data= pull_data,
+            merges_data= merges_data, closed_data= closed_data, forks_data= forks_data, stars_data= stars_data,
+            newIss_data= newIss_data, comm_data= comm_data, reac_data= reac_data, pull_data= pull_data,
             velocity_data= velocity_data, uig_data= uig_data, mac_data= mac_data,
             quarter_dates= quarter_dates
         )
 
-    def produce_all_raw_charts():
-        produce_raw_comparison_chart(scaling_repo,"Merges", merges_data, quarter_dates, repos)
-        produce_raw_comparison_chart(scaling_repo,"Closed", closed_data, quarter_dates, repos)
-        produce_raw_comparison_chart(scaling_repo,"Forks", forks_data, quarter_dates, repos)
-        produce_raw_comparison_chart(scaling_repo,"Stars", stars_data, quarter_dates, repos)
-        produce_raw_comparison_chart(scaling_repo,"NewIssues", newIss_data, quarter_dates, repos)
-        produce_raw_comparison_chart(scaling_repo,"Comments", comm_data, quarter_dates, repos)
-        produce_raw_comparison_chart(scaling_repo,"Reactions", reac_data, quarter_dates, repos)
-        produce_raw_comparison_chart(scaling_repo,"Pulls", pull_data, quarter_dates, repos)
+    print("\n=== Generating separate PNGs for each raw variable. ===\n")
 
-    produce_all_raw_charts()
+    raw_vars= {
+      "Merges": merges_data,
+      "Closed": closed_data,
+      "Forks": forks_data,
+      "Stars": stars_data,
+      "NewIssues": newIss_data,
+      "Comments": comm_data,
+      "Reactions": reac_data,
+      "Pulls": pull_data
+    }
 
-    # aggregator => velocity, MAC, UIG, SEI
-    produce_raw_comparison_chart(scaling_repo,"Velocity", velocity_data, quarter_dates, repos)
-    produce_raw_comparison_chart(scaling_repo,"MAC", mac_data, quarter_dates, repos)
-    produce_raw_comparison_chart(scaling_repo,"UIG", uig_data, quarter_dates, repos)
-    produce_sei_comparison_chart(scaling_repo, velocity_data, uig_data, mac_data, quarter_dates, repos)
+    def build_ranges_for_r(r, datadict):
+        if r not in quarter_dates:
+            return [],[]
+        qk= sorted(quarter_dates[r].keys())
+        quarts=[]
+        vals=[]
+        for q_idx in qk:
+            (qs,qe,pf)= quarter_dates[r][q_idx]
+            quarts.append((qs,qe,pf))
+            vals.append(datadict[r].get(q_idx,0.0))
+        return quarts,vals
 
-    print("\n=== Final: 12 charts (8 raw + 4 aggregator) generated. ===\n")
+    for var_label, var_dict in raw_vars.items():
+        qrng, barv= build_ranges_for_r(scaling_repo, var_dict)
+        produce_chart_with_table(
+          quarter_ranges= qrng,
+          bar_values= barv,
+          scaling_repo= scaling_repo,
+          all_repos= repos,
+          oldest_map= oldest_map,
+          chart_title= f"{var_label} ({scaling_repo}) - Fiscal Quarters",
+          filename= f"{var_label.lower()}_fiscal.png"
+        )
 
-    # End-of-script => flush + restore stdout
+    print("\n=== Now generating aggregator (Velocity, MAC, UIG, SEI). ===\n")
+
+    def aggregator_ranges(r, dct):
+        if r not in quarter_dates:
+            return [],[]
+        qk= sorted(quarter_dates[r].keys())
+        Qs=[]
+        Vs=[]
+        for qi in qk:
+            (qs,qe,pf)= quarter_dates[r][qi]
+            Qs.append((qs,qe,pf))
+            Vs.append(dct[r].get(qi,0.0))
+        return Qs,Vs
+
+    # velocity
+    v_q, v_val= aggregator_ranges(scaling_repo, velocity_data)
+    produce_chart_with_table(
+      quarter_ranges= v_q,
+      bar_values= v_val,
+      scaling_repo= scaling_repo,
+      all_repos= repos,
+      oldest_map= oldest_map,
+      chart_title= f"Velocity ({scaling_repo}) - Fiscal",
+      filename= "velocity_fiscal.png"
+    )
+
+    # mac
+    m_q, m_val= aggregator_ranges(scaling_repo, mac_data)
+    produce_chart_with_table(
+      quarter_ranges= m_q,
+      bar_values= m_val,
+      scaling_repo= scaling_repo,
+      all_repos= repos,
+      oldest_map= oldest_map,
+      chart_title= f"MAC ({scaling_repo}) - Fiscal",
+      filename= "mac_fiscal.png"
+    )
+
+    # uig
+    u_q, u_val= aggregator_ranges(scaling_repo, uig_data)
+    produce_chart_with_table(
+      quarter_ranges= u_q,
+      bar_values= u_val,
+      scaling_repo= scaling_repo,
+      all_repos= repos,
+      oldest_map= oldest_map,
+      chart_title= f"UIG ({scaling_repo}) - Fiscal",
+      filename= "uig_fiscal.png"
+    )
+
+    # sei
+    sei_data={}
+    if scaling_repo in velocity_data:
+        for q_idx in quarter_dates[scaling_repo]:
+            vv= velocity_data[scaling_repo].get(q_idx,0.0)
+            uu= uig_data[scaling_repo].get(q_idx,0.0)
+            mm= mac_data[scaling_repo].get(q_idx,0.0)
+            val= 0.5*mm + 0.3*vv + 0.2*uu
+            if scaling_repo not in sei_data:
+                sei_data[scaling_repo]= {}
+            sei_data[scaling_repo][q_idx]= val
+
+    s_q, s_val= aggregator_ranges(scaling_repo, sei_data)
+    produce_chart_with_table(
+      quarter_ranges= s_q,
+      bar_values= s_val,
+      scaling_repo= scaling_repo,
+      all_repos= repos,
+      oldest_map= oldest_map,
+      chart_title= f"SEI ({scaling_repo}) - Fiscal",
+      filename= "sei_fiscal.png"
+    )
+
+    print("\n=== Done. BFS debug plus raw variable PNGs plus aggregator PNGs. ===")
+
     sys.stdout.flush()
     console_text= log_capture.getvalue()
     sys.stdout= original_stdout
 
-    # Overwrite debug_log
     debug_file= "debug_log.txt"
     if os.path.exists(debug_file):
         os.remove(debug_file)
-
     with open(debug_file,"w",encoding="utf-8") as f:
         f.write("=== ENVIRONMENT VARIABLES ===\n")
-        env_scaling= os.environ.get("SCALING_REPO","<not set>")
-        env_quarters= os.environ.get("NUM_FISCAL_QUARTERS","<not set>")
         f.write(f"SCALING_REPO={env_scaling}\n")
         f.write(f"NUM_FISCAL_QUARTERS={env_quarters}\n\n")
-
         f.write("=== CAPTURED CONSOLE OUTPUT ===\n")
         f.write(console_text)
 

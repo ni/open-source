@@ -13,6 +13,36 @@ NUM_FISCAL_QUARTERS=8
 [INFO] scale_factors: (other repo) facebook/react => oldest_date=2013-05-29 20:20:53, window_end=2015-05-29 20:20:53 (window=730 days)
 [INFO] scale_factors: (other repo) tensorflow/tensorflow => oldest_date=2015-11-09 14:21:11, window_end=2017-11-08 14:21:11 (window=730 days)
 [INFO] scale_factors: (other repo) dotnet/core => oldest_date=2015-01-16 16:22:27, window_end=2017-01-15 16:22:27 (window=730 days)
+Existing Quarter Data for ni/labview-icon-editor | (mergesFactor=1.0000, closedFactor=1.0000, forksFactor=1.0000, starsFactor=1.0000, newIssuesFactor=1.0000, commentsFactor=1.0000, reactionsFactor=1.0000, pullsFactor=1.0000)
+Q-Range                              | mergesRaw | closedRaw | forksRaw | starsRaw | newIssRaw | newCommRaw | newReactRaw | newPullRaw | mergesScaled | closedScaled | forksScaled | starsScaled | newIssScaled | newCommScaled | newReactScaled | newPullScaled | Velocity |  UIG   | MAC    
+-------------------------------------+-----------+-----------+----------+----------+-----------+------------+-------------+------------+--------------+--------------+-------------+-------------+--------------+---------------+----------------+---------------+----------+--------+--------
+Q1(2024-05-03..2024-08-03)           |     5     |     0     |    5     |    9     |    17     |     14     |      6      |     7      |    5.0000    |    0.0000    |   5.0000    |   9.0000    |   17.0000    |    14.0000    |     6.0000     |    7.0000     |  0.2727  | 7.4000 | 31.0000
+Q2(2024-08-03..2024-11-03)           |     8     |     4     |    5     |    5     |    10     |     36     |      5      |     17     |    8.0000    |    4.0000    |   5.0000    |   5.0000    |   10.0000    |    36.0000    |     5.0000     |    17.0000    |  2.4762  | 5.0000 | 44.2000
+Q3(2024-11-03..2025-01-24) (partial) |    13     |    20     |    5     |    2     |    27     |     43     |     33      |     21     |   13.0000    |   20.0000    |   5.0000    |   2.0000    |   27.0000    |    43.0000    |    33.0000     |    21.0000    |  7.0589  | 3.2000 | 86.6000
+
+--- Additional Calculation Details for ni/labview-icon-editor (Velocity, UIG, MAC) ---
+
+=== Detailed Calculations for ni/labview-icon-editor: Velocity ===
+Q-Range                              | mergesScaled | closedScaled | Velocity=0.4*M+0.6*C
+-------------------------------------+--------------+--------------+---------------------
+Q1(2024-05-03..2024-08-03)           |    5.0000    |    0.0000    |        0.2727       
+Q2(2024-08-03..2024-11-03)           |    8.0000    |    4.0000    |        2.4762       
+Q3(2024-11-03..2025-01-24) (partial) |   13.0000    |   20.0000    |        7.0589       
+
+=== Detailed Calculations for ni/labview-icon-editor: UIG ===
+Q-Range                              | forksScaled | starsScaled | UIG=0.4*F+0.6*S
+-------------------------------------+-------------+-------------+----------------
+Q1(2024-05-03..2024-08-03)           |   5.0000    |   9.0000    |     7.4000     
+Q2(2024-08-03..2024-11-03)           |   5.0000    |   5.0000    |     5.0000     
+Q3(2024-11-03..2025-01-24) (partial) |   5.0000    |   2.0000    |     3.2000     
+
+=== Detailed Calculations for ni/labview-icon-editor: MAC ===
+Q-Range                              | (Iss+Comm+React)Scaled | pullScaled | MAC=0.8*(sum)+0.2*pull
+-------------------------------------+------------------------+------------+-----------------------
+Q1(2024-05-03..2024-08-03)           |        37.0000         |   7.0000   |        31.0000        
+Q2(2024-08-03..2024-11-03)           |        51.0000         |  17.0000   |        44.2000        
+Q3(2024-11-03..2025-01-24) (partial) |        103.0000        |  21.0000   |        86.6000        
+
 Existing Quarter Data for facebook/react | (mergesFactor=0.4407, closedFactor=0.8000, forksFactor=0.0067, starsFactor=0.0000, newIssuesFactor=1.9286, commentsFactor=0.5602, reactionsFactor=0.0000, pullsFactor=0.6250)
 Q-Range                    | mergesRaw | closedRaw | forksRaw | starsRaw | newIssRaw | newCommRaw | newReactRaw | newPullRaw | mergesScaled | closedScaled | forksScaled | starsScaled | newIssScaled | newCommScaled | newReactScaled | newPullScaled | Velocity |  UIG   | MAC     
 ---------------------------+-----------+-----------+----------+----------+-----------+------------+-------------+------------+--------------+--------------+-------------+-------------+--------------+---------------+----------------+---------------+----------+--------+---------
@@ -163,180 +193,23 @@ Q6(2016-04-16..2016-07-16) |        87.2281         |  13.7500   |        72.532
 Q7(2016-07-16..2016-10-16) |         9.8436         |   0.0000   |         7.8748        
 Q8(2016-10-16..2017-01-16) |        13.0616         |   0.0000   |        10.4492        
 
-Existing Quarter Data for ni/labview-icon-editor | (mergesFactor=1.0000, closedFactor=1.0000, forksFactor=1.0000, starsFactor=1.0000, newIssuesFactor=1.0000, commentsFactor=1.0000, reactionsFactor=1.0000, pullsFactor=1.0000)
-Q-Range                              | mergesRaw | closedRaw | forksRaw | starsRaw | newIssRaw | newCommRaw | newReactRaw | newPullRaw | mergesScaled | closedScaled | forksScaled | starsScaled | newIssScaled | newCommScaled | newReactScaled | newPullScaled | Velocity |  UIG   | MAC    
--------------------------------------+-----------+-----------+----------+----------+-----------+------------+-------------+------------+--------------+--------------+-------------+-------------+--------------+---------------+----------------+---------------+----------+--------+--------
-Q1(2024-05-03..2024-08-03)           |     5     |     0     |    5     |    9     |    17     |     14     |      6      |     7      |    5.0000    |    0.0000    |   5.0000    |   9.0000    |   17.0000    |    14.0000    |     6.0000     |    7.0000     |  0.2727  | 7.4000 | 31.0000
-Q2(2024-08-03..2024-11-03)           |     8     |     4     |    5     |    5     |    10     |     36     |      5      |     17     |    8.0000    |    4.0000    |   5.0000    |   5.0000    |   10.0000    |    36.0000    |     5.0000     |    17.0000    |  2.4762  | 5.0000 | 44.2000
-Q3(2024-11-03..2025-01-24) (partial) |    13     |    20     |    5     |    2     |    27     |     43     |     33      |     21     |   13.0000    |   20.0000    |   5.0000    |   2.0000    |   27.0000    |    43.0000    |    33.0000     |    21.0000    |  7.0589  | 3.2000 | 86.6000
 
---- Additional Calculation Details for ni/labview-icon-editor (Velocity, UIG, MAC) ---
+=== Generating separate PNGs for each raw variable. ===
 
-=== Detailed Calculations for ni/labview-icon-editor: Velocity ===
-Q-Range                              | mergesScaled | closedScaled | Velocity=0.4*M+0.6*C
--------------------------------------+--------------+--------------+---------------------
-Q1(2024-05-03..2024-08-03)           |    5.0000    |    0.0000    |        0.2727       
-Q2(2024-08-03..2024-11-03)           |    8.0000    |    4.0000    |        2.4762       
-Q3(2024-11-03..2025-01-24) (partial) |   13.0000    |   20.0000    |        7.0589       
+[INFO] Created merges_fiscal.png with chart + table: Merges (ni/labview-icon-editor) - Fiscal Quarters
+[INFO] Created closed_fiscal.png with chart + table: Closed (ni/labview-icon-editor) - Fiscal Quarters
+[INFO] Created forks_fiscal.png with chart + table: Forks (ni/labview-icon-editor) - Fiscal Quarters
+[INFO] Created stars_fiscal.png with chart + table: Stars (ni/labview-icon-editor) - Fiscal Quarters
+[INFO] Created newissues_fiscal.png with chart + table: NewIssues (ni/labview-icon-editor) - Fiscal Quarters
+[INFO] Created comments_fiscal.png with chart + table: Comments (ni/labview-icon-editor) - Fiscal Quarters
+[INFO] Created reactions_fiscal.png with chart + table: Reactions (ni/labview-icon-editor) - Fiscal Quarters
+[INFO] Created pulls_fiscal.png with chart + table: Pulls (ni/labview-icon-editor) - Fiscal Quarters
 
-=== Detailed Calculations for ni/labview-icon-editor: UIG ===
-Q-Range                              | forksScaled | starsScaled | UIG=0.4*F+0.6*S
--------------------------------------+-------------+-------------+----------------
-Q1(2024-05-03..2024-08-03)           |   5.0000    |   9.0000    |     7.4000     
-Q2(2024-08-03..2024-11-03)           |   5.0000    |   5.0000    |     5.0000     
-Q3(2024-11-03..2025-01-24) (partial) |   5.0000    |   2.0000    |     3.2000     
+=== Now generating aggregator (Velocity, MAC, UIG, SEI). ===
 
-=== Detailed Calculations for ni/labview-icon-editor: MAC ===
-Q-Range                              | (Iss+Comm+React)Scaled | pullScaled | MAC=0.8*(sum)+0.2*pull
--------------------------------------+------------------------+------------+-----------------------
-Q1(2024-05-03..2024-08-03)           |        37.0000         |   7.0000   |        31.0000        
-Q2(2024-08-03..2024-11-03)           |        51.0000         |  17.0000   |        44.2000        
-Q3(2024-11-03..2025-01-24) (partial) |        103.0000        |  21.0000   |        86.6000        
+[INFO] Created velocity_fiscal.png with chart + table: Velocity (ni/labview-icon-editor) - Fiscal
+[INFO] Created mac_fiscal.png with chart + table: MAC (ni/labview-icon-editor) - Fiscal
+[INFO] Created uig_fiscal.png with chart + table: UIG (ni/labview-icon-editor) - Fiscal
+[INFO] Created sei_fiscal.png with chart + table: SEI (ni/labview-icon-editor) - Fiscal
 
-
-=== Merges Target vs. Merges ni/labview-icon-editor ===
-Quarter                            | Merges Target | Merges (ni/labview-icon-editor)
------------------------------------+---------------+--------------------------------
-Q1(2024-05-03-2024-08-03)          |     19.67     |              5.00              
-Q2(2024-08-03-2024-11-03)          |     1.00      |              8.00              
-Q3(2024-11-03-2025-01-24)(partial) |     1.67      |              13.00             
-Q4(No data)                        |     2.33      |              0.00              
-Q5(No data)                        |     1.00      |              0.00              
-Q6(No data)                        |     3.67      |              0.00              
-Q7(No data)                        |     0.00      |              0.00              
-Q8(No data)                        |     0.00      |              0.00              
-
-=== Closed Target vs. Closed ni/labview-icon-editor ===
-Quarter                            | Closed Target | Closed (ni/labview-icon-editor)
------------------------------------+---------------+--------------------------------
-Q1(2024-05-03-2024-08-03)          |     36.33     |              0.00              
-Q2(2024-08-03-2024-11-03)          |     3.67      |              4.00              
-Q3(2024-11-03-2025-01-24)(partial) |     2.67      |              20.00             
-Q4(No data)                        |     5.00      |              0.00              
-Q5(No data)                        |     4.67      |              0.00              
-Q6(No data)                        |     12.00     |              0.00              
-Q7(No data)                        |     1.33      |              0.00              
-Q8(No data)                        |     0.67      |              0.00              
-
-=== Forks Target vs. Forks ni/labview-icon-editor ===
-Quarter                            | Forks Target | Forks (ni/labview-icon-editor)
------------------------------------+--------------+-------------------------------
-Q1(2024-05-03-2024-08-03)          |   1377.00    |              5.00             
-Q2(2024-08-03-2024-11-03)          |    716.00    |              5.00             
-Q3(2024-11-03-2025-01-24)(partial) |    969.33    |              5.00             
-Q4(No data)                        |   1100.67    |              0.00             
-Q5(No data)                        |   1316.67    |              0.00             
-Q6(No data)                        |   1661.67    |              0.00             
-Q7(No data)                        |   1693.00    |              0.00             
-Q8(No data)                        |   1758.67    |              0.00             
-
-=== Stars Target vs. Stars ni/labview-icon-editor ===
-Quarter                            | Stars Target | Stars (ni/labview-icon-editor)
------------------------------------+--------------+-------------------------------
-Q1(2024-05-03-2024-08-03)          |     0.00     |              9.00             
-Q2(2024-08-03-2024-11-03)          |     0.00     |              5.00             
-Q3(2024-11-03-2025-01-24)(partial) |     0.00     |              2.00             
-Q4(No data)                        |     0.00     |              0.00             
-Q5(No data)                        |     0.00     |              0.00             
-Q6(No data)                        |     0.00     |              0.00             
-Q7(No data)                        |     0.00     |              0.00             
-Q8(No data)                        |     0.00     |              0.00             
-
-=== NewIssues Target vs. NewIssues ni/labview-icon-editor ===
-Quarter                            | NewIssues Target | NewIssues (ni/labview-icon-editor)
------------------------------------+------------------+-----------------------------------
-Q1(2024-05-03-2024-08-03)          |      41.67       |               17.00               
-Q2(2024-08-03-2024-11-03)          |       0.00       |               10.00               
-Q3(2024-11-03-2025-01-24)(partial) |       1.33       |               27.00               
-Q4(No data)                        |       6.00       |                0.00               
-Q5(No data)                        |       5.00       |                0.00               
-Q6(No data)                        |       7.67       |                0.00               
-Q7(No data)                        |       0.00       |                0.00               
-Q8(No data)                        |       0.00       |                0.00               
-
-=== Comments Target vs. Comments ni/labview-icon-editor ===
-Quarter                            | Comments Target | Comments (ni/labview-icon-editor)
------------------------------------+-----------------+----------------------------------
-Q1(2024-05-03-2024-08-03)          |     358.67      |               14.00              
-Q2(2024-08-03-2024-11-03)          |      91.00      |               36.00              
-Q3(2024-11-03-2025-01-24)(partial) |      48.33      |               43.00              
-Q4(No data)                        |     106.00      |               0.00               
-Q5(No data)                        |      82.67      |               0.00               
-Q6(No data)                        |      87.33      |               0.00               
-Q7(No data)                        |      50.00      |               0.00               
-Q8(No data)                        |      48.00      |               0.00               
-
-=== Reactions Target vs. Reactions ni/labview-icon-editor ===
-Quarter                            | Reactions Target | Reactions (ni/labview-icon-editor)
------------------------------------+------------------+-----------------------------------
-Q1(2024-05-03-2024-08-03)          |       0.00       |                6.00               
-Q2(2024-08-03-2024-11-03)          |      23.00       |                5.00               
-Q3(2024-11-03-2025-01-24)(partial) |      30.33       |               33.00               
-Q4(No data)                        |      24.67       |                0.00               
-Q5(No data)                        |      12.33       |                0.00               
-Q6(No data)                        |      10.33       |                0.00               
-Q7(No data)                        |       4.67       |                0.00               
-Q8(No data)                        |       5.00       |                0.00               
-
-=== Pulls Target vs. Pulls ni/labview-icon-editor ===
-Quarter                            | Pulls Target | Pulls (ni/labview-icon-editor)
------------------------------------+--------------+-------------------------------
-Q1(2024-05-03-2024-08-03)          |    27.33     |              7.00             
-Q2(2024-08-03-2024-11-03)          |     1.00     |             17.00             
-Q3(2024-11-03-2025-01-24)(partial) |     1.33     |             21.00             
-Q4(No data)                        |     3.67     |              0.00             
-Q5(No data)                        |     1.33     |              0.00             
-Q6(No data)                        |     3.67     |              0.00             
-Q7(No data)                        |     0.00     |              0.00             
-Q8(No data)                        |     0.00     |              0.00             
-
-=== Velocity Target vs. Velocity ni/labview-icon-editor ===
-Quarter                            | Velocity Target | Velocity (ni/labview-icon-editor)
------------------------------------+-----------------+----------------------------------
-Q1(2024-05-03-2024-08-03)          |      0.60       |               0.27               
-Q2(2024-08-03-2024-11-03)          |      0.50       |               2.48               
-Q3(2024-11-03-2025-01-24)(partial) |      0.40       |               7.06               
-Q4(No data)                        |      0.52       |               0.00               
-Q5(No data)                        |      0.64       |               0.00               
-Q6(No data)                        |      0.67       |               0.00               
-Q7(No data)                        |      0.09       |               0.00               
-Q8(No data)                        |      0.04       |               0.00               
-
-=== MAC Target vs. MAC ni/labview-icon-editor ===
-Quarter                            | MAC Target | MAC (ni/labview-icon-editor)
------------------------------------+------------+-----------------------------
-Q1(2024-05-03-2024-08-03)          |   67.34    |            31.00            
-Q2(2024-08-03-2024-11-03)          |    7.67    |            44.20            
-Q3(2024-11-03-2025-01-24)(partial) |    7.40    |            86.60            
-Q4(No data)                        |   15.99    |             0.00            
-Q5(No data)                        |   15.69    |             0.00            
-Q6(No data)                        |   26.17    |             0.00            
-Q7(No data)                        |    4.56    |             0.00            
-Q8(No data)                        |    5.28    |             0.00            
-
-=== UIG Target vs. UIG ni/labview-icon-editor ===
-Quarter                            | UIG Target | UIG (ni/labview-icon-editor)
------------------------------------+------------+-----------------------------
-Q1(2024-05-03-2024-08-03)          |    0.52    |             7.40            
-Q2(2024-08-03-2024-11-03)          |    0.32    |             5.00            
-Q3(2024-11-03-2025-01-24)(partial) |    0.43    |             3.20            
-Q4(No data)                        |    0.51    |             0.00            
-Q5(No data)                        |    0.62    |             0.00            
-Q6(No data)                        |    1.02    |             0.00            
-Q7(No data)                        |    1.17    |             0.00            
-Q8(No data)                        |    1.41    |             0.00            
-
-=== SEI Target vs. SEI ni/labview-icon-editor ===
-Quarter                            | SEI Target | SEI (ni/labview-icon-editor)
------------------------------------+------------+-----------------------------
-Q1(2024-05-03-2024-08-03)          |  33.9542   |           17.0618           
-Q2(2024-08-03-2024-11-03)          |   4.0504   |           23.8429           
-Q3(2024-11-03-2025-01-24)(partial) |   3.9075   |           46.0577           
-Q4(No data)                        |   8.2521   |            0.0000           
-Q5(No data)                        |   8.1580   |            0.0000           
-Q6(No data)                        |  13.4909   |            0.0000           
-Q7(No data)                        |   2.5434   |            0.0000           
-Q8(No data)                        |   2.9341   |            0.0000           
-
-=== Final: 12 charts (8 raw + 4 aggregator) generated. ===
-
+=== Done. BFS debug plus raw variable PNGs plus aggregator PNGs. ===
