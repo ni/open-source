@@ -7,11 +7,11 @@ import time
 import logging
 import yaml
 from logging.handlers import TimedRotatingFileHandler
-from datetime import datetime
 from fetch_events import (
     fetch_issue_events_for_all_issues,
     fetch_pull_events_for_all_pulls
 )
+from datetime import datetime, timedelta
 
 import requests
 from requests.adapters import HTTPAdapter, Retry
@@ -43,9 +43,9 @@ def load_config():
         "console_level":"DEBUG",
         "file_level":"DEBUG"
     })
+    # The number of days we add to earliest GH commit date => final baseline
+    cfg.setdefault("days_to_capture",1)
     cfg.setdefault("max_retries",20)
-    # Fallback date => used if no baseline_date in DB
-    cfg.setdefault("fallback_baseline_date","2015-01-01")
     return cfg
 
 def setup_logging(cfg):
@@ -95,71 +95,172 @@ def rotate_token():
     session.headers["Authorization"] = f"token {new_token}"
     logging.info("Rotated token from idx %d to %d => not showing partial token", old_idx, CURRENT_TOKEN_INDEX)
 
-def check_if_repo_baselines_empty(conn):
-    """
-    Returns True if repo_baselines table has zero rows => brand-new DB
-    """
-    c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM repo_baselines")
-    row = c.fetchone()
-    c.close()
-    return (row and row[0] == 0)
+def main():
+    global TOKENS, session, token_info, CURRENT_TOKEN_INDEX
+    cfg = load_config()
+    setup_logging(cfg)
+    logging.info("Starting => watchers=full => numeric issues/pulls => skip older stars => single-thread => ALWAYS baseline=earliest GH commit + days_to_capture")
 
-def insert_repo_baseline_if_missing(conn, owner, repo, fallback_dt):
-    """
-    Insert (owner,repo,baseline_date=fallback_dt, enabled=1, updated_at=NOW()) if missing.
-    """
-    c=conn.cursor()
-    sql="""
-    INSERT INTO repo_baselines (owner, repo, baseline_date, enabled, updated_at)
-    VALUES (%s,%s,%s,1,NOW())
-    ON DUPLICATE KEY UPDATE
-      baseline_date=VALUES(baseline_date),
-      enabled=1,
-      updated_at=NOW()
-    """
-    c.execute(sql,(owner,repo,fallback_dt))
-    conn.commit()
-    c.close()
+    conn = connect_db(cfg, create_db_if_missing=True)
+    create_tables(conn)
 
-def get_earliest_item_created_date_in_db(conn, repo_name):
-    """
-    If the earliest item is newer than baseline => skip entire repo approach
-    """
-    c = conn.cursor()
-    c.execute("""
-    SELECT MIN(created_at) 
-    FROM (
-      SELECT created_at FROM issues WHERE repo_name=%s
-      UNION
-      SELECT created_at FROM pulls WHERE repo_name=%s
-    ) sub
-    """,(repo_name,repo_name))
-    row = c.fetchone()
-    c.close()
-    if row and row[0]:
-        return row[0]
-    return None
+    TOKENS = cfg["tokens"]
+    session = setup_session_with_retry()
+    token_info = {}
 
-def get_minmax_all_tables(conn, repo_name):
+    if TOKENS:
+        session.headers["Authorization"] = f"token {TOKENS[0]}"
+
+    max_retries = cfg["max_retries"]
+    days_to_capture = cfg["days_to_capture"]
+
+    summary_data = []
+    all_repos = get_repo_list()
+    for (owner,repo) in all_repos:
+        # 1) get earliest GH commit => if none => skip entire
+        earliest_gh_date = get_earliest_gh_commit_date(owner,repo,session,handle_rate_limit_func,max_retries)
+        if not earliest_gh_date:
+            logging.warning("Repo %s/%s => no earliest GH commit => skip",owner,repo)
+            skip_reason="no_earliest_gh_commit"
+            stats=gather_repo_stats(conn,owner,repo,skip_reason,None,None,False)
+            stats["fetched_min_dt"]=None
+            stats["fetched_max_dt"]=None
+            summary_data.append(stats)
+            continue
+
+        # 2) baseline_date = earliestGhCommit + days_to_capture
+        baseline_dt = earliest_gh_date + timedelta(days=days_to_capture)
+        # store in repo_baselines => enabled=1
+        update_repo_baseline(conn, owner, repo, baseline_dt)
+
+        # 3) check earliest DB date => if it's beyond baseline => skip
+        earliest_db_dt = get_minmax_earliest_db_date(conn,owner,repo)
+        skip_reason="None"
+        if earliest_db_dt and earliest_db_dt>baseline_dt:
+            skip_reason="earliest_in_db_newer_than_baseline"
+            logging.info("Repo %s/%s => earliest DB item %s > baseline=%s => skip entire repo",
+                         owner,repo,earliest_db_dt,baseline_dt)
+            stats=gather_repo_stats(conn,owner,repo,skip_reason,earliest_db_dt,baseline_dt,True)
+            stats["fetched_min_dt"]=None
+            stats["fetched_max_dt"]=None
+            summary_data.append(stats)
+            continue
+
+        logging.info("Repo %s/%s => watchers => full => numeric issues/pulls => final baseline_date=%s => proceed",
+                     owner,repo,baseline_dt)
+
+        # normal fetch watchers/forks/stars/issues/pulls...
+        from fetch_forks_stars_watchers import (
+            list_watchers_single_thread,
+            list_forks_single_thread,
+            list_stars_single_thread
+        )
+        list_watchers_single_thread(conn,owner,repo,1,session,handle_rate_limit_func,max_retries)
+        list_forks_single_thread(conn,owner,repo,1,session,handle_rate_limit_func,max_retries)
+        list_stars_single_thread(conn,owner,repo,1,baseline_dt,session,handle_rate_limit_func,max_retries)
+
+        from fetch_issues import list_issues_single_thread
+        list_issues_single_thread(conn,owner,repo,1,session,handle_rate_limit_func,max_retries)
+
+        from fetch_pulls import list_pulls_single_thread
+        list_pulls_single_thread(conn,owner,repo,1,session,handle_rate_limit_func,max_retries)
+
+        from fetch_events import (
+            fetch_issue_events_for_all_issues,
+            fetch_pull_events_for_all_pulls
+        )
+        fetch_issue_events_for_all_issues(conn,owner,repo,1,session,handle_rate_limit_func,max_retries)
+        fetch_pull_events_for_all_pulls(conn,owner,repo,1,session,handle_rate_limit_func,max_retries)
+
+        from fetch_comments import fetch_comments_for_all_issues
+        fetch_comments_for_all_issues(conn,owner,repo,1,session,handle_rate_limit_func,max_retries)
+
+        from fetch_issue_reactions import fetch_issue_reactions_for_all_issues
+        fetch_issue_reactions_for_all_issues(conn,owner,repo,1,session,handle_rate_limit_func,max_retries)
+
+        # if comment_reactions => do them here
+
+        stats=gather_repo_stats(conn,owner,repo,"None",earliest_db_dt,baseline_dt,True)
+        min_dt,max_dt = get_minmax_all_tables(conn,f"{owner}/{repo}")
+        stats["fetched_min_dt"]=min_dt
+        stats["fetched_max_dt"]=max_dt
+        summary_data.append(stats)
+
+    conn.close()
+    logging.info("All done => printing final summary table & multiline details...\n")
+    print_final_summary_table(summary_data)
+    print_detailed_repo_summaries(summary_data)
+    logging.info("Finished completely.")
+
+def get_earliest_gh_commit_date(owner, repo, session, handle_rate_limit_func, max_retries):
     """
-    Gathers the overall min and max created_at (or starred_at) across:
-      forks.created_at
-      stars.starred_at
-      issues.created_at
-      pulls.created_at
-      issue_events.created_at
-      pull_events.created_at
-      issue_comments.created_at
-      comment_reactions.created_at
-      issue_reactions.created_at
+    Single call to /repos/{owner}/{repo}/commits?sort=committer-date&direction=asc&per_page=1
+    Return datetime or None => skip
+    """
+    url=f"https://api.github.com/repos/{owner}/{repo}/commits"
+    params={
+        "sort":"committer-date",
+        "direction":"asc",
+        "per_page":1,
+        "page":1
+    }
+    (resp, success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
+    if not success or not resp:
+        return None
+    data=resp.json()
+    if not data:
+        return None
+    cstr=data[0].get("commit",{}).get("committer",{}).get("date")
+    if not cstr:
+        return None
+    try:
+        dt=datetime.strptime(cstr,"%Y-%m-%dT%H:%M:%SZ")
+        return dt
+    except ValueError:
+        return None
+
+def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
+    import requests
+    from requests.exceptions import ConnectionError
+    mini_retry_attempts=3
+    for attempt in range(1,max_retries+1):
+        local_attempt=1
+        while local_attempt<=mini_retry_attempts:
+            try:
+                resp=session.get(url,params=params)
+                handle_rate_limit_func(resp)
+                if resp.status_code==200:
+                    return (resp,True)
+                elif resp.status_code in (403,429,500,502,503,504):
+                    logging.warning("HTTP %d => attempt %d/%d => retry => %s",
+                                    resp.status_code,attempt,max_retries,url)
+                    time.sleep(5)
+                else:
+                    logging.warning("HTTP %d => attempt %d => break => %s",
+                                    resp.status_code,attempt,url)
+                    return (resp,False)
+                break
+            except ConnectionError:
+                logging.warning("Connection error => local mini-retry => %s",url)
+                time.sleep(3)
+                local_attempt+=1
+        if local_attempt>mini_retry_attempts:
+            logging.warning("Exhausted local mini-retry => break => %s",url)
+            return (None,False)
+    logging.warning("Exceeded max_retries => give up => %s",url)
+    return (None,False)
+
+def get_minmax_earliest_db_date(conn, owner, repo):
+    """
+    Return earliest date from union across forks/stars/issues/pulls/events/comments/reactions
     watchers => no date
-    If no items, returns (None,None).
+    If none => None
     """
-    c = conn.cursor()
-    # We'll union all date-time fields into one derived table, then find min and max
+    repo_name=f"{owner}/{repo}"
+    c=conn.cursor()
     c.execute("""
-    SELECT MIN(dt), MAX(dt) FROM (
+    SELECT MIN(dt)
+    FROM (
       SELECT created_at as dt FROM forks WHERE repo_name=%s
       UNION ALL
       SELECT starred_at as dt FROM stars WHERE repo_name=%s
@@ -179,127 +280,78 @@ def get_minmax_all_tables(conn, repo_name):
       SELECT created_at as dt FROM issue_reactions WHERE repo_name=%s
     ) sub
     """,(repo_name,repo_name,repo_name,repo_name,repo_name,repo_name,repo_name,repo_name,repo_name))
-    row = c.fetchone()
+    row=c.fetchone()
+    c.close()
+    if row and row[0]:
+        return row[0]
+    return None
+
+def get_minmax_all_tables(conn, repo_name):
+    """
+    Return (min_dt, max_dt) across forks,stars,issues,pulls,events,comments,comment_reactions,issue_reactions
+    watchers => no date
+    If none => (None,None)
+    """
+    c=conn.cursor()
+    c.execute("""
+    SELECT MIN(dt), MAX(dt)
+    FROM (
+      SELECT created_at as dt FROM forks WHERE repo_name=%s
+      UNION ALL
+      SELECT starred_at as dt FROM stars WHERE repo_name=%s
+      UNION ALL
+      SELECT created_at as dt FROM issues WHERE repo_name=%s
+      UNION ALL
+      SELECT created_at as dt FROM pulls WHERE repo_name=%s
+      UNION ALL
+      SELECT created_at as dt FROM issue_events WHERE repo_name=%s
+      UNION ALL
+      SELECT created_at as dt FROM pull_events WHERE repo_name=%s
+      UNION ALL
+      SELECT created_at as dt FROM issue_comments WHERE repo_name=%s
+      UNION ALL
+      SELECT created_at as dt FROM comment_reactions WHERE repo_name=%s
+      UNION ALL
+      SELECT created_at as dt FROM issue_reactions WHERE repo_name=%s
+    ) sub
+    """,(repo_name,repo_name,repo_name,repo_name,repo_name,repo_name,repo_name,repo_name,repo_name))
+    row=c.fetchone()
     c.close()
     if row and (row[0] or row[1]):
         return (row[0], row[1])
     return (None,None)
 
-def main():
-    global TOKENS, session, token_info, CURRENT_TOKEN_INDEX
-    cfg = load_config()
-    setup_logging(cfg)
-    logging.info("Starting => watchers=full => numeric issues/pulls => skip older stars => single-thread => final summary => if brand-new DB => populate baselines")
-
-    conn = connect_db(cfg, create_db_if_missing=True)
-    create_tables(conn)
-
-    # Check if brand-new => if so, populate repo_baselines with fallback baseline_date, enabled=1
-    new_db = check_if_repo_baselines_empty(conn)
-    if new_db:
-        logging.info("Detected brand-new DB => populating repo_baselines with fallback date, enabled=1")
-        fallback_str = cfg["fallback_baseline_date"]
-        fallback_dt = datetime.strptime(fallback_str, "%Y-%m-%d")
-        for (owner,repo) in get_repo_list():
-            insert_repo_baseline_if_missing(conn, owner, repo, fallback_dt)
-
-    TOKENS = cfg["tokens"]
-    session = setup_session_with_retry()
-    token_info = {}
-
-    if TOKENS:
-        session.headers["Authorization"] = f"token {TOKENS[0]}"
-
-    max_retries = cfg["max_retries"]
-    fallback_str = cfg["fallback_baseline_date"]
-    fallback_dt = datetime.strptime(fallback_str, "%Y-%m-%d")
-
-    summary_data = []
-
-    all_repos = get_repo_list()
-    for (owner,repo) in all_repos:
-        baseline_dt, enabled = get_baseline_info(conn,owner,repo)
-        if not baseline_dt:
-            baseline_dt = fallback_dt
-
-        skip_reason = "None"
-        if enabled==0:
-            skip_reason="disabled"
-
-        repo_name=f"{owner}/{repo}"
-        earliest_in_db=None
-        if enabled==1:
-            earliest_in_db = get_earliest_item_created_date_in_db(conn,repo_name)
-            if earliest_in_db and earliest_in_db>baseline_dt:
-                skip_reason="earliest_in_db_newer_than_baseline"
-
-        if enabled==0:
-            logging.info("Repo %s/%s => disabled => skip run",owner,repo)
-        elif skip_reason=="earliest_in_db_newer_than_baseline":
-            logging.info("Repo %s/%s => earliest DB item %s > baseline=%s => skip entire repo",
-                         owner,repo,earliest_in_db,baseline_dt)
-        else:
-            logging.info("Repo %s/%s => watchers => full => numeric issues/pulls => skip stars older than baseline=%s => proceed",
-                         owner,repo,baseline_dt)
-            from fetch_forks_stars_watchers import (
-                list_watchers_single_thread,
-                list_forks_single_thread,
-                list_stars_single_thread
-            )
-            list_watchers_single_thread(conn,owner,repo,enabled,session,handle_rate_limit_func,max_retries)
-            list_forks_single_thread(conn,owner,repo,enabled,session,handle_rate_limit_func,max_retries)
-            list_stars_single_thread(conn,owner,repo,enabled,baseline_dt,session,handle_rate_limit_func,max_retries)
-
-            from fetch_issues import list_issues_single_thread
-            list_issues_single_thread(conn,owner,repo,enabled,session,handle_rate_limit_func,max_retries)
-
-            from fetch_pulls import list_pulls_single_thread
-            list_pulls_single_thread(conn,owner,repo,enabled,session,handle_rate_limit_func,max_retries)
-
-            from fetch_events import (
-                fetch_issue_events_for_all_issues,
-                fetch_pull_events_for_all_pulls
-            )
-            fetch_issue_events_for_all_issues(conn,owner,repo,enabled,session,handle_rate_limit_func,max_retries)
-            fetch_pull_events_for_all_pulls(conn,owner,repo,enabled,session,handle_rate_limit_func,max_retries)
-
-            from fetch_comments import fetch_comments_for_all_issues
-            fetch_comments_for_all_issues(conn,owner,repo,enabled,session,handle_rate_limit_func,max_retries)
-
-            from fetch_issue_reactions import fetch_issue_reactions_for_all_issues
-            fetch_issue_reactions_for_all_issues(conn,owner,repo,enabled,session,handle_rate_limit_func,max_retries)
-
-            # If you have comment_reactions => do that here
-
-        # gather stats => includes counting closed merges, etc.
-        stats = gather_repo_stats(conn, owner, repo, skip_reason, earliest_in_db, baseline_dt, enabled)
-        # also gather min/max of ALL data fetched
-        min_dt, max_dt = get_minmax_all_tables(conn, repo_name)
-        stats["fetched_min_dt"] = min_dt
-        stats["fetched_max_dt"] = max_dt
-
-        summary_data.append(stats)
-
-    conn.close()
-    logging.info("All done => printing final summary => also printing a separate summary per repo with min_dt, max_dt, baseline.\n")
-
-    print_final_summary_table(summary_data)
-    print_detailed_repo_summaries(summary_data)
-
-    logging.info("Finished completely.")
+def update_repo_baseline(conn, owner, repo, baseline_dt):
+    """
+    Insert or update (owner,repo, baseline_date, enabled=1)
+    """
+    c=conn.cursor()
+    sql="""
+    INSERT INTO repo_baselines (owner, repo, baseline_date, enabled, updated_at)
+    VALUES (%s,%s,%s,1,NOW())
+    ON DUPLICATE KEY UPDATE
+      baseline_date=VALUES(baseline_date),
+      enabled=1,
+      updated_at=NOW()
+    """
+    c.execute(sql,(owner,repo,baseline_dt))
+    conn.commit()
+    c.close()
 
 def gather_repo_stats(conn, owner, repo,
-                      skip_reason, earliest_db_dt, baseline_dt, enabled):
-    repo_name = f"{owner}/{repo}"
-    stats_dict = {
+                      skip_reason, earliest_db_dt, baseline_dt,
+                      enabled):
+    """
+    Summaries => if skip_reason!="None" or not enabled => zero counts
+    else => actual counts from DB
+    """
+    stats_dict={
       "owner_repo": f"{owner}/{repo}",
       "skip_reason": skip_reason,
       "earliest_db_dt": earliest_db_dt,
-      "baseline_dt": baseline_dt,
-      "enabled": enabled
+      "baseline_dt": baseline_dt
     }
-    if skip_reason!="None":
-        # zero them out
+    if skip_reason!="None" or not enabled:
         stats_dict["reactions_in_issues"] = 0
         stats_dict["issues_count"] = 0
         stats_dict["reactions_in_pulls"] = 0
@@ -318,7 +370,8 @@ def gather_repo_stats(conn, owner, repo,
         stats_dict["merged_pulls"] = 0
         return stats_dict
 
-    c = conn.cursor()
+    repo_name=f"{owner}/{repo}"
+    c=conn.cursor()
 
     c.execute("SELECT COUNT(*) FROM issue_reactions WHERE repo_name=%s",(repo_name,))
     stats_dict["reactions_in_issues"]=c.fetchone()[0]
@@ -392,9 +445,6 @@ def gather_repo_stats(conn, owner, repo,
     return stats_dict
 
 def print_final_summary_table(summary_data):
-    """
-    Print an aligned one-line table with columns like skipReason, issues, pulls, watchers, etc.
-    """
     col_repo_width = 25
     col_skip_width = 12
     header_parts = [
@@ -439,23 +489,15 @@ def print_final_summary_table(summary_data):
     print("===============================================================")
 
 def print_detailed_repo_summaries(summary_data):
-    """
-    Print a separate multiline summary per repo, showing:
-      - earliest_in_db
-      - baseline_dt
-      - skip_reason
-      - fetched_min_dt, fetched_max_dt
-        which are the earliest/ latest we actually have in all tables
-    """
     print("")
     print("========== DETAILED SUMMARY PER REPO ==========")
     for row in summary_data:
         print(f"--- Repo: {row['owner_repo']} ---")
         print(f"    SkipReason: {row['skip_reason']}")
+        print(f"    EarliestInDB: {row['earliest_db_dt']}")
         print(f"    BaselineDate: {row['baseline_dt']}")
-        print(f"    EarliestInDB (from old data): {row['earliest_db_dt']}")
-        print(f"    FetchedMinDt (this session): {row.get('fetched_min_dt',None)}")
-        print(f"    FetchedMaxDt (this session): {row.get('fetched_max_dt',None)}")
+        print(f"    FetchedMinDt: {row.get('fetched_min_dt',None)}")
+        print(f"    FetchedMaxDt: {row.get('fetched_max_dt',None)}")
         print("")
 
 def handle_rate_limit_func(resp):
