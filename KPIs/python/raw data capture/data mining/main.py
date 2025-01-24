@@ -208,6 +208,12 @@ def main():
             session,handle_rate_limit_func,
             max_retries
         )
+        from fetch_comment_reactions import fetch_comment_reactions_for_all_comments
+        fetch_comment_reactions_for_all_comments(
+            conn, owner, repo, en,
+            session, handle_rate_limit_func,
+            max_retries
+        )
 
         from fetch_issue_reactions import fetch_issue_reactions_for_all_issues
         fetch_issue_reactions_for_all_issues(
