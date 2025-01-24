@@ -413,7 +413,7 @@ def main():
     from scale_factors import compute_scale_factors
 
     # default repos
-    repos= ["ni/labview-icon-editor","facebook/react","tensorflow/tensorflow","dotnet/core"]
+    repos= ["facebook/react","tensorflow/tensorflow","dotnet/core"]
     scaling_repo= get_scaling_repo() or "ni/labview-icon-editor"
     if scaling_repo not in repos:
         repos.append(scaling_repo)
