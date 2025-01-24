@@ -1,31 +1,19 @@
 # db.py
-"""
-Connects to MySQL, creates or uses an existing DB,
-and builds the required tables if not present.
-
-Tables:
- - repo_baselines: manages 'baseline_date' and 'enabled' per repo
- - issues, pulls, forks, etc.: each storing data from GitHub
- - comment_reactions, issue_reactions, events...
-Using LONGTEXT for big fields (e.g., comment bodies).
-"""
-
 import logging
 import mysql.connector
 
 def connect_db(cfg, create_db_if_missing=True):
-    db_conf = cfg["mysql"]
-    db_name = db_conf["db"]
+    db_conf=cfg["mysql"]
+    db_name=db_conf["db"]
 
-    # Connect w/o specifying DB => create if missing
-    tmp_conn = mysql.connector.connect(
+    tmp_conn=mysql.connector.connect(
         host=db_conf["host"],
         port=db_conf["port"],
         user=db_conf["user"],
         password=db_conf["password"],
         database=None
     )
-    tmp_cursor = tmp_conn.cursor()
+    tmp_cursor=tmp_conn.cursor()
     if create_db_if_missing:
         logging.info("Ensuring database '%s' exists...", db_name)
         tmp_cursor.execute(f"CREATE DATABASE IF NOT EXISTS {db_name}")
@@ -33,8 +21,7 @@ def connect_db(cfg, create_db_if_missing=True):
     tmp_cursor.close()
     tmp_conn.close()
 
-    # Now connect to actual DB
-    conn = mysql.connector.connect(
+    conn=mysql.connector.connect(
         host=db_conf["host"],
         port=db_conf["port"],
         user=db_conf["user"],
@@ -44,7 +31,7 @@ def connect_db(cfg, create_db_if_missing=True):
     return conn
 
 def create_tables(conn):
-    c = conn.cursor()
+    c=conn.cursor()
 
     c.execute("""
     CREATE TABLE IF NOT EXISTS repo_baselines (
@@ -100,7 +87,6 @@ def create_tables(conn):
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
 
-    # LONGTEXT for comment bodies
     c.execute("""
     CREATE TABLE IF NOT EXISTS issue_comments (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -139,10 +125,10 @@ def create_tables(conn):
     c.execute("""
     CREATE TABLE IF NOT EXISTS stars (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      repo_name  VARCHAR(255) NOT NULL,
+      repo_name VARCHAR(255) NOT NULL,
       user_login VARCHAR(255) NOT NULL,
       starred_at DATETIME,
-      raw_json   JSON,
+      raw_json JSON,
       UNIQUE KEY (repo_name, user_login, starred_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
@@ -161,11 +147,11 @@ def create_tables(conn):
     c.execute("""
     CREATE TABLE IF NOT EXISTS issue_reactions (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      repo_name    VARCHAR(255) NOT NULL,
+      repo_name VARCHAR(255) NOT NULL,
       issue_number INT NOT NULL,
-      reaction_id  BIGINT UNSIGNED NOT NULL,
-      created_at   DATETIME,
-      raw_json     JSON,
+      reaction_id BIGINT UNSIGNED NOT NULL,
+      created_at DATETIME,
+      raw_json JSON,
       UNIQUE KEY (repo_name, issue_number, reaction_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)

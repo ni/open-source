@@ -5,6 +5,19 @@ import requests
 from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
 
+def get_last_page(resp):
+    link_header=resp.headers.get("Link")
+    if not link_header:
+        return None
+    parts=link_header.split(',')
+    for p in parts:
+        if 'rel="last"' in p:
+            import re
+            m=re.search(r'[?&]page=(\d+)',p)
+            if m:
+                return int(m.group(1))
+    return None
+
 def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
     mini_retry_attempts=3
     for attempt in range(1,max_retries+1):
@@ -25,7 +38,7 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
                     return (resp,False)
                 break
             except requests.exceptions.ConnectionError:
-                logging.warning("Conn error => local mini-retry => %s",url)
+                logging.warning("Connection error => local mini-retry => %s",url)
                 time.sleep(3)
                 local_attempt+=1
         if local_attempt>mini_retry_attempts:
@@ -34,7 +47,6 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
     logging.warning("Exceeded max_retries => give up => %s",url)
     return (None,False)
 
-# watchers => full => no numeric skip
 def list_watchers_single_thread(conn, owner, repo, enabled,
                                 session, handle_rate_limit_func,
                                 max_retries):
@@ -42,18 +54,26 @@ def list_watchers_single_thread(conn, owner, repo, enabled,
         logging.info("Repo %s/%s => disabled => skip watchers",owner,repo)
         return
     page=1
+    last_page=None
     repo_name=f"{owner}/{repo}"
     while True:
         url=f"https://api.github.com/repos/{owner}/{repo}/subscribers"
         params={"page":page,"per_page":100}
         (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
         if not success:
+            logging.warning("Watchers => can't get page %d => skip => %s",page,repo_name)
             break
         data=resp.json()
         if not data:
             break
+        if last_page is None:
+            last_page=get_last_page(resp)
+        if last_page:
+            progress=(page/last_page)*100
+            logging.debug(f"[DEBUG] watchers => page={page}/{last_page} => {progress:.3f}%% => {repo_name}")
+
         for user_obj in data:
-            insert_watcher_record(conn, repo_name, user_obj)
+            insert_watcher_record(conn,repo_name,user_obj)
         if len(data)<100:
             break
         page+=1
@@ -73,27 +93,16 @@ def insert_watcher_record(conn, repo_name, user_obj):
     conn.commit()
     c.close()
 
-# numeric skip => forks => skip fork_id <= known
-def get_max_fork_id(conn, repo_name):
-    c=conn.cursor()
-    c.execute("SELECT MAX(fork_id) FROM forks WHERE repo_name=%s",(repo_name,))
-    row=c.fetchone()
-    c.close()
-    if row and row[0]:
-        return row[0]
-    return 0
-
 def list_forks_single_thread(conn, owner, repo, enabled,
                              session, handle_rate_limit_func,
                              max_retries):
     if enabled==0:
         logging.info("Repo %s/%s => disabled => skip forks",owner,repo)
         return
-    repo_name=f"{owner}/{repo}"
-    highest_fid=get_max_fork_id(conn,repo_name)
     page=1
+    last_page=None
+    repo_name=f"{owner}/{repo}"
     while True:
-        old_val=highest_fid
         old_en=enabled
         new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,None,old_en)
         if new_en==0:
@@ -104,30 +113,31 @@ def list_forks_single_thread(conn, owner, repo, enabled,
         params={"sort":"oldest","page":page,"per_page":100}
         (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
         if not success:
+            logging.warning("Forks => can't get page %d => skip => %s",page,repo_name)
             break
         data=resp.json()
         if not data:
             break
-        new_count=0
-        for fork_obj in data:
-            fid=fork_obj["id"]
-            if fid<=highest_fid:
-                continue
-            c_str=fork_obj.get("created_at")
-            cdt=None
-            if c_str:
-                cdt=datetime.strptime(c_str,"%Y-%m-%dT%H:%M:%SZ")
-            insert_fork_record(conn,repo_name,fork_obj,fid,cdt)
-            new_count+=1
-            if fid>highest_fid:
-                highest_fid=fid
-        if new_count<100:
+        if last_page is None:
+            last_page=get_last_page(resp)
+        if last_page:
+            progress=(page/last_page)*100
+            logging.debug(f"[DEBUG] forks => page={page}/{last_page} => {progress:.3f}%% => {repo_name}")
+
+        for fk in data:
+            insert_fork_record(conn,repo_name,fk)
+        if len(data)<100:
             break
         page+=1
 
-def insert_fork_record(conn, repo_name, fork_obj, fork_id, created_dt):
+def insert_fork_record(conn, repo_name, fork_obj):
     import json
     raw_str=json.dumps(fork_obj,ensure_ascii=False)
+    fork_id=fork_obj["id"]
+    cstr=fork_obj.get("created_at")
+    cdt=None
+    if cstr:
+        cdt=datetime.strptime(cstr,"%Y-%m-%dT%H:%M:%SZ")
     c=conn.cursor()
     sql="""
     INSERT INTO forks (repo_name, fork_id, created_at, raw_json)
@@ -137,33 +147,23 @@ def insert_fork_record(conn, repo_name, fork_obj, fork_id, created_dt):
       created_at=VALUES(created_at),
       raw_json=VALUES(raw_json)
     """
-    c.execute(sql,(repo_name,fork_id,created_dt,raw_str))
+    c.execute(sql,(repo_name,fork_id,cdt,raw_str))
     conn.commit()
     c.close()
 
-# numeric skip => stars => star_id
-def get_max_star_id(conn, repo_name):
-    c=conn.cursor()
-    c.execute("SELECT MAX(star_id) FROM stars WHERE repo_name=%s",(repo_name,))
-    row=c.fetchone()
-    c.close()
-    if row and row[0]:
-        return row[0]
-    return 0
-
 def list_stars_single_thread(conn, owner, repo, enabled,
+                             baseline_dt,
                              session, handle_rate_limit_func,
                              max_retries):
     if enabled==0:
         logging.info("Repo %s/%s => disabled => skip stars",owner,repo)
         return
     repo_name=f"{owner}/{repo}"
-    highest_sid=get_max_star_id(conn,repo_name)
     old_accept=session.headers.get("Accept","")
     session.headers["Accept"]="application/vnd.github.v3.star+json"
     page=1
+    last_page=None
     while True:
-        old_val=highest_sid
         old_en=enabled
         new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,None,old_en)
         if new_en==0:
@@ -174,43 +174,44 @@ def list_stars_single_thread(conn, owner, repo, enabled,
         params={"page":page,"per_page":100}
         (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
         if not success:
+            logging.warning("Stars => can't get page %d => skip => %s",page,repo_name)
             break
         data=resp.json()
         if not data:
             break
-        new_count=0
+        if last_page is None:
+            last_page=get_last_page(resp)
+        if last_page:
+            progress=(page/last_page)*100
+            logging.debug(f"[DEBUG] stars => page={page}/{last_page} => {progress:.3f}%% => {repo_name}")
+
         import json
         for stargazer in data:
-            # ID from top-level stargazer or from stargazer["user"]["id"] if needed
-            sid=stargazer["id"]
-            if sid<=highest_sid:
+            starred_at_str=stargazer.get("starred_at")
+            if not starred_at_str:
                 continue
-            s_str=stargazer.get("starred_at")
-            cdt=None
-            if s_str:
-                cdt=datetime.strptime(s_str,"%Y-%m-%dT%H:%M:%SZ")
-            insert_star_record(conn,repo_name,stargazer,sid,cdt)
-            new_count+=1
-            if sid>highest_sid:
-                highest_sid=sid
-        if new_count<100:
+            sdt=datetime.strptime(starred_at_str,"%Y-%m-%dT%H:%M:%SZ")
+            if sdt<baseline_dt:
+                # skip older
+                continue
+            user_login=stargazer["user"]["login"]
+            raw_str=json.dumps(stargazer,ensure_ascii=False)
+            insert_star_record(conn,repo_name,user_login,sdt,raw_str)
+
+        if len(data)<100:
             break
         page+=1
     session.headers["Accept"]=old_accept
 
-def insert_star_record(conn, repo_name, star_obj, star_id, starred_dt):
-    import json
-    raw_str=json.dumps(star_obj,ensure_ascii=False)
-    user_login=star_obj["user"]["login"]
+def insert_star_record(conn, repo_name, user_login, starred_dt, raw_str):
     c=conn.cursor()
     sql="""
-    INSERT INTO stars (repo_name, star_id, user_login, starred_at, raw_json)
-    VALUES
-      (%s,%s,%s,%s,%s)
+    INSERT INTO stars (repo_name, user_login, starred_at, raw_json)
+    VALUES (%s,%s,%s,%s)
     ON DUPLICATE KEY UPDATE
       starred_at=VALUES(starred_at),
       raw_json=VALUES(raw_json)
     """
-    c.execute(sql,(repo_name,star_id,user_login,starred_dt,raw_str))
+    c.execute(sql,(repo_name,user_login,starred_dt,raw_str))
     conn.commit()
     c.close()

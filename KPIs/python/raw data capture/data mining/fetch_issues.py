@@ -5,6 +5,19 @@ import requests
 from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
 
+def get_last_page(resp):
+    link_header=resp.headers.get("Link")
+    if not link_header:
+        return None
+    parts=link_header.split(',')
+    for part in parts:
+        if 'rel="last"' in part:
+            import re
+            match=re.search(r'[?&]page=(\d+)',part)
+            if match:
+                return int(match.group(1))
+    return None
+
 def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
     mini_retry_attempts=3
     for attempt in range(1,max_retries+1):
@@ -16,7 +29,7 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
                 if resp.status_code==200:
                     return (resp,True)
                 elif resp.status_code in (403,429,500,502,503,504):
-                    logging.warning("HTTP %d => attempt %d/%d => will retry => %s",
+                    logging.warning("HTTP %d => attempt %d/%d => retry => %s",
                                     resp.status_code,attempt,max_retries,url)
                     time.sleep(5)
                 else:
@@ -25,7 +38,7 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
                     return (resp,False)
                 break
             except requests.exceptions.ConnectionError:
-                logging.warning("Conn error => local mini-retry => %s",url)
+                logging.warning("Connection error => local mini-retry => %s",url)
                 time.sleep(3)
                 local_attempt+=1
         if local_attempt>mini_retry_attempts:
@@ -44,7 +57,8 @@ def get_max_issue_number(conn, repo_name):
     return 0
 
 def list_issues_single_thread(conn, owner, repo, enabled,
-                              session, handle_rate_limit_func, max_retries):
+                              session, handle_rate_limit_func,
+                              max_retries):
     if enabled==0:
         logging.info("Repo %s/%s => disabled => skip issues",owner,repo)
         return
@@ -54,6 +68,7 @@ def list_issues_single_thread(conn, owner, repo, enabled,
     logging.debug(f"[DEBUG] {repo_name} => highest_known_issue={highest_known}")
 
     page=1
+    last_page=None
     while True:
         old_val=highest_known
         old_en=enabled
@@ -71,6 +86,12 @@ def list_issues_single_thread(conn, owner, repo, enabled,
         data=resp.json()
         if not data:
             break
+
+        if last_page is None:
+            last_page=get_last_page(resp)
+        if last_page:
+            progress=(page/last_page)*100
+            logging.debug(f"[DEBUG] issues => page={page}/{last_page} => {progress:.3f}%% => {repo_name}")
 
         new_count=0
         for item in data:

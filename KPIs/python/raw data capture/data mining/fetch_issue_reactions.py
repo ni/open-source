@@ -5,6 +5,19 @@ import requests
 from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
 
+def get_last_page(resp):
+    link_header=resp.headers.get("Link")
+    if not link_header:
+        return None
+    parts=link_header.split(',')
+    for p in parts:
+        if 'rel="last"' in p:
+            import re
+            m=re.search(r'[?&]page=(\d+)',p)
+            if m:
+                return int(m.group(1))
+    return None
+
 def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
     mini_retry_attempts=3
     for attempt in range(1,max_retries+1):
@@ -16,7 +29,7 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
                 if resp.status_code==200:
                     return (resp,True)
                 elif resp.status_code in (403,429,500,502,503,504):
-                    logging.warning("HTTP %d => attempt %d/%d => re-try => %s",
+                    logging.warning("HTTP %d => attempt %d/%d => retry => %s",
                                     resp.status_code,attempt,max_retries,url)
                     time.sleep(5)
                 else:
@@ -25,7 +38,7 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
                     return (resp,False)
                 break
             except requests.exceptions.ConnectionError:
-                logging.warning("Conn error => local mini-retry => %s",url)
+                logging.warning("Connection error => local mini-retry => %s",url)
                 time.sleep(3)
                 local_attempt+=1
         if local_attempt>mini_retry_attempts:
@@ -37,7 +50,8 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
 def get_max_reaction_id_for_issue(conn, repo_name, issue_num):
     c=conn.cursor()
     c.execute("""
-       SELECT MAX(reaction_id) FROM issue_reactions
+       SELECT MAX(reaction_id)
+       FROM issue_reactions
        WHERE repo_name=%s AND issue_number=%s
     """,(repo_name,issue_num))
     row=c.fetchone()
@@ -58,44 +72,49 @@ def fetch_issue_reactions_for_all_issues(conn, owner, repo, enabled,
     rows=c.fetchall()
     c.close()
     for (issue_num,) in rows:
-        fetch_issue_reactions_single_thread(conn, repo_name, issue_num,
-                                            enabled, session,
+        fetch_issue_reactions_single_thread(conn,repo_name,issue_num,
+                                            enabled,session,
                                             handle_rate_limit_func,
                                             max_retries)
 
 def fetch_issue_reactions_single_thread(conn, repo_name, issue_num,
                                         enabled, session,
-                                        handle_rate_limit_func, max_retries):
+                                        handle_rate_limit_func,
+                                        max_retries):
     if enabled==0:
         logging.info("%s => disabled => skip => issue_reactions => #%d",repo_name,issue_num)
         return
-    highest_rid=get_max_reaction_id_for_issue(conn,repo_name,issue_num)
+    old_val=get_max_reaction_id_for_issue(conn,repo_name,issue_num)
+    highest_rid=old_val
+
     old_accept=session.headers.get("Accept","")
     session.headers["Accept"]="application/vnd.github.squirrel-girl-preview+json"
     url=f"https://api.github.com/repos/{repo_name}/issues/{issue_num}/reactions"
     (resp,success)=robust_get_page(session,url,{},handle_rate_limit_func,max_retries)
     session.headers["Accept"]=old_accept
     if not success:
+        logging.warning("Issue Reactions => skip => %s => #%d",repo_name,issue_num)
         return
     data=resp.json()
     if not data:
         return
 
-    new_count=0
-    for reac in data:
-        reac_id=reac["id"]
-        if reac_id<=highest_rid:
-            continue
-        c_str=reac.get("created_at")
-        cdt=None
-        if c_str:
-            cdt=datetime.strptime(c_str,"%Y-%m-%dT%H:%M:%SZ")
-        insert_issue_reaction(conn,repo_name,issue_num,reac_id,cdt,reac)
-        new_count+=1
-        if reac_id>highest_rid:
-            highest_rid=reac_id
+    logging.debug(f"[DEBUG] issue_reactions => 100.000% => {repo_name} => issue #{issue_num}")
 
-def insert_issue_reaction(conn, repo_name, issue_num, reac_id, created_dt, reac_json):
+    for reac in data:
+        rid=reac["id"]
+        if rid<=old_val:
+            continue
+        cstr=reac.get("created_at")
+        cdt=None
+        if cstr:
+            cdt=datetime.strptime(cstr,"%Y-%m-%dT%H:%M:%SZ")
+        insert_issue_reaction(conn,repo_name,issue_num,rid,cdt,reac)
+        if rid>highest_rid:
+            highest_rid=rid
+
+def insert_issue_reaction(conn, repo_name, issue_num, reac_id,
+                          created_dt, reac_json):
     import json
     raw_str=json.dumps(reac_json,ensure_ascii=False)
     c=conn.cursor()

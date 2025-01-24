@@ -5,6 +5,19 @@ import requests
 from datetime import datetime
 from repo_baselines import refresh_baseline_info_mid_run
 
+def get_last_page(resp):
+    link_header=resp.headers.get("Link")
+    if not link_header:
+        return None
+    parts=link_header.split(',')
+    for part in parts:
+        if 'rel="last"' in part:
+            import re
+            match=re.search(r'[?&]page=(\d+)',part)
+            if match:
+                return int(match.group(1))
+    return None
+
 def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
     mini_retry_attempts=3
     for attempt in range(1,max_retries+1):
@@ -25,7 +38,7 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
                     return (resp,False)
                 break
             except requests.exceptions.ConnectionError:
-                logging.warning("Conn error => local mini-retry => %s",url)
+                logging.warning("Connection error => local mini-retry => %s",url)
                 time.sleep(3)
                 local_attempt+=1
         if local_attempt>mini_retry_attempts:
@@ -51,9 +64,8 @@ def list_pulls_single_thread(conn, owner, repo, enabled,
         return
     repo_name=f"{owner}/{repo}"
     highest_known=get_max_pull_number(conn,repo_name)
-    logging.debug(f"[DEBUG] {repo_name} => highest_known_pull={highest_known}")
-
     page=1
+    last_page=None
     while True:
         old_val=highest_known
         old_en=enabled
@@ -72,6 +84,12 @@ def list_pulls_single_thread(conn, owner, repo, enabled,
         if not data:
             break
 
+        if last_page is None:
+            last_page=get_last_page(resp)
+        if last_page:
+            progress=(page/last_page)*100
+            logging.debug(f"[DEBUG] pulls => page={page}/{last_page} => {progress:.3f}%% => {repo_name}")
+
         new_count=0
         for item in data:
             if "pull_request" not in item:
@@ -79,10 +97,10 @@ def list_pulls_single_thread(conn, owner, repo, enabled,
             pull_num=item["number"]
             if pull_num<=highest_known:
                 continue
-            c_created_str=item.get("created_at")
+            cstr=item.get("created_at")
             cdt=None
-            if c_created_str:
-                cdt=datetime.strptime(c_created_str,"%Y-%m-%dT%H:%M:%SZ")
+            if cstr:
+                cdt=datetime.strptime(cstr,"%Y-%m-%dT%H:%M:%SZ")
             insert_pull_record(conn,repo_name,pull_num,cdt)
             new_count+=1
             if pull_num>highest_known:

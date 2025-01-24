@@ -3,9 +3,15 @@
 
 import os
 import sys
+import time
 import logging
 import yaml
 from logging.handlers import TimedRotatingFileHandler
+from datetime import datetime
+from fetch_events import (
+    fetch_issue_events_for_all_issues,
+    fetch_pull_events_for_all_pulls
+)
 
 import requests
 from requests.adapters import HTTPAdapter, Retry
@@ -14,8 +20,8 @@ from db import connect_db, create_tables
 from repo_baselines import get_baseline_info, set_baseline_date
 from repos import get_repo_list
 
-CURRENT_TOKEN_INDEX=0
 TOKENS=[]
+CURRENT_TOKEN_INDEX=0
 session=None
 token_info={}
 
@@ -24,7 +30,9 @@ def load_config():
     if os.path.isfile("config.yaml"):
         with open("config.yaml","r",encoding="utf-8") as f:
             cfg=yaml.safe_load(f)
-    cfg.setdefault("mysql",{"host":"localhost","port":3306,"user":"root","password":"root","db":"my_kpis_db"})
+    cfg.setdefault("mysql",{
+        "host":"localhost","port":3306,"user":"root","password":"root","db":"my_kpis_db"
+    })
     cfg.setdefault("tokens",[])
     cfg.setdefault("logging",{
         "file_name":"myapp.log",
@@ -34,7 +42,8 @@ def load_config():
         "file_level":"DEBUG"
     })
     cfg.setdefault("max_retries",20)
-    # if we want date-based skip for stars or baseline_date, set days_to_capture here
+    # fallback if no baseline in DB
+    cfg.setdefault("fallback_baseline_date","2015-01-01")
     return cfg
 
 def setup_logging(cfg):
@@ -82,64 +91,139 @@ def rotate_token():
     CURRENT_TOKEN_INDEX=(CURRENT_TOKEN_INDEX+1)%len(TOKENS)
     new_token=TOKENS[CURRENT_TOKEN_INDEX]
     session.headers["Authorization"]=f"token {new_token}"
-    logging.info("Rotated token from idx %d to %d => not showing partial token", old_idx, CURRENT_TOKEN_INDEX)
+    logging.info("Rotated token from idx %d to %d => not showing partial token string",
+                 old_idx,CURRENT_TOKEN_INDEX)
+
+def get_earliest_item_created_date_in_db(conn, repo_name):
+    """
+    If the earliest item is newer than baseline => skip entire repo.
+    We'll check MIN(created_at) from issues + pulls.
+    """
+    c=conn.cursor()
+    c.execute("""
+    SELECT MIN(created_at) 
+    FROM (
+      SELECT created_at FROM issues WHERE repo_name=%s
+      UNION
+      SELECT created_at FROM pulls WHERE repo_name=%s
+    ) AS sub
+    """,(repo_name,repo_name))
+    row=c.fetchone()
+    c.close()
+    if row and row[0]:
+        return row[0]
+    return None
 
 def main():
-    global TOKENS, session, token_info, CURRENT_TOKEN_INDEX
+    global TOKENS,session,token_info,CURRENT_TOKEN_INDEX
     cfg=load_config()
     setup_logging(cfg)
-    logging.info("Starting => integrated numeric approach => watchers full => single-thread => no concurrency")
+    logging.info("Starting => watchers=full => numeric for issues/pulls => skip stars by starred_at => skip entire repo if earliest DB item>baseline => single-thread")
 
-    conn=connect_db(cfg, create_db_if_missing=True)
+    conn=connect_db(cfg,create_db_if_missing=True)
     create_tables(conn)
 
     TOKENS=cfg["tokens"]
     session=setup_session_with_retry()
     token_info={}
+
     if TOKENS:
         session.headers["Authorization"]=f"token {TOKENS[0]}"
 
     max_retries=cfg["max_retries"]
+    fallback_dt=datetime.strptime(cfg["fallback_baseline_date"],"%Y-%m-%d")
 
     all_repos=get_repo_list()
     for (owner,repo) in all_repos:
-        base,en = get_baseline_info(conn,owner,repo)
+        bdt,en = get_baseline_info(conn,owner,repo)
         if en==0:
-            logging.info("Repo %s/%s => disabled => skip",owner,repo)
+            logging.info("Repo %s/%s => enabled=0 => skip run",owner,repo)
+            continue
+        if not bdt:
+            bdt=fallback_dt
+
+        repo_name=f"{owner}/{repo}"
+        earliest_in_db=get_earliest_item_created_date_in_db(conn,repo_name)
+        if earliest_in_db and earliest_in_db>bdt:
+            logging.info("Earliest item in DB for %s => %s, which is newer than baseline_date=%s => skip entire repo",
+                         repo_name,earliest_in_db,bdt)
             continue
 
-        logging.info("Repo %s/%s => watchers => full => numeric skip => daily runs",owner,repo)
+        logging.info("Repo %s => watchers => full => numeric issues/pulls => skip stars older than %s => proceed",
+                     repo_name,bdt)
 
-        # watchers/forks/stars
-        from fetch_forks_stars_watchers import list_watchers_single_thread, list_forks_single_thread, list_stars_single_thread
-        list_watchers_single_thread(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
-        list_forks_single_thread(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
-        list_stars_single_thread(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
+        from fetch_forks_stars_watchers import (
+            list_watchers_single_thread,
+            list_forks_single_thread,
+            list_stars_single_thread
+        )
+        list_watchers_single_thread(
+            conn,owner,repo,en,session,handle_rate_limit_func,
+            max_retries
+        )
+        list_forks_single_thread(
+            conn,owner,repo,en,session,handle_rate_limit_func,
+            max_retries
+        )
+        # pass baseline_dt => skip stars with starred_at < bdt
+        list_stars_single_thread(
+            conn,owner,repo,en,
+            bdt,
+            session,handle_rate_limit_func,
+            max_retries
+        )
 
         from fetch_issues import list_issues_single_thread
-        list_issues_single_thread(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
+        list_issues_single_thread(
+            conn,owner,repo,en,
+            session,handle_rate_limit_func,
+            max_retries
+        )
 
         from fetch_pulls import list_pulls_single_thread
-        list_pulls_single_thread(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
+        list_pulls_single_thread(
+            conn,owner,repo,en,
+            session,handle_rate_limit_func,
+            max_retries
+        )
 
-        from fetch_events import fetch_issue_events_for_all_issues, fetch_pull_events_for_all_pulls
-        fetch_issue_events_for_all_issues(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
-        fetch_pull_events_for_all_pulls(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
+        from fetch_events import (
+            fetch_issue_events_for_all_issues,
+            fetch_pull_events_for_all_pulls
+        )
+        fetch_issue_events_for_all_issues(
+            conn,owner,repo,en,
+            session,handle_rate_limit_func,
+            max_retries
+        )
+        fetch_pull_events_for_all_pulls(
+            conn,owner,repo,en,
+            session,handle_rate_limit_func,
+            max_retries
+        )
 
         from fetch_comments import fetch_comments_for_all_issues
-        fetch_comments_for_all_issues(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
+        fetch_comments_for_all_issues(
+            conn,owner,repo,en,
+            session,handle_rate_limit_func,
+            max_retries
+        )
 
         from fetch_issue_reactions import fetch_issue_reactions_for_all_issues
-        fetch_issue_reactions_for_all_issues(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
+        fetch_issue_reactions_for_all_issues(
+            conn,owner,repo,en,
+            session,handle_rate_limit_func,
+            max_retries
+        )
 
     conn.close()
-    logging.info("All done => integrated numeric approach => watchers full => single-thread => done")
+    logging.info("All done => single-thread => watchers=full => numeric issues/pulls => skip stars older than baseline => skip entire repo if earliest DB item>baseline => complete")
 
 def handle_rate_limit_func(resp):
-    global TOKENS, CURRENT_TOKEN_INDEX, session, token_info
+    global TOKENS,CURRENT_TOKEN_INDEX,session,token_info
     if not TOKENS:
         return
-    update_token_info(CURRENT_TOKEN_INDEX, resp)
+    update_token_info(CURRENT_TOKEN_INDEX,resp)
     info=token_info.get(CURRENT_TOKEN_INDEX)
     if info and info["remaining"]<5:
         old_idx=CURRENT_TOKEN_INDEX
@@ -211,3 +295,6 @@ def do_sleep_based_on_reset():
     import time
     logging.warning("Cannot parse reset => fallback => sleep 3600s")
     time.sleep(3600)
+
+if __name__=="__main__":
+    main()
