@@ -43,7 +43,7 @@ def compute_scale_factors(scaling_repo, all_repos):
     """
 
     # We'll define window=120 days. Adjust if needed or read from config.
-    window_days = 120
+    window_days = 10
 
     # Prepare result dictionaries
     mergesFactor = {}
