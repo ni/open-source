@@ -359,7 +359,19 @@ def main():
     from config import get_scaling_repo, get_num_fiscal_quarters
     repos= [
         "tensorflow/tensorflow",
-        "facebook/react", 
+        "ni/actor-framework",
+        "ni/grpc-labview",
+        "dotnet/core",
+        "facebook/react",
+        "EPICS/reconos",
+        "OpenFOAM/OpenFOAM-dev",
+        "FreeCAD/freecad",
+        "fritzing/fritzing-app",
+        "qucs/qucs",
+        "OpenSCAD/openscad",
+        "Node-RED/nodered",
+        "OpenPLC/OpenPLC-IDE",
+        "Eclipse/mraa",
 
     ]
     scaling_repo= get_scaling_repo()
