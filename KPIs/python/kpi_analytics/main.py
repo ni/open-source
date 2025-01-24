@@ -360,7 +360,7 @@ def main():
     repos= [
         "tensorflow/tensorflow",
         "facebook/react", 
-        "dotnet/core"
+
     ]
     scaling_repo= get_scaling_repo()
     if not scaling_repo:
