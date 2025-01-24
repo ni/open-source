@@ -4,6 +4,8 @@ analytics/comments_reactions.py
 
 Real DB queries for issue_comments, plus possibly a 'reactions' table.
 If you track them in 'issue_comments' or 'issue_reactions', adapt logic here.
+Count issue comments, plus total reactions, from DB.
+If 'issue_reactions' and 'comment_reactions' are separate, unify them if needed.
 """
 
 import mysql.connector
@@ -27,6 +29,9 @@ def count_issue_comments(repo, start_dt, end_dt):
     WHERE repo_name=? 
       AND created_at >= start_dt
       AND created_at < end_dt
+     WHERE repo_name=?
+       AND created_at >= start_dt
+       AND created_at < end_dt
     """
     cnx= _get_db_connection()
     cursor= cnx.cursor()
@@ -45,42 +50,36 @@ def count_issue_comments(repo, start_dt, end_dt):
 
 def count_all_reactions(repo, start_dt, end_dt):
     """
-    Possibly searching both 'comment_reactions' + 'issue_reactions' if you store them separately.
-    For now, let's unify with a single table or logic. 
-    Example approach:
-        SELECT COUNT(*) 
-        FROM comment_reactions
-        WHERE repo_name=? 
-          AND created_at >= start_dt
-          AND created_at < end_dt
-    Then sum it with issue_reactions if you have them.
+    sum of:
+     - comment_reactions
+     - issue_reactions
+    in [start_dt, end_dt]
     """
-    # Example with one table 'comment_reactions':
     cnx= _get_db_connection()
     cursor= cnx.cursor()
-    query= """
+
+    q1= """
     SELECT COUNT(*)
     FROM comment_reactions
     WHERE repo_name=%s
       AND created_at >= %s
       AND created_at < %s
     """
-    cursor.execute(query, (repo, start_dt, end_dt))
-    total1= cursor.fetchone()[0]
+    cursor.execute(q1, (repo, start_dt, end_dt))
+    total_comment= cursor.fetchone()[0]
     cursor.close()
 
-    # If you have a separate 'issue_reactions' table, do that too:
-    query2= """
+    cursor= cnx.cursor()
+    q2= """
     SELECT COUNT(*)
     FROM issue_reactions
     WHERE repo_name=%s
       AND created_at >= %s
       AND created_at < %s
     """
-    cursor= cnx.cursor()
-    cursor.execute(query2, (repo, start_dt, end_dt))
-    total2= cursor.fetchone()[0]
+    cursor.execute(q2, (repo, start_dt, end_dt))
+    total_issue= cursor.fetchone()[0]
     cursor.close()
     cnx.close()
 
-    return total1+ total2
+    return total_comment+ total_issue

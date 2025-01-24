@@ -2,7 +2,9 @@
 """
 analytics/forks_stars.py
 
-Implements real DB queries for forks, stars.
+Count forks + stars from DB, given a date range, using the columns:
+- forks.created_at
+- stars.starred_at
 """
 
 import mysql.connector
@@ -23,9 +25,9 @@ def _get_db_connection():
 def count_forks(repo, start_dt, end_dt):
     """
     SELECT COUNT(*) FROM forks
-    WHERE repo_name=? 
-      AND created_at >= start_dt
-      AND created_at < end_dt
+     WHERE repo_name=?
+       AND created_at >= start_dt
+       AND created_at < end_dt
     """
     cnx= _get_db_connection()
     cursor= cnx.cursor()
@@ -45,9 +47,9 @@ def count_forks(repo, start_dt, end_dt):
 def count_stars(repo, start_dt, end_dt):
     """
     SELECT COUNT(*) FROM stars
-    WHERE repo_name=? 
-      AND starred_at >= start_dt
-      AND starred_at < end_dt
+     WHERE repo_name=?
+       AND starred_at >= start_dt
+       AND starred_at < end_dt
     """
     cnx= _get_db_connection()
     cursor= cnx.cursor()

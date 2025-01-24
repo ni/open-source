@@ -2,98 +2,75 @@
 """
 scale_factors.py
 
-This module defines:
-1) compute_scale_factors(...):
-   - Creates 8 separate dictionaries for scaling merges, closed issues,
-     forks, stars, new issues, comments, reactions, new pulls.
+Computes the 8 scale factors by comparing sums in [oldest_date..(oldest_date+windowDays)]
+for the scaling repo vs. other repos. Then merges them into mergesFactor, closedFactor, etc.
 
-2) compute_target_reached_data(...):
-   - Sums up each metric across non-scaling repos to produce an average,
-     then compares the scaling repo's value => ratio.
+We also define:
+  - compute_target_reached_data(...) => used by produce_raw_comparison_chart
+  - compute_sei_data(...) => used by produce_sei_comparison_chart
 
-3) compute_sei_data(...):
-   - Weighted SEI ratio approach if you want a final "SEI" aggregator
-     from velocity, UIG, and MAC target dicts.
+Additionally prints out each repo's oldest_date + that window so you see
+the exact time range for scale factor summation.
 """
 
+import yaml
+import os
 from datetime import datetime, timedelta
 
-# Suppose these are your aggregator references if you need them:
-# from merges_issues import count_merged_pulls, count_closed_issues, ...
-# from forks_stars import count_forks, count_stars
-# from comments_reactions import count_issue_comments, count_all_reactions
+from baseline import find_oldest_date_for_repo
+from merges_issues import (
+    count_merged_pulls, count_closed_issues,
+    count_new_pulls, count_new_issues
+)
+from forks_stars import count_forks, count_stars
+from comments_reactions import count_issue_comments, count_all_reactions
 
+FALLBACK_SCALE_WINDOW= 290
+
+def read_scale_window_days():
+    config_file= "config.yaml"
+    if not os.path.exists(config_file):
+        print(f"[WARN] scale_factors => {config_file} missing => fallback={FALLBACK_SCALE_WINDOW}")
+        return FALLBACK_SCALE_WINDOW
+    with open(config_file,"r",encoding="utf-8") as f:
+        data= yaml.safe_load(f) or {}
+    sc_data= data.get("scaleFactors", {})
+    return sc_data.get("windowDays", FALLBACK_SCALE_WINDOW)
 
 def compute_scale_factors(scaling_repo, all_repos):
     """
-    For each repository, define a separate scale factor for each raw variable:
-      mergesFactor, closedFactor, forksFactor, starsFactor,
-      newIssuesFactor, commentsFactor, reactionsFactor, pullsFactor.
+    Summation => factor= scaleSum / repoSum
+    merges, closed, forks, stars, newIss, comments, reac, pulls => 8 dicts
 
-    Steps:
-      1) Sum merges, closed, forks, stars, new issues, comments, reactions, new pulls
-         in [scalingOldestDate, scalingOldestDate + 120 days] for the scaling repo.
-      2) For each other repo, do the same in [repoOldestDate, repoOldestDate + 120 days].
-      3) factor = scalingSum / repoSum (with fallback logic).
-    Returns:
-      (mergesFactor, closedFactor, forksFactor, starsFactor,
-       newIssuesFactor, commentsFactor, reactionsFactor, pullsFactor)
-
-    Each factor dict: mergesFactor[repo] = float scaling factor, etc.
+    Prints out:
+     - scaling_oldest_date
+     - (scaling_oldest_date + scale_factor_window)
+     and similarly for each other repo.
     """
+    window_days= read_scale_window_days()
 
-    # We'll define window=120 days. Adjust if needed or read from config.
-    window_days = 120
+    mergesFactor={}
+    closedFactor={}
+    forksFactor={}
+    starsFactor={}
+    newIssuesFactor={}
+    commentsFactor={}
+    reactionsFactor={}
+    pullsFactor={}
 
-    # Prepare result dictionaries
-    mergesFactor = {}
-    closedFactor = {}
-    forksFactor = {}
-    starsFactor = {}
-    newIssuesFactor = {}
-    commentsFactor = {}
-    reactionsFactor = {}
-    pullsFactor = {}
+    def sum_all(r, st, ed):
+        m= count_merged_pulls(r, st, ed)
+        c= count_closed_issues(r, st, ed)
+        f= count_forks(r, st, ed)
+        s= count_stars(r, st, ed)
+        ni= count_new_issues(r, st, ed)
+        co= count_issue_comments(r, st, ed)
+        re= count_all_reactions(r, st, ed)
+        pu= count_new_pulls(r, st, ed)
+        return (m,c,f,s,ni,co,re,pu)
 
-    # Helper function to sum the eight raw variables for a given repo in [start,end].
-    def sum_all_counts(r, start_dt, end_dt):
-        """
-        Summation stub to handle merges, closed, forks, stars,
-        new issues, comments, reactions, new pulls in [start_dt, end_dt].
-        Replace with your real merges_issues, forks_stars, etc.
-        """
-        from merges_issues import (
-            count_merged_pulls, count_closed_issues,
-            count_new_pulls, count_new_issues
-        )
-        from forks_stars import (
-            count_forks, count_stars
-        )
-        from comments_reactions import (
-            count_issue_comments, count_all_reactions
-        )
-
-        merges_count = count_merged_pulls(r, start_dt, end_dt)
-        closed_count = count_closed_issues(r, start_dt, end_dt)
-        forks_count  = count_forks(r, start_dt, end_dt)
-        stars_count  = count_stars(r, start_dt, end_dt)
-        newIss_count = count_new_issues(r, start_dt, end_dt)
-        comm_count   = count_issue_comments(r, start_dt, end_dt)
-        reac_count   = count_all_reactions(r, start_dt, end_dt)
-        pulls_count  = count_new_pulls(r, start_dt, end_dt)
-
-        return (
-            merges_count, closed_count, forks_count, stars_count,
-            newIss_count, comm_count, reac_count, pulls_count
-        )
-
-    # Attempt to find oldest date for scaling repo
-    from baseline import find_oldest_date_for_repo
-    scaling_oldest = find_oldest_date_for_repo(scaling_repo)
-
-    def fallback_factor_initialize():
-        """If scaling repo has no data => set all=1.0 for each repo."""
-        for rr in all_repos:
+    def fallback_ones(rrs):
+        for rr in rrs:
             mergesFactor[rr]=1.0
             closedFactor[rr]=1.0
             forksFactor[rr]=1.0
@@ -103,48 +80,32 @@ def compute_scale_factors(scaling_repo, all_repos):
             reactionsFactor[rr]=1.0
             pullsFactor[rr]=1.0
 
-    if not scaling_oldest:
-        # no data => fallback
-        fallback_factor_initialize()
+    scaling_old= find_oldest_date_for_repo(scaling_repo)
+    if not scaling_old:
+        print(f"[INFO] scaling repo '{scaling_repo}': no data => set scale factors=1.0 for all.")
+        fallback_ones(all_repos)
         return (mergesFactor, closedFactor, forksFactor, starsFactor,
                 newIssuesFactor, commentsFactor, reactionsFactor, pullsFactor)
 
-    scaling_end= scaling_oldest + timedelta(days=window_days)
-    (m_scl, c_scl, f_scl, st_scl,
-     ni_scl, co_scl, re_scl, pu_scl)= sum_all_counts(scaling_repo, scaling_oldest, scaling_end)
+    scaling_end= scaling_old+ timedelta(days=window_days)
+    print(f"[INFO] scale_factors: (scaling repo) {scaling_repo}"
+          f" => oldest_date={scaling_old}, window_end={scaling_end}"
+          f" (window={window_days} days)")
 
-    def ratio_func(scale_val, repo_val):
-        """
-        Basic approach:
-          if scale_val>0 && repo_val=0 => 0.0
-          elif both=0 => 1.0
-          else => scale_val / repo_val
-        """
-        if scale_val>0 and repo_val==0:
+    (m_s, c_s, f_s, st_s, ni_s, co_s, re_s, pu_s)= sum_all(scaling_repo, scaling_old, scaling_end)
+
+    def ratio_func(sc_val, rp_val):
+        if sc_val>0 and rp_val==0:
             return 0.0
-        elif scale_val==0 and repo_val>0:
+        elif sc_val==0 and rp_val>0:
             return 0.0
-        elif scale_val==0 and repo_val==0:
+        elif sc_val==0 and rp_val==0:
             return 1.0
         else:
-            return float(scale_val)/ float(repo_val)
+            return float(sc_val)/ float(rp_val)
 
     for rr in all_repos:
         if rr==scaling_repo:
-            # scaling => factor=1.0
-            mergesFactor[rr] = 1.0
-            closedFactor[rr] = 1.0
-            forksFactor[rr]  = 1.0
-            starsFactor[rr]  = 1.0
-            newIssuesFactor[rr] = 1.0
-            commentsFactor[rr]  = 1.0
-            reactionsFactor[rr] = 1.0
-            pullsFactor[rr]     = 1.0
-            continue
-
-        repoOldest= find_oldest_date_for_repo(rr)
-        if not repoOldest:
-            # no data => fallback
             mergesFactor[rr]=1.0
             closedFactor[rr]=1.0
             forksFactor[rr]=1.0
@@ -155,102 +116,109 @@ def compute_scale_factors(scaling_repo, all_repos):
             pullsFactor[rr]=1.0
             continue
 
-        repo_end= repoOldest + timedelta(days=window_days)
-        (m_repo, c_repo, f_repo, st_repo,
-         ni_repo, co_repo, re_repo, pu_repo)= sum_all_counts(rr, repoOldest, repo_end)
+        rold= find_oldest_date_for_repo(rr)
+        if not rold:
+            print(f"[INFO] other repo '{rr}': no data => set scale factors=1.0")
+            mergesFactor[rr]=1.0
+            closedFactor[rr]=1.0
+            forksFactor[rr]=1.0
+            starsFactor[rr]=1.0
+            newIssuesFactor[rr]=1.0
+            commentsFactor[rr]=1.0
+            reactionsFactor[rr]=1.0
+            pullsFactor[rr]=1.0
+            continue
 
-        mergesFactor[rr]    = ratio_func(m_scl, m_repo)
-        closedFactor[rr]    = ratio_func(c_scl, c_repo)
-        forksFactor[rr]     = ratio_func(f_scl, f_repo)
-        starsFactor[rr]     = ratio_func(st_scl, st_repo)
-        newIssuesFactor[rr] = ratio_func(ni_scl, ni_repo)
-        commentsFactor[rr]  = ratio_func(co_scl, co_repo)
-        reactionsFactor[rr] = ratio_func(re_scl, re_repo)
-        pullsFactor[rr]     = ratio_func(pu_scl, pu_repo)
+        rend= rold+ timedelta(days=window_days)
+        print(f"[INFO] scale_factors: (other repo) {rr}"
+              f" => oldest_date={rold}, window_end={rend}"
+              f" (window={window_days} days)")
 
-    return (
-        mergesFactor,
-        closedFactor,
-        forksFactor,
-        starsFactor,
-        newIssuesFactor,
-        commentsFactor,
-        reactionsFactor,
-        pullsFactor
-    )
+        (mr,cr,fr,st_r,ni_r,co_r,re_r,pu_r)= sum_all(rr, rold, rend)
 
+        mergesFactor[rr]= ratio_func(m_s,mr)
+        closedFactor[rr]= ratio_func(c_s,cr)
+        forksFactor[rr]= ratio_func(f_s,fr)
+        starsFactor[rr]= ratio_func(st_s,st_r)
+        newIssuesFactor[rr]= ratio_func(ni_s,ni_r)
+        commentsFactor[rr]= ratio_func(co_s,co_r)
+        reactionsFactor[rr]= ratio_func(re_s,re_r)
+        pullsFactor[rr]= ratio_func(pu_s,pu_r)
+
+    return (mergesFactor, closedFactor, forksFactor, starsFactor,
+            newIssuesFactor, commentsFactor, reactionsFactor, pullsFactor)
 
 def compute_target_reached_data(repos, scaling_repo, quarter_data_dict):
     """
-    Summation among non-scaling => average => compare to scaling => ratio.
-    Returns a dict: {q_idx: (averageVal, scalingVal, ratioVal)}
+    Summaries for raw comparison charts:
+      - we gather average among non-scaling repos => "target"
+      - scaling repo's value => sc_val
+      - ratio => (sc_val / target)*100 if target>0
 
-    averageVal = average of non-scaling repos' metric
-    scalingVal = scaling repo's metric
-    ratioVal   = (scalingVal / averageVal)*100 if averageVal>0 else 0
+    Returns a dict: { q_idx: (targetVal, scalingVal, ratioPercent) }
     """
-    target_data = {}
-    union_q_idx= set()
+    target_data={}
+    union_q= set()
     for r in repos:
-        union_q_idx |= set(quarter_data_dict[r].keys())
-    union_q_idx= sorted(union_q_idx)
+        union_q |= set(quarter_data_dict[r].keys())
+    union_q= sorted(union_q)
+    non_scaling= [rr for rr in repos if rr!= scaling_repo]
 
-    non_scaling= [rr for rr in repos if rr!=scaling_repo]
-
-    for q_idx in union_q_idx:
-        sum_val= 0.0
-        count_val=0
-        for r in non_scaling:
-            if q_idx in quarter_data_dict[r]:
-                sum_val+= quarter_data_dict[r][q_idx]
-                count_val+=1
-        avg_val=0.0
-        if count_val>0:
-            avg_val= sum_val/count_val
-
-        scaling_val= quarter_data_dict[scaling_repo].get(q_idx,0.0)
+    for q_idx in union_q:
+        sum_v=0.0
+        ccount=0
+        for nr in non_scaling:
+            if q_idx in quarter_data_dict[nr]:
+                sum_v+= quarter_data_dict[nr][q_idx]
+                ccount+=1
+        avg_v=0.0
+        if ccount>0:
+            avg_v= sum_v/ ccount
+        sc_val= quarter_data_dict[scaling_repo].get(q_idx,0.0)
         ratio_val=0.0
-        if abs(avg_val)>1e-9:
-            ratio_val= (scaling_val/ avg_val)*100.0
+        if abs(avg_v)>1e-9:
+            ratio_val= (sc_val/ avg_v)*100.0
+        target_data[q_idx]= (avg_v, sc_val, ratio_val)
 
-        target_data[q_idx]= (avg_val, scaling_val, ratio_val)
     return target_data
 
-
-def compute_sei_data(velocity_dict, uig_dict, mac_dict):
+def compute_sei_data(velocity_tr, uig_tr, mac_tr):
     """
-    Weighted ratio approach => 0.3 velocity, 0.2 uig, 0.5 mac if present
-    returns {q_idx: (100.0, scaledSei, ratioVal)}.
+    used by produce_sei_comparison_chart in main.py
+    velocity_tr => {q_idx: (vTarget, vScaling, vRatio)}
+    uig_tr      => likewise
+    mac_tr      => likewise
 
-    scaledSei is the scaling repo's actual SEI if needed,
-    ratioVal is partialSum / weightSum from velocityRatio, uigRatio, macRatio.
+    We unify them => SEI ratio= 0.3*(vRatio) + 0.2*(uigRatio) + 0.5*(macRatio)
+    or fallback if missing.
+
+    Return {q_idx: (100.0, scaledSei, ratioVal)}
+    we let produce_sei_comparison_chart handle final bar chart, etc.
     """
     sei_data={}
-    all_q= set(velocity_dict.keys())| set(uig_dict.keys())| set(mac_dict.keys())
+    all_q= set(velocity_tr.keys())| set(uig_tr.keys())| set(mac_tr.keys())
     all_q= sorted(all_q)
     for q_idx in all_q:
-        (vT,vS,vR)= velocity_dict.get(q_idx,(0,0,0))
-        (uT,uS,uR)= uig_dict.get(q_idx,(0,0,0))
-        (mT,mS,mR)= mac_dict.get(q_idx,(0,0,0))
+        (vT,vS,vR)= velocity_tr.get(q_idx,(0,0,0))
+        (uT,uS,uR)= uig_tr.get(q_idx,(0,0,0))
+        (mT,mS,mR)= mac_tr.get(q_idx,(0,0,0))
 
         ratio_weights=[]
         ratio_values=[]
-        # if velocity target is nonzero => we weigh vR with 0.3
+        # if vT>0 => vR is valid
         if abs(vT)>1e-9:
             ratio_weights.append(0.3)
             ratio_values.append(vR)
-        # if uig target is nonzero => weigh uR with 0.2
         if abs(uT)>1e-9:
             ratio_weights.append(0.2)
             ratio_values.append(uR)
-        # if mac target is nonzero => weigh mR with 0.5
         if abs(mT)>1e-9:
             ratio_weights.append(0.5)
             ratio_values.append(mR)
 
-        if len(ratio_weights)==0:
-            # fallback => no scaling ratio => call it 0.0, scaled=some aggregator
-            scaled_sei= 0.5*mS + 0.3*vS + 0.2*uS
+        if not ratio_weights:
+            # fallback => just 0.5*mS +0.3*vS +0.2*uS
+            scaled_sei= 0.5*mS+ 0.3*vS+ 0.2*uS
             sei_data[q_idx]= (100.0, scaled_sei, 0.0)
             continue
 
@@ -259,6 +227,7 @@ def compute_sei_data(velocity_dict, uig_dict, mac_dict):
         for i in range(len(ratio_weights)):
             partial_sum+= ratio_weights[i]* ratio_values[i]
         sei_ratio= partial_sum/wsum
-        scaled_sei= 0.5*mS + 0.3*vS + 0.2*uS
+
+        scaled_sei= 0.5*mS+ 0.3*vS+0.2*uS
         sei_data[q_idx]= (100.0, scaled_sei, sei_ratio)
     return sei_data
