@@ -113,12 +113,12 @@ def get_earliest_item_created_date_in_db(conn, repo_name):
     return None
 
 def main():
-    global TOKENS, session, token_info, CURRENT_TOKEN_INDEX
+    global TOKENS,session,token_info,CURRENT_TOKEN_INDEX
     cfg=load_config()
     setup_logging(cfg)
-    logging.info("Starting => watchers=full => numeric issues/pulls => skip stars older than baseline => single-thread => summary at end")
+    logging.info("Starting => watchers=full => numeric issues/pulls => skip older stars => single-thread => final summary of stats per repo")
 
-    conn=connect_db(cfg, create_db_if_missing=True)
+    conn=connect_db(cfg,create_db_if_missing=True)
     create_tables(conn)
 
     TOKENS=cfg["tokens"]
@@ -132,150 +132,274 @@ def main():
     fallback_str=cfg["fallback_baseline_date"]
     fallback_dt=datetime.strptime(fallback_str, "%Y-%m-%d")
 
-    # We'll store summary info in a list of dicts, then print at the end
+    # We'll store stats in a list => print at end
     summary_data=[]
 
     all_repos=get_repo_list()
     for (owner,repo) in all_repos:
-        bdt,en=get_baseline_info(conn,owner,repo)
+        bdt,en = get_baseline_info(conn,owner,repo)
         if not bdt:
             bdt=fallback_dt
+
         skip_reason="None"
         if en==0:
             skip_reason="disabled"
-        earliest_in_db=None
 
         repo_name=f"{owner}/{repo}"
+        earliest_db_dt=None
         if en==1:
-            earliest_in_db=get_earliest_item_created_date_in_db(conn,repo_name)
-            if earliest_in_db and earliest_in_db>bdt:
+            earliest_db_dt=get_earliest_item_created_date_in_db(conn,repo_name)
+            if earliest_db_dt and earliest_db_dt>bdt:
                 skip_reason="earliest_in_db_newer_than_baseline"
-
-        summary_data.append({
-            "owner":owner,
-            "repo":repo,
-            "baseline_date":bdt,
-            "enabled":en,
-            "earliest_in_db":earliest_in_db,
-            "skip_reason":skip_reason
-        })
 
         if en==0:
             logging.info("Repo %s/%s => disabled => skip run",owner,repo)
-            continue
-        if skip_reason=="earliest_in_db_newer_than_baseline":
-            logging.info("Repo %s/%s => earliest item in DB is %s > baseline=%s => skip entire repo",
-                         owner,repo,earliest_in_db,bdt)
-            continue
+        elif skip_reason=="earliest_in_db_newer_than_baseline":
+            logging.info("Repo %s/%s => earliest item in DB %s > baseline=%s => skip entire repo",
+                         owner,repo,earliest_db_dt,bdt)
+        else:
+            logging.info("Repo %s/%s => watchers => full => numeric issues/pulls => skip stars older than baseline=%s => proceed",
+                         owner,repo,bdt)
 
-        logging.info("Repo %s/%s => watchers => full => numeric issues/pulls => skip stars older than baseline=%s => proceed",
-                     owner,repo,bdt)
+            from fetch_forks_stars_watchers import (
+                list_watchers_single_thread,
+                list_forks_single_thread,
+                list_stars_single_thread
+            )
+            list_watchers_single_thread(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
+            list_forks_single_thread(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
+            list_stars_single_thread(conn,owner,repo,en,bdt,session,handle_rate_limit_func,max_retries)
 
-        from fetch_forks_stars_watchers import (
-            list_watchers_single_thread,
-            list_forks_single_thread,
-            list_stars_single_thread
-        )
-        list_watchers_single_thread(
-            conn,owner,repo,en,session,handle_rate_limit_func,
-            max_retries
-        )
-        list_forks_single_thread(
-            conn,owner,repo,en,session,handle_rate_limit_func,
-            max_retries
-        )
-        # pass baseline_dt => skip stars with starred_at < bdt
-        list_stars_single_thread(
-            conn,owner,repo,en,
-            bdt,
-            session,handle_rate_limit_func,
-            max_retries
-        )
+            from fetch_issues import list_issues_single_thread
+            list_issues_single_thread(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
 
-        from fetch_issues import list_issues_single_thread
-        list_issues_single_thread(
-            conn,owner,repo,en,
-            session,handle_rate_limit_func,
-            max_retries
-        )
+            from fetch_pulls import list_pulls_single_thread
+            list_pulls_single_thread(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
 
-        from fetch_pulls import list_pulls_single_thread
-        list_pulls_single_thread(
-            conn,owner,repo,en,
-            session,handle_rate_limit_func,
-            max_retries
-        )
+            from fetch_events import (
+                fetch_issue_events_for_all_issues,
+                fetch_pull_events_for_all_pulls
+            )
+            fetch_issue_events_for_all_issues(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
+            fetch_pull_events_for_all_pulls(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
 
-        from fetch_events import fetch_issue_events_for_all_issues, fetch_pull_events_for_all_pulls
-        fetch_issue_events_for_all_issues(
-            conn,owner,repo,en,
-            session,handle_rate_limit_func,
-            max_retries
-        )
-        fetch_pull_events_for_all_pulls(
-            conn,owner,repo,en,
-            session,handle_rate_limit_func,
-            max_retries
-        )
+            from fetch_comments import fetch_comments_for_all_issues
+            fetch_comments_for_all_issues(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
 
-        from fetch_comments import fetch_comments_for_all_issues
-        fetch_comments_for_all_issues(
-            conn,owner,repo,en,
-            session,handle_rate_limit_func,
-            max_retries
-        )
-        from fetch_comment_reactions import fetch_comment_reactions_for_all_comments
-        fetch_comment_reactions_for_all_comments(
-            conn, owner, repo, en,
-            session, handle_rate_limit_func,
-            max_retries
-        )
+            from fetch_issue_reactions import fetch_issue_reactions_for_all_issues
+            fetch_issue_reactions_for_all_issues(conn,owner,repo,en,session,handle_rate_limit_func,max_retries)
 
-        from fetch_issue_reactions import fetch_issue_reactions_for_all_issues
-        fetch_issue_reactions_for_all_issues(
-            conn,owner,repo,en,
-            session,handle_rate_limit_func,
-            max_retries
-        )
+            # If you have fetch_comment_reactions => do it here:
+            # from fetch_comment_reactions import fetch_comment_reactions_for_all_comments
+            # fetch_comment_reactions_for_all_comments(...)
 
-        # If you have fetch_comment_reactions => do that here:
-        # from fetch_comment_reactions import fetch_comment_reactions_for_all_comments
-        # fetch_comment_reactions_for_all_comments(...)
+        # after fetching, gather stats for final summary
+        stats= gather_repo_stats(conn, owner, repo, skip_reason, earliest_db_dt, bdt, en)
+        summary_data.append(stats)
 
     conn.close()
 
-    logging.info("All done => now printing summary table for each repo...\n")
-    print_summary_table(summary_data)
-    logging.info("Finished.")
+    logging.info("All done => now printing final summary with advanced counts.\n")
+    print_final_summary_table(summary_data)
+    logging.info("Finished completely.")
 
-def print_summary_table(summary_data):
+def gather_repo_stats(conn, owner, repo,
+                      skip_reason, earliest_db_dt, baseline_dt, enabled):
     """
-    Print a simple console table showing:
-    - owner/repo
-    - earliest_in_db
-    - baseline_date
-    - skip_reason
-    So we can easily see differences between repos.
+    Returns a dict with all the counts you requested for the final summary:
+      - Reactions in issues
+      - Issues
+      - Reactions in pulls => 0 (Q7 => not stored)
+      - Pull requests
+      - Comments to issues => # in issue_comments
+      - Comments to pulls => 0 (pull comments not in the schema)
+      - Reactions to comments from issues => join comment_reactions -> issue_comments
+      - Reactions to comments from pulls => 0
+      - stars => count(stars)
+      - forks => count(forks)
+      - watchers => count(watchers)
+      - opened issues => same as total issues
+      - opened pulls => same as total pulls
+      - closed issues => event-based
+      - closed pulls => event-based
+      - merged pulls => event-based
+    If skip_reason != "None", we might set them to 0 because we didn't fetch.
+    """
+    repo_name=f"{owner}/{repo}"
+    stats_dict={
+      "owner_repo":f"{owner}/{repo}",
+      "skip_reason":skip_reason,
+      "earliest_db_dt":earliest_db_dt,
+      "baseline_dt":baseline_dt,
+      "enabled":enabled
+    }
+
+    if skip_reason!="None":
+        # everything => 0
+        stats_dict["reactions_in_issues"] = 0
+        stats_dict["issues_count"] = 0
+        stats_dict["reactions_in_pulls"] = 0
+        stats_dict["pulls_count"] = 0
+        stats_dict["comments_issues"] = 0
+        stats_dict["comments_pulls"] = 0
+        stats_dict["reactions_comments_issues"] = 0
+        stats_dict["reactions_comments_pulls"] = 0
+        stats_dict["stars_count"] = 0
+        stats_dict["forks_count"] = 0
+        stats_dict["watchers_count"] = 0
+        stats_dict["opened_issues"] = 0
+        stats_dict["opened_pulls"] = 0
+        stats_dict["closed_issues"] = 0
+        stats_dict["closed_pulls"] = 0
+        stats_dict["merged_pulls"] = 0
+        return stats_dict
+
+    # we do queries for each count
+    c=conn.cursor()
+
+    # Reactions in issues => count(*) from issue_reactions
+    c.execute("SELECT COUNT(*) FROM issue_reactions WHERE repo_name=%s",(repo_name,))
+    stats_dict["reactions_in_issues"]=c.fetchone()[0]
+
+    # Issues => total in issues
+    c.execute("SELECT COUNT(*) FROM issues WHERE repo_name=%s",(repo_name,))
+    stats_dict["issues_count"]=c.fetchone()[0]
+
+    # Reactions in pulls => 0 => Q7 => not stored
+    stats_dict["reactions_in_pulls"]=0
+
+    # Pull requests => total in pulls
+    c.execute("SELECT COUNT(*) FROM pulls WHERE repo_name=%s",(repo_name,))
+    stats_dict["pulls_count"]=c.fetchone()[0]
+
+    # Comments to issues => total rows in issue_comments => they are only for issues
+    c.execute("SELECT COUNT(*) FROM issue_comments WHERE repo_name=%s",(repo_name,))
+    stats_dict["comments_issues"]=c.fetchone()[0]
+
+    # Comments to pulls => 0 => Q5 => not stored
+    stats_dict["comments_pulls"]=0
+
+    # Reactions to comments from issues => do a join comment_reactions -> issue_comments
+    c.execute("""
+      SELECT COUNT(*)
+      FROM comment_reactions cr
+      JOIN issue_comments ic ON 
+        cr.repo_name=ic.repo_name 
+        AND cr.issue_number=ic.issue_number 
+        AND cr.comment_id=ic.comment_id
+      WHERE cr.repo_name=%s
+    """,(repo_name,))
+    stats_dict["reactions_comments_issues"]=c.fetchone()[0]
+
+    # Reactions to comments from pulls => 0 => no pull_comments table
+    stats_dict["reactions_comments_pulls"]=0
+
+    # stars => count(*)
+    c.execute("SELECT COUNT(*) FROM stars WHERE repo_name=%s",(repo_name,))
+    stats_dict["stars_count"]=c.fetchone()[0]
+
+    # forks => count(*)
+    c.execute("SELECT COUNT(*) FROM forks WHERE repo_name=%s",(repo_name,))
+    stats_dict["forks_count"]=c.fetchone()[0]
+
+    # watchers => count(*)
+    c.execute("SELECT COUNT(*) FROM watchers WHERE repo_name=%s",(repo_name,))
+    stats_dict["watchers_count"]=c.fetchone()[0]
+
+    # opened issues => same as total issues
+    stats_dict["opened_issues"]=stats_dict["issues_count"]
+
+    # opened pulls => same as total pulls
+    stats_dict["opened_pulls"]=stats_dict["pulls_count"]
+
+    # closed issues => event-based => DISTINCT issue_number in issue_events with event='closed'
+    c.execute("""
+      SELECT COUNT(DISTINCT issue_number)
+      FROM issue_events
+      WHERE repo_name=%s
+        AND JSON_EXTRACT(raw_json,'$.event')='closed'
+    """,(repo_name,))
+    row=c.fetchone()
+    closed_issues_count=row[0] if row and row[0] else 0
+    stats_dict["closed_issues"]=closed_issues_count
+
+    # closed pulls => event-based => DISTINCT pull_number in pull_events with event='closed'
+    c.execute("""
+      SELECT COUNT(DISTINCT pull_number)
+      FROM pull_events
+      WHERE repo_name=%s
+        AND JSON_EXTRACT(raw_json,'$.event')='closed'
+    """,(repo_name,))
+    row=c.fetchone()
+    closed_pulls_count=row[0] if row and row[0] else 0
+    stats_dict["closed_pulls"]=closed_pulls_count
+
+    # merged pulls => treat event='merged' => DISTINCT pull_number
+    c.execute("""
+      SELECT COUNT(DISTINCT pull_number)
+      FROM pull_events
+      WHERE repo_name=%s
+        AND JSON_EXTRACT(raw_json,'$.event')='merged'
+    """,(repo_name,))
+    row=c.fetchone()
+    merged_pulls_count=row[0] if row and row[0] else 0
+    stats_dict["merged_pulls"]=merged_pulls_count
+
+    c.close()
+    return stats_dict
+
+def print_final_summary_table(summary_data):
+    """
+    Print one line per repo with all the counts requested:
+    - Reactions in issues/pulls
+    - issues, pulls
+    - comments in issues/pulls
+    - reactions to comments in issues/pulls
+    - stars, forks, watchers
+    - opened issues, opened pulls
+    - closed issues, closed pulls
+    - merged pulls
+    plus skipReason if any
     """
     print("")
-    print("========== FINAL SUMMARY ==========")
-    header = f"{'Repo':35s} | {'EarliestInDB':19s} | {'BaselineDate':19s} | {'SkipReason':15s}"
+    print("===================== FINAL SUMMARY =====================")
+    header=(
+        "Repo".ljust(25)+"  SkipReason".ljust(20)+
+        "  Issues  IssueReact  Pulls  PullReact  CmtIss  CmtPull  ReactCmtIss  ReactCmtPull  Stars  Forks  Watchers  OpenIss  OpenPull  ClsdIss  ClsdPull  MrgdPull"
+    )
     print(header)
     print("-"*len(header))
+
     for row in summary_data:
-        repo_str=f"{row['owner']}/{row['repo']}"
-        earliest_str=str(row['earliest_in_db']) if row['earliest_in_db'] else "None"
-        baseline_str=str(row['baseline_date']) if row['baseline_date'] else "None"
-        skip_str=row['skip_reason']
-        line = f"{repo_str:35s} | {earliest_str:19s} | {baseline_str:19s} | {skip_str:15s}"
-        print(line)
-    print("===================================")
+        line_parts=[]
+        line_parts.append(row["owner_repo"].ljust(25))
+        line_parts.append(row["skip_reason"].ljust(20))
+        line_parts.append(str(row["issues_count"]).rjust(7))
+        line_parts.append(str(row["reactions_in_issues"]).rjust(11))
+        line_parts.append(str(row["pulls_count"]).rjust(7))
+        line_parts.append(str(row["reactions_in_pulls"]).rjust(10))
+        line_parts.append(str(row["comments_issues"]).rjust(7))
+        line_parts.append(str(row["comments_pulls"]).rjust(8))
+        line_parts.append(str(row["reactions_comments_issues"]).rjust(12))
+        line_parts.append(str(row["reactions_comments_pulls"]).rjust(13))
+        line_parts.append(str(row["stars_count"]).rjust(6))
+        line_parts.append(str(row["forks_count"]).rjust(6))
+        line_parts.append(str(row["watchers_count"]).rjust(9))
+        line_parts.append(str(row["opened_issues"]).rjust(8))
+        line_parts.append(str(row["opened_pulls"]).rjust(9))
+        line_parts.append(str(row["closed_issues"]).rjust(8))
+        line_parts.append(str(row["closed_pulls"]).rjust(9))
+        line_parts.append(str(row["merged_pulls"]).rjust(9))
+
+        print("  ".join(line_parts))
+
+    print("=========================================================")
 
 def handle_rate_limit_func(resp):
     global TOKENS,CURRENT_TOKEN_INDEX,session,token_info
     if not TOKENS:
         return
-    update_token_info(CURRENT_TOKEN_INDEX,resp)
+    update_token_info(CURRENT_TOKEN_INDEX, resp)
     info=token_info.get(CURRENT_TOKEN_INDEX)
     if info and info["remaining"]<5:
         old_idx=CURRENT_TOKEN_INDEX
