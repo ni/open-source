@@ -10,9 +10,9 @@ def get_repo_list():
     For example: [("owner1","repo1"), ("owner2","repo2")]
     """
     return [
-        ("ni","labview-icon-editor"),
+        #("ni","labview-icon-editor"),
         #("ni","actor-framework"),
-        #("dotnet","core"),
+        ("dotnet","core"),
         #("facebook","react"),
         #("tensorflow","tensorflow"),
         #("EPICS/reconos"),
