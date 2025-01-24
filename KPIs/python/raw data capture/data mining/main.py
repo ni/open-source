@@ -42,7 +42,6 @@ def load_config():
         "file_level":"DEBUG"
     })
     cfg.setdefault("max_retries",20)
-    # fallback if no baseline in DB
     cfg.setdefault("fallback_baseline_date","2015-01-01")
     return cfg
 
@@ -96,8 +95,7 @@ def rotate_token():
 
 def get_earliest_item_created_date_in_db(conn, repo_name):
     """
-    If the earliest item is newer than baseline => skip entire repo.
-    We'll check MIN(created_at) from issues + pulls.
+    If you want the earliest created_at among issues + pulls.
     """
     c=conn.cursor()
     c.execute("""
@@ -106,7 +104,7 @@ def get_earliest_item_created_date_in_db(conn, repo_name):
       SELECT created_at FROM issues WHERE repo_name=%s
       UNION
       SELECT created_at FROM pulls WHERE repo_name=%s
-    ) AS sub
+    ) sub
     """,(repo_name,repo_name))
     row=c.fetchone()
     c.close()
@@ -115,12 +113,12 @@ def get_earliest_item_created_date_in_db(conn, repo_name):
     return None
 
 def main():
-    global TOKENS,session,token_info,CURRENT_TOKEN_INDEX
+    global TOKENS, session, token_info, CURRENT_TOKEN_INDEX
     cfg=load_config()
     setup_logging(cfg)
-    logging.info("Starting => watchers=full => numeric for issues/pulls => skip stars by starred_at => skip entire repo if earliest DB item>baseline => single-thread")
+    logging.info("Starting => watchers=full => numeric issues/pulls => skip stars older than baseline => single-thread => summary at end")
 
-    conn=connect_db(cfg,create_db_if_missing=True)
+    conn=connect_db(cfg, create_db_if_missing=True)
     create_tables(conn)
 
     TOKENS=cfg["tokens"]
@@ -131,26 +129,47 @@ def main():
         session.headers["Authorization"]=f"token {TOKENS[0]}"
 
     max_retries=cfg["max_retries"]
-    fallback_dt=datetime.strptime(cfg["fallback_baseline_date"],"%Y-%m-%d")
+    fallback_str=cfg["fallback_baseline_date"]
+    fallback_dt=datetime.strptime(fallback_str, "%Y-%m-%d")
+
+    # We'll store summary info in a list of dicts, then print at the end
+    summary_data=[]
 
     all_repos=get_repo_list()
     for (owner,repo) in all_repos:
-        bdt,en = get_baseline_info(conn,owner,repo)
-        if en==0:
-            logging.info("Repo %s/%s => enabled=0 => skip run",owner,repo)
-            continue
+        bdt,en=get_baseline_info(conn,owner,repo)
         if not bdt:
             bdt=fallback_dt
+        skip_reason="None"
+        if en==0:
+            skip_reason="disabled"
+        earliest_in_db=None
 
         repo_name=f"{owner}/{repo}"
-        earliest_in_db=get_earliest_item_created_date_in_db(conn,repo_name)
-        if earliest_in_db and earliest_in_db>bdt:
-            logging.info("Earliest item in DB for %s => %s, which is newer than baseline_date=%s => skip entire repo",
-                         repo_name,earliest_in_db,bdt)
+        if en==1:
+            earliest_in_db=get_earliest_item_created_date_in_db(conn,repo_name)
+            if earliest_in_db and earliest_in_db>bdt:
+                skip_reason="earliest_in_db_newer_than_baseline"
+
+        summary_data.append({
+            "owner":owner,
+            "repo":repo,
+            "baseline_date":bdt,
+            "enabled":en,
+            "earliest_in_db":earliest_in_db,
+            "skip_reason":skip_reason
+        })
+
+        if en==0:
+            logging.info("Repo %s/%s => disabled => skip run",owner,repo)
+            continue
+        if skip_reason=="earliest_in_db_newer_than_baseline":
+            logging.info("Repo %s/%s => earliest item in DB is %s > baseline=%s => skip entire repo",
+                         owner,repo,earliest_in_db,bdt)
             continue
 
-        logging.info("Repo %s => watchers => full => numeric issues/pulls => skip stars older than %s => proceed",
-                     repo_name,bdt)
+        logging.info("Repo %s/%s => watchers => full => numeric issues/pulls => skip stars older than baseline=%s => proceed",
+                     owner,repo,bdt)
 
         from fetch_forks_stars_watchers import (
             list_watchers_single_thread,
@@ -187,10 +206,7 @@ def main():
             max_retries
         )
 
-        from fetch_events import (
-            fetch_issue_events_for_all_issues,
-            fetch_pull_events_for_all_pulls
-        )
+        from fetch_events import fetch_issue_events_for_all_issues, fetch_pull_events_for_all_pulls
         fetch_issue_events_for_all_issues(
             conn,owner,repo,en,
             session,handle_rate_limit_func,
@@ -222,8 +238,38 @@ def main():
             max_retries
         )
 
+        # If you have fetch_comment_reactions => do that here:
+        # from fetch_comment_reactions import fetch_comment_reactions_for_all_comments
+        # fetch_comment_reactions_for_all_comments(...)
+
     conn.close()
-    logging.info("All done => single-thread => watchers=full => numeric issues/pulls => skip stars older than baseline => skip entire repo if earliest DB item>baseline => complete")
+
+    logging.info("All done => now printing summary table for each repo...\n")
+    print_summary_table(summary_data)
+    logging.info("Finished.")
+
+def print_summary_table(summary_data):
+    """
+    Print a simple console table showing:
+    - owner/repo
+    - earliest_in_db
+    - baseline_date
+    - skip_reason
+    So we can easily see differences between repos.
+    """
+    print("")
+    print("========== FINAL SUMMARY ==========")
+    header = f"{'Repo':35s} | {'EarliestInDB':19s} | {'BaselineDate':19s} | {'SkipReason':15s}"
+    print(header)
+    print("-"*len(header))
+    for row in summary_data:
+        repo_str=f"{row['owner']}/{row['repo']}"
+        earliest_str=str(row['earliest_in_db']) if row['earliest_in_db'] else "None"
+        baseline_str=str(row['baseline_date']) if row['baseline_date'] else "None"
+        skip_str=row['skip_reason']
+        line = f"{repo_str:35s} | {earliest_str:19s} | {baseline_str:19s} | {skip_str:15s}"
+        print(line)
+    print("===================================")
 
 def handle_rate_limit_func(resp):
     global TOKENS,CURRENT_TOKEN_INDEX,session,token_info
