@@ -48,14 +48,14 @@ def velocity(merges_s, closed_s, openIssueRatio, openPRRatio, weights):
     """
     w_m= weights.get("velocity_merges_weight",0.6)
     w_c= weights.get("velocity_closed_weight",0.4)
-    val= (merges_s + closed_s) * openPRRatio * openIssueRatio
+    val=  openPRRatio * openIssueRatio
     return val
 
 def user_interest_growth(forks_s, stars_s):
     """
     Hard-coded => 0.4*forks + 0.6*stars
     """
-    return 0.4*forks_s + 0.6*stars_s
+    return forks_s
 
 def monthly_active_contributors(newIss_s, comm_s, reac_s, pull_s, weights):
     """

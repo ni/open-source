@@ -723,21 +723,21 @@ def main():
 
     repos= [#"ni/labview-icon-editor","facebook/react","tensorflow/tensorflow","dotnet/core"]
     
-        "ni/labview-icon-editor",
-        "ni/actor-framework",
-        "ni/grpc-labview",
-        "dotnet/core",
+        #"ni/labview-icon-editor",
+        #"ni/actor-framework",
+        #"ni/grpc-labview",
+        #"dotnet/core",
         "facebook/react",
         "tensorflow/tensorflow",
-        "EPICS/reconos",
-        "OpenFOAM/OpenFOAM-dev",
-        "FreeCAD/freecad",
-        "fritzing/fritzing-app",
-        "qucs/qucs",
-        "OpenSCAD/openscad",
-        "Node-RED/nodered",
-        "OpenPLC/OpenPLC-IDE",
-        "Eclipse/mraa",
+        #"EPICS/reconos",
+        #"OpenFOAM/OpenFOAM-dev",
+        #"FreeCAD/freecad",
+        #"fritzing/fritzing-app",
+        #"qucs/qucs",
+        #"OpenSCAD/openscad",
+        #"Node-RED/nodered",
+        #"OpenPLC/OpenPLC-IDE",
+        #"Eclipse/mraa",
     ]
     scaling_repo= get_scaling_repo() or "ni/labview-icon-editor"
     if scaling_repo not in repos:
