@@ -48,7 +48,7 @@ def velocity(merges_s, closed_s, openIssueRatio, openPRRatio, weights):
     """
     w_m= weights.get("velocity_merges_weight",0.6)
     w_c= weights.get("velocity_closed_weight",0.4)
-    val= (merges_s* openPRRatio* w_m) + (closed_s* openIssueRatio* w_c)
+    val= (merges_s + closed_s) * openPRRatio * openIssueRatio * w_m
     return val
 
 def user_interest_growth(forks_s, stars_s):
