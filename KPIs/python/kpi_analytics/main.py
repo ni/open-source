@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
 """
-main.py - BFS aggregator + side-by-side raw variable charts (scaling vs. non-scaling target)
-with a ratio label above the scaling bar.
-
-We keep BFS aggregator prints in the console unchanged. For raw variable PNGs,
-we now produce side-by-side bars (scaling vs. 'TARGET(avgNonScaling)') and label partial coverage.
-We also place (scaling/target)*100.0 above scaling bar, or 'N/A' if target=0.
-
-We keep the same filenames: merges_raw.png, closed_raw.png, etc., overwriting the old single-bar style.
+main.py - Final integrated BFS solution, with side-by-side charts
+(unify quarter indexes from scaling & target, partial-labeled, ratio label on scaling bar),
+and table placed UNDER the chart. Applies to both raw variables & aggregator metrics.
 """
 
 import sys
@@ -17,7 +12,6 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 
-# We assume these modules exist
 from config import get_scaling_repo, get_num_fiscal_quarters
 from aggregator import (
     load_aggregator_weights,
@@ -31,7 +25,7 @@ from scale_factors import (
 )
 from baseline import find_oldest_date_for_repo
 from quarters import generate_quarter_windows
-from merges_issues import (
+from analytics.merges_issues import (
     count_merged_pulls,
     count_closed_issues,
     count_new_pulls,
@@ -39,13 +33,9 @@ from merges_issues import (
     count_open_issues_at_date,
     count_open_prs_at_date
 )
-from forks_stars import count_forks, count_stars
-from comments_reactions import count_issue_comments, count_all_reactions
+from analytics.forks_stars import count_forks, count_stars
+from analytics.comments_reactions import count_issue_comments, count_all_reactions
 
-
-############################################
-# CAPTURE CONSOLE => debug_log
-############################################
 original_stdout= sys.stdout
 log_capture= io.StringIO()
 
@@ -59,9 +49,6 @@ class DualOutput:
 
 sys.stdout= DualOutput()
 
-############################################
-# PRINT HELPERS
-############################################
 def print_aligned_table(table_data, alignments=None):
     if not table_data:
         return
@@ -134,9 +121,6 @@ def largest_overlap_quarter(st, ed):
             best_lbl= qlbl
     return best_lbl
 
-############################################
-# BFS PRINT REPO
-############################################
 def BFS_print_repo(
     repo, mergesFactor, closedFactor, forksFactor, starsFactor,
     newIssuesFactor, commentsFactor, reactionsFactor, pullsFactor,
@@ -216,9 +200,6 @@ def BFS_print_repo(
     print("------------------------------------------------------\n")
 
 
-############################################
-# compute_non_scaling_target for aggregator
-############################################
 def compute_non_scaling_target(
     scaling_repo, all_repos,
     velocity_data, uig_data, mac_data, sei_data,
@@ -249,6 +230,7 @@ def compute_non_scaling_target(
     union_q_idx= set()
     non_scalers= [r for r in all_repos if r!=scaling_repo]
 
+    # gather aggregator quarter indexes among non-scalers
     for nr in non_scalers:
         if nr in quarter_dates:
             union_q_idx.update(quarter_dates[nr].keys())
@@ -303,23 +285,12 @@ def compute_non_scaling_target(
 
     return target_name
 
-############################################
-# Additional: compute_non_scaling_raw for merges, forks, etc.
-############################################
 def compute_non_scaling_raw_target(
     scaling_repo, all_repos,
     merges_data, closed_data, forks_data, stars_data,
     newIss_data, comm_data, reac_data, pull_data,
     quarter_dates
 ):
-    """
-    Creates a pseudo-repo "TARGETraw(avgNonScaling)" for each raw variable 
-    by averaging the non-scaling repos. We'll unify quarter indexes => if 
-    a quarter is missing for a repo => skip. Then BFS average.
-
-    We'll store merges_data["TARGETraw(avgNonScaling)"][q_idx] = average merges etc.
-    Return that target name.
-    """
     target_name= "TARGETraw(avgNonScaling)"
     merges_data[target_name]= {}
     closed_data[target_name]= {}
@@ -332,8 +303,7 @@ def compute_non_scaling_raw_target(
     quarter_dates[target_name]= {}
 
     union_q= set()
-    non_scalers= [r for r in all_repos if r!=scaling_repo]
-    # gather all q_idx from non-scaling
+    non_scalers= [r for r in all_repos if r!= scaling_repo]
     for nr in non_scalers:
         if nr in quarter_dates:
             union_q.update(quarter_dates[nr].keys())
@@ -343,9 +313,9 @@ def compute_non_scaling_raw_target(
         sumM=0.0; sumC=0.0; sumF=0.0; sumS=0.0
         sumNi=0.0; sumCo=0.0; sumRe=0.0; sumPu=0.0
         ccount=0
-        partial_any= False
-        st_list=[]
-        ed_list=[]
+        partial_any=False
+        st_list= []
+        ed_list= []
         for nr in non_scalers:
             if nr not in quarter_dates:
                 continue
@@ -371,7 +341,6 @@ def compute_non_scaling_raw_target(
                 sumRe+= re
                 sumPu+= pu
                 ccount+=1
-
         if ccount>0 and st_list and ed_list:
             avgM= sumM/ ccount
             avgC= sumC/ ccount
@@ -396,21 +365,23 @@ def compute_non_scaling_raw_target(
 
     return target_name
 
-############################################
-def produce_side_by_side_raw(
-    var_label, # e.g. "Merges"
+def produce_side_by_side_chart(
+    metric_label,
     scaling_repo, target_repo,
-    raw_data,   # e.g. merges_data
+    data_dict,  # e.g. merges_data or velocity_data
     quarter_dates,
     all_repos,
     oldest_map,
     filename
 ):
     """
-    Side-by-side bar chart for a raw variable. 
-    2 bars: scaling vs. target for each quarter. 
-    With ratio label above scaling bar. If target=0 => 'N/A'.
-    partial coverage labeling => unify quarter indexes.
+    Unify all q_idx from scaling & target => bar1= scaling, bar2= target
+    If scaling missing => 0, if target missing => 0
+    Label partial if either side is partial. 
+    Ratio label on top of scaling bar => 2 decimals or N/A if target=0
+
+    Table placed UNDER the chart => 'Repo, OldestDate, WindowEnd' 
+    with '(partial)' if partial coverage overall for that repo.
     """
     import matplotlib.pyplot as plt
 
@@ -422,99 +393,109 @@ def produce_side_by_side_raw(
         qset.update(quarter_dates[target_repo].keys())
     sorted_q= sorted(qset)
 
+    # build arrays
     scaling_vals=[]
     target_vals=[]
     labels=[]
+    partial_flags=[]
 
     for q_idx in sorted_q:
-        sc_val= raw_data[scaling_repo].get(q_idx,0.0) if scaling_repo in raw_data else 0.0
-        tg_val= raw_data[target_repo].get(q_idx,0.0) if target_repo in raw_data else 0.0
-        # partial coverage?
+        sc= data_dict[scaling_repo].get(q_idx,0.0) if scaling_repo in data_dict else 0.0
+        tg= data_dict[target_repo].get(q_idx,0.0) if target_repo in data_dict else 0.0
+
+        # partial label => if scaling or target partial
         sp= False
-        # gather intervals
-        (sqs,sqe,spf)= (None,None,False)
+        sflag= False
+        tflag= False
         if scaling_repo in quarter_dates and q_idx in quarter_dates[scaling_repo]:
-            (sqs,sqe,spf)= quarter_dates[scaling_repo][q_idx]
-        (tqs,tqe,tpf)= (None,None,False)
+            (_,_,sf)= quarter_dates[scaling_repo][q_idx]
+            sflag= sf
         if target_repo in quarter_dates and q_idx in quarter_dates[target_repo]:
-            (tqs,tqe,tpf)= quarter_dates[target_repo][q_idx]
-        if spf or tpf:
-            sp= True
-        # unify intervals
-        allS= [];allE=[]
-        if sqs: allS.append(sqs)
-        if tqs: allS.append(tqs)
-        if sqe: allE.append(sqe)
-        if tqe: allE.append(tqe)
-        if allS and allE:
-            st= min(allS)
-            ed= max(allE)
+            (_,_,tf)= quarter_dates[target_repo][q_idx]
+            tflag= tf
+        sp= (sflag or tflag)
+
+        # unify intervals to pick a single st,ed for largest_overlap_quarter
+        st_list=[]; ed_list=[]
+        if scaling_repo in quarter_dates and q_idx in quarter_dates[scaling_repo]:
+            (qs,qe,_)= quarter_dates[scaling_repo][q_idx]
+            st_list.append(qs)
+            ed_list.append(qe)
+        if target_repo in quarter_dates and q_idx in quarter_dates[target_repo]:
+            (qs,qe,_)= quarter_dates[target_repo][q_idx]
+            st_list.append(qs)
+            ed_list.append(qe)
+        if st_list and ed_list:
+            st= min(st_list)
+            ed= max(ed_list)
         else:
             st= datetime(2000,1,1)
             ed= datetime(2000,1,1)
 
-        # label
-        qlbl= largest_overlap_quarter(st,ed)
+        lbl= largest_overlap_quarter(st,ed)
         if sp:
-            qlbl+= "(partial)"
+            lbl+= "(partial)"
 
-        scaling_vals.append(sc_val)
-        target_vals.append(tg_val)
-        labels.append(qlbl)
+        scaling_vals.append(sc)
+        target_vals.append(tg)
+        labels.append(lbl)
 
     x= np.arange(len(sorted_q))
-    width=0.35
+    width= 0.35
 
-    fig,ax= plt.subplots(figsize=(12,6))
-    ax.set_title(f"{var_label} Compare: Scaling vs. Target")
+    fig= plt.figure(figsize=(12,8))
+    ax= fig.add_axes([0.1,0.3,0.8,0.65])  # chart on top ~ 65% of figure height
+    ax.set_title(f"{metric_label} Compare: {scaling_repo} vs. {target_repo}")
     bar_s= ax.bar(x - width/2, scaling_vals, width, label=scaling_repo, color='steelblue')
     bar_t= ax.bar(x + width/2, target_vals, width, label=target_repo, color='orange')
+
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
     ax.legend()
 
-    # ratio label on scaling bars
-    for i,rect in enumerate(bar_s):
+    # ratio label => scaling bar
+    for i, rect in enumerate(bar_s):
         scv= scaling_vals[i]
         tgv= target_vals[i]
-        if abs(tgv)<1e-9:
+        if abs(tgv)< 1e-9:
             ratio_str= "N/A"
         else:
-            ratio_f= (scv/tgv)*100.0
-            ratio_str= f"{ratio_f:.2f}%"
-        height= rect.get_height()
-        ax.text(rect.get_x()+rect.get_width()/2, height+0.05*max(1.0,height),
-            ratio_str, ha='center', va='bottom', fontsize=9)
+            ratio= (scv/tgv)*100.0
+            ratio_str= f"{ratio:.2f}%"
+        ht= rect.get_height()
+        ax.text(rect.get_x()+rect.get_width()/2, ht+ 0.05*max(1.0, ht),
+                ratio_str, ha='center', va='bottom', fontsize=9)
 
-    # Make a side table if you want, or replicate aggregator logic
-    # For simplicity, let's replicate aggregator approach
-    # We'll show scaling + non-scaling repos date range
-    from matplotlib.table import Table
-    ax_table= fig.add_axes([0.7,0.1,0.28,0.8])
+    # table under chart => row for each repo
+    ax_table= fig.add_axes([0.1,0.05,0.8,0.2]) # 20% for table
     ax_table.set_axis_off()
 
-    tbl= Table(ax_table,bbox=[0,0,1,1])
+    from matplotlib.table import Table
+    tbl= Table(ax_table, bbox=[0,0,1,1])
     col_labels= ["Repo","OldestDate","WindowEnd"]
     table_data= [col_labels]
-    # top => scaling
+
+    # scaling
     if scaling_repo in oldest_map:
         (odt, wend, pf)= oldest_map[scaling_repo]
         od_str= odt.strftime("%Y-%m-%d %H:%M")
         we_str= wend.strftime("%Y-%m-%d %H:%M")
         if pf:
             we_str+= " (partial)"
-        table_data.append([scaling_repo+"(scaling)", od_str, we_str])
+        table_data.append([scaling_repo, od_str, we_str])
+
     # non-scaling
-    # or just show the entire set of repos?
+    # you said you don't want extra columns => keep it simple
+    # we'll just list all repos for completeness
     for rp in all_repos:
-        if rp== scaling_repo: 
+        if rp== scaling_repo:
             continue
         if rp not in oldest_map:
             continue
-        (odt, wend, pf)= oldest_map[rp]
+        (odt,wend,pff)= oldest_map[rp]
         od_str= odt.strftime("%Y-%m-%d %H:%M")
         we_str= wend.strftime("%Y-%m-%d %H:%M")
-        if pf:
+        if pff:
             we_str+= " (partial)"
         table_data.append([rp, od_str, we_str])
 
@@ -525,10 +506,13 @@ def produce_side_by_side_raw(
 
     for irow in range(nrows):
         for icol in range(ncols):
-            ctxt= table_data[irow][icol]
-            cell= tbl.add_cell(irow, icol,
+            cval= table_data[irow][icol]
+            cell= tbl.add_cell(
+               row=irow, col=icol,
                width=col_w, height=row_h,
-               text= ctxt, loc='center', facecolor='white'
+               text=cval,
+               loc='center',
+               facecolor='white'
             )
             if irow==0:
                 cell.set_facecolor('lightgray')
@@ -540,9 +524,8 @@ def produce_side_by_side_raw(
 
     fig.savefig(filename)
     plt.close(fig)
-    print(f"[INFO] Created side-by-side raw => {filename}")
+    print(f"[INFO] Created {filename}")
 
-############################################
 def main():
     env_scaling= os.environ.get("SCALING_REPO","<not set>")
     env_quarters= os.environ.get("NUM_FISCAL_QUARTERS","<not set>")
@@ -681,7 +664,7 @@ def main():
 
         oldest_map[r]= (oldest, final_end, partial_any)
 
-    # BFS for each repo
+    # BFS aggregator prints
     for r in repos:
         if r not in quarter_dates:
             continue
@@ -698,9 +681,8 @@ def main():
             quarter_dates= quarter_dates
         )
 
-    # aggregator target for aggregator metrics
-    target_name= "TARGET(avgNonScaling)"
-    target_name= compute_non_scaling_target(
+    # aggregator target
+    target_agg= compute_non_scaling_target(
         scaling_repo, repos,
         velocity_data, uig_data, mac_data, sei_data,
         issueRatio_data, prRatio_data,
@@ -708,19 +690,17 @@ def main():
         merges_data, closed_data, forks_data, stars_data,
         newIss_data, comm_data, reac_data, pull_data
     )
-
     # raw target
-    raw_target_name= "TARGETraw(avgNonScaling)"
-    raw_target_name= compute_non_scaling_raw_target(
+    target_raw= compute_non_scaling_raw_target(
         scaling_repo, repos,
         merges_data, closed_data, forks_data, stars_data,
         newIss_data, comm_data, reac_data, pull_data,
         quarter_dates
     )
 
-    print("\n=== BFS aggregator done. Now produce side-by-side raw & aggregator charts. ===\n")
+    print("\n=== BFS aggregator done. Now produce side-by-side for raw & aggregator. ===\n")
 
-    ########## side-by-side raw => merges, closed, forks, etc.
+    # produce side-by-side for raw
     raw_vars= {
        "Merges": merges_data,
        "Closed": closed_data,
@@ -731,26 +711,40 @@ def main():
        "Reactions": reac_data,
        "Pulls": pull_data
     }
-
-    for rv_label, rv_dict in raw_vars.items():
-        # produce side-by-side
+    for rv_label,rv_dict in raw_vars.items():
         fname= f"{rv_label.lower()}_raw.png"
-        produce_side_by_side_raw(
-          var_label= rv_label,
+        produce_side_by_side_chart(
+          metric_label= rv_label,
           scaling_repo= scaling_repo,
-          target_repo= raw_target_name,
-          raw_data= rv_dict,
+          target_repo= "TARGETraw(avgNonScaling)",
+          data_dict= rv_dict,
           quarter_dates= quarter_dates,
           all_repos= repos,
           oldest_map= oldest_map,
           filename= fname
         )
 
-    # aggregator side-by-side => velocity, mac, uig, sei => omitted here if you only want raw side-by-side
-    # but if you still want aggregator side by side:
-    # [similar approach as before, or unify aggregator approach, etc.]
+    # aggregator side-by-side
+    aggregator_metrics= {
+       "Velocity": velocity_data,
+       "MAC": mac_data,
+       "UIG": uig_data,
+       "SEI": sei_data
+    }
+    for label, data_dict in aggregator_metrics.items():
+        fn= f"{label.lower()}_compare.png"
+        produce_side_by_side_chart(
+          metric_label= label,
+          scaling_repo= scaling_repo,
+          target_repo= "TARGET(avgNonScaling)",
+          data_dict= data_dict,
+          quarter_dates= quarter_dates,
+          all_repos= repos,
+          oldest_map= oldest_map,
+          filename= fn
+        )
 
-    print("\n=== Done all side-by-side raw variable charts. ===")
+    print("\n=== Done. BFS aggregator + side-by-side raw & aggregator charts with table under. ===")
 
     sys.stdout.flush()
     console_out= log_capture.getvalue()
