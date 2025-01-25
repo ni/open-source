@@ -210,7 +210,7 @@ def BFS_print_detailed_calculations(
         st_raw= stars_data[repo].get(q_idx,0.0)
         fo_s= fo_raw* forksFactor[repo]
         st_s= st_raw* starsFactor[repo]
-        uig= 0.4* fo_s + 0.6* st_s
+        uig= fo_s #0.4* fo_s + 0.6* st_s
 
         uig_header.append([
           label_str,
