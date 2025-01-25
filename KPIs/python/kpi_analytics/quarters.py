@@ -1,31 +1,53 @@
-#!/usr/bin/env python3
+# quarters.py
 """
-quarters.py
-
-Generates n consecutive 3-month windows from a start_dt.
-If you want a real "fiscal" approach, adapt add_months or define exact Q1..Q4 bounds.
+Simple library to generate quarter windows from a starting date
+for BFS aggregator usage.
 """
 
-from datetime import datetime
-import calendar
+from dateutil.relativedelta import relativedelta
 
-def generate_quarter_windows(start_dt, n):
-    windows=[]
-    cur= start_dt
-    for _ in range(n):
-        end= add_months(cur, 3)
-        windows.append((cur, end))
-        cur= end
-    return windows
+def generate_quarter_windows(oldest_date, q_count):
+    """
+    Each quarter is 3 months. We produce q_count windows.
+    """
+    out=[]
+    current= oldest_date
+    for _ in range(q_count):
+        end= current+ relativedelta(months=3)
+        out.append((current,end))
+        current= end
+    return out
 
-def add_months(dt, months):
-    year= dt.year
-    month= dt.month+ months
-    day= dt.day
-    while month>12:
-        month-=12
-        year+=1
-    last_day= calendar.monthrange(year, month)[1]
-    if day> last_day:
-        day= last_day
-    return dt.replace(year=year, month=month, day=day)
+def find_fy(d):
+    """
+    If month >=10 => fiscal year= d.year+1, else d.year
+    """
+    if d.month>=10:
+        return d.year+1
+    return d.year
+
+def quarter_fy_ranges(fy):
+    """
+    Return Q1..Q4 for that FY
+    """
+    import datetime
+    return {
+      "Q1": (datetime.datetime(fy-1,10,1), datetime.datetime(fy-1,12,31,23,59,59)),
+      "Q2": (datetime.datetime(fy,1,1), datetime.datetime(fy,3,31,23,59,59)),
+      "Q3": (datetime.datetime(fy,4,1), datetime.datetime(fy,6,30,23,59,59)),
+      "Q4": (datetime.datetime(fy,7,1), datetime.datetime(fy,9,30,23,59,59))
+    }
+
+def largest_overlap_quarter(st, ed):
+    fy= find_fy(st)
+    Q= quarter_fy_ranges(fy)
+    best_lbl= "Q?"
+    best_ov= 0
+    for qlbl,(qs,qe) in Q.items():
+        overlap_s= max(st, qs)
+        overlap_e= min(ed, qe)
+        ov_sec= (overlap_e- overlap_s).total_seconds()
+        if ov_sec> best_ov:
+            best_ov= ov_sec
+            best_lbl= qlbl
+    return best_lbl

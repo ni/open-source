@@ -1,51 +1,35 @@
-#!/usr/bin/env python3
+# baseline.py
 """
-baseline.py
-
-Finds the oldest date from 'pulls' or 'issues' for each repo.
-Uses db_config.ini for MySQL credentials.
+Finds the oldest creation date for a given repo from issues, pulls, forks, stars, etc.
 """
 
 import mysql.connector
-import configparser
-
-def _get_db_connection():
-    config= configparser.ConfigParser()
-    config.read('db_config.ini')
-    db_cfg= config['mysql']
-    cnx= mysql.connector.connect(
-        host=db_cfg['host'],
-        user=db_cfg['user'],
-        password=db_cfg['password'],
-        database=db_cfg['database']
-    )
-    return cnx
+from db_config import DB_HOST, DB_USER, DB_PASSWORD, DB_DATABASE
 
 def find_oldest_date_for_repo(repo):
     """
-    SELECT MIN(all_min) FROM (
-      SELECT MIN(created_at) FROM pulls WHERE repo_name=?
-      UNION ALL
-      SELECT MIN(created_at) FROM issues WHERE repo_name=?
-    ) subq
+    We want the earliest creation date from issues, pulls, forks, stars, etc.
     """
-    cnx= _get_db_connection()
-    cursor= cnx.cursor()
     query= """
-    SELECT MIN(all_min) AS oldest_date
-    FROM (
-        SELECT MIN(created_at) AS all_min
-        FROM pulls
-        WHERE repo_name=%s
-
-        UNION ALL
-
-        SELECT MIN(created_at) AS all_min
-        FROM issues
-        WHERE repo_name=%s
-    ) subq
+        SELECT MIN(all_min) AS oldest_date
+        FROM (
+            SELECT MIN(created_at) AS all_min FROM issues      WHERE repo_name=%s
+            UNION ALL
+            SELECT MIN(created_at) FROM pulls                  WHERE repo_name=%s
+            UNION ALL
+            SELECT MIN(created_at) FROM forks                  WHERE repo_name=%s
+            UNION ALL
+            SELECT MIN(starred_at) FROM stars                  WHERE repo_name=%s
+        ) subq
     """
-    cursor.execute(query, (repo, repo))
+    cnx= mysql.connector.connect(
+        host= DB_HOST,
+        user= DB_USER,
+        password= DB_PASSWORD,
+        database= DB_DATABASE
+    )
+    cursor= cnx.cursor()
+    cursor.execute(query, (repo,repo,repo,repo))
     row= cursor.fetchone()
     cursor.close()
     cnx.close()

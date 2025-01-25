@@ -1,68 +1,42 @@
-#!/usr/bin/env python3
+# aggregator.py
 """
-aggregator.py
-
-Implements aggregator logic for velocity, MAC, user_interest_growth, SEI,
-plus reading aggregator weights from config.yaml.
+Defines aggregator functions: velocity, uig, mac, sei,
+plus a placeholder load_aggregator_weights() if you store them in a config.
 """
-
-import os
-import yaml
-
-DEFAULT_VELOCITY_MERGES_WEIGHT= 0.6
-DEFAULT_VELOCITY_CLOSED_WEIGHT= 0.4
-
-DEFAULT_MAC_NEWISS_WEIGHT= 0.8
-DEFAULT_MAC_PULLS_WEIGHT= 0.2
 
 def load_aggregator_weights():
-    config_file= "config.yaml"
-    if not os.path.exists(config_file):
-        print(f"[WARN] aggregator => {config_file} missing => fallback.")
-        return {
-          "velocity_merges_weight": DEFAULT_VELOCITY_MERGES_WEIGHT,
-          "velocity_closed_weight": DEFAULT_VELOCITY_CLOSED_WEIGHT,
-          "mac_newIssues_weight":   DEFAULT_MAC_NEWISS_WEIGHT,
-          "mac_pulls_weight":       DEFAULT_MAC_PULLS_WEIGHT
-        }
-    with open(config_file,"r",encoding="utf-8") as f:
-        data= yaml.safe_load(f) or {}
-    agg_data= data.get("aggregatorWeights",{})
-
-    vmw= agg_data.get("velocity_merges_weight", DEFAULT_VELOCITY_MERGES_WEIGHT)
-    vcw= agg_data.get("velocity_closed_weight", DEFAULT_VELOCITY_CLOSED_WEIGHT)
-    m_ni= agg_data.get("mac_newIssues_weight",  DEFAULT_MAC_NEWISS_WEIGHT)
-    m_pl= agg_data.get("mac_pulls_weight",      DEFAULT_MAC_PULLS_WEIGHT)
-
+    """
+    If you have aggregator.ini or environment, parse them.
+    For now, we do a direct fallback demonstration.
+    """
     return {
-      "velocity_merges_weight": vmw,
-      "velocity_closed_weight": vcw,
-      "mac_newIssues_weight":   m_ni,
-      "mac_pulls_weight":       m_pl
+      "velocity_mergesWeight": 0.4,
+      "velocity_closedWeight": 0.6,
+      # ...
     }
 
-def velocity(merges_s, closed_s, openIssueRatio, openPRRatio, weights):
+def velocity(merges_s, closed_s):
     """
-    velocity = merges_s* openPRRatio* mergesWeight 
-             + closed_s* openIssueRatio* closedWeight
+    Basic aggregator formula for velocity:
+    velocity = 0.4 * mergesScaled + 0.6 * closedScaled
     """
-    w_m= weights.get("velocity_merges_weight",0.6)
-    w_c= weights.get("velocity_closed_weight",0.4)
-    val=  openPRRatio * openIssueRatio
-    return val
+    return 0.4* merges_s + 0.6* closed_s
 
 def user_interest_growth(forks_s, stars_s):
     """
-    Hard-coded => 0.4*forks + 0.6*stars
+    Basic aggregator formula for UIG:
+    uig = 0.4 * forksScaled + 0.6 * starsScaled
     """
-    return forks_s
+    return 0.4* forks_s + 0.6* stars_s
 
-def monthly_active_contributors(newIss_s, comm_s, reac_s, pull_s, weights):
+def monthly_active_contributors(issues_comm_reac_s, pulls_s):
     """
-    mac= w_ni*(newIss_s + comm_s + reac_s) + w_pl*(pull_s)
+    MAC = 0.8 * (issues+comments+reactions scaled) + 0.2 * pullsScaled
     """
-    w_ni= weights.get("mac_newIssues_weight",0.8)
-    w_pl= weights.get("mac_pulls_weight",0.2)
-    sumICR= newIss_s+ comm_s+ reac_s
-    val= w_ni* sumICR + w_pl* pull_s
-    return val
+    return 0.8* issues_comm_reac_s + 0.2* pulls_s
+
+def compute_sei(velocity_val, uig_val, mac_val):
+    """
+    SEI = 0.5*MAC + 0.3*Velocity + 0.2*UIG
+    """
+    return 0.5* mac_val + 0.3* velocity_val + 0.2* uig_val
