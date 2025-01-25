@@ -2,28 +2,19 @@
 """
 main.py - Final Integrated BFS + Aggregator + Non-scaling Target + Partial Coverage
 -----------------------------------------------------------------------------------
-1) BFS console prints for:
-   - Raw variables: merges, closed, forks, stars, newIssues, comments, reactions, pulls
-   - Aggregator metrics: velocity, uig, mac, sei
-   - Includes openIssueRatio and openPRRatio columns for aggregator detail
-   - Done per repo, including scaling and non-scaling
-2) We also compute a "Target" aggregator as the average of all non-scaling repos,
-   and produce a BFS aggregator print for that "pseudo-repo" too.
-3) Partial coverage is shown and labeled as "(partial)"
-4) Summaries are strictly in console for BFS aggregator, no BFS in PNG.
-5) PNG output => separate raw variable charts + aggregator charts
-6) Single vs. multiple repos in side-by-side bar approach for aggregator if desired.
+- Avoids KeyError by defining empty raw-data dicts for 'TARGET(avgNonScaling)'
+- Ensures 'largest_overlap_quarter' is defined above 'produce_chart_with_table'
+- BFS includes raw merges/issues/forks/stars + aggregator columns (Velocity, UIG, MAC, SEI)
+- Generates separate .png files for each raw variable + aggregator metrics
+- Partial quarters labeled "(partial)" if the quarter extends beyond 'now'
 
-We unify the flow:
- - Build quarter data for each repo
- - BFS prints (raw + aggregator) for each repo
- - Build "non-scaling target" aggregator BFS
- - Produce separate PNGs for each raw var
- - Produce aggregator PNGs (velocity, mac, uig, sei)
- - If you want a scaling vs. target chart, that can be done with produce_scaling_vs_target_chart.
-
-openIssueRatio = (#openIssuesAvgOverWindow) / (#openIssuesAvgOverWindow + #closedIssuesInWindow)
-openPRRatio    = (#openPRsAvgOverWindow)    / (#openPRsAvgOverWindow    + #mergedPRsInWindow)
+Dependencies (must be present in your environment):
+  1) aggregator.py => aggregator logic (velocity, user_interest_growth, monthly_active_contributors)
+  2) scale_factors.py => mergesFactor, closedFactor, etc. plus compute_scale_factors
+  3) analytics/ => merges_issues.py, forks_stars.py, comments_reactions.py, etc. that do real SQL queries
+  4) baseline.py => find_oldest_date_for_repo
+  5) quarters.py => generate_quarter_windows
+  6) config.py => get_scaling_repo, get_num_fiscal_quarters or environment
 """
 
 import sys
@@ -33,20 +24,30 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 
-# We'll assume these modules exist from your previous code references
+# 1) config.py => user’s environment & config retrieval
 from config import get_scaling_repo, get_num_fiscal_quarters
+
+# 2) aggregator.py => aggregator weights & formulas
 from aggregator import (
     load_aggregator_weights,
     velocity as aggregator_velocity,
     user_interest_growth as aggregator_uig,
     monthly_active_contributors as aggregator_mac
 )
+
+# 3) scale_factors.py => mergesFactor, closedFactor, etc.
 from scale_factors import (
     compute_scale_factors,
-    compute_sei_data  # if you had a function for SEI, else we'll do manual
+    compute_sei_data
 )
+
+# 4) baseline.py => earliest date
 from baseline import find_oldest_date_for_repo
+
+# 5) quarters.py => quarter windows
 from quarters import generate_quarter_windows
+
+# 6) analytics/ => merges_issues, forks_stars, comments_reactions
 from merges_issues import (
     count_merged_pulls,
     count_closed_issues,
@@ -72,21 +73,25 @@ class DualOutput:
         original_stdout.flush()
         log_capture.flush()
 
+# Route all stdout => the dual output
 sys.stdout= DualOutput()
 
 ###############################################################################
 # BFS Print Helpers
 ###############################################################################
 def print_aligned_table(table_data, alignments=None):
+    """
+    Utility to print a 2D array (list of lists) with aligned columns.
+    """
     if not table_data:
         return
-    num_cols= len(table_data[0])
+    num_cols = len(table_data[0])
     if alignments is None:
         alignments= ['left']* num_cols
     if len(alignments)< num_cols:
         alignments+= ['left']* (num_cols- len(alignments))
 
-    # compute col widths
+    # compute column widths
     col_widths= [0]* num_cols
     for row in table_data:
         for c_idx, cell in enumerate(row):
@@ -103,18 +108,21 @@ def print_aligned_table(table_data, alignments=None):
             right_pad= pad- left_pad
             return ' '*left_pad+ cell_str+ ' '*right_pad
         else:
+            # right
             return cell_str.rjust(width)
 
-    # header
-    header_line= " | ".join(
+    # header line
+    header_line = " | ".join(
         format_cell(str(table_data[0][i]), col_widths[i], alignments[i])
         for i in range(num_cols)
     )
     print(header_line)
+
+    # separator
     sep_line= "-+-".join("-"*col_widths[i] for i in range(num_cols))
     print(sep_line)
 
-    # rows
+    # content rows
     for row in table_data[1:]:
         row_line= " | ".join(
             format_cell(str(row[i]), col_widths[i], alignments[i])
@@ -123,230 +131,68 @@ def print_aligned_table(table_data, alignments=None):
         print(row_line)
 
 ###############################################################################
-def BFS_print_repo(
-    repo, mergesFactor, closedFactor, forksFactor, starsFactor,
-    newIssuesFactor, commentsFactor, reactionsFactor, pullsFactor,
-    merges_data, closed_data, forks_data, stars_data,
-    newIss_data, comm_data, reac_data, pull_data,
-    velocity_data, uig_data, mac_data, sei_data,
-    issueRatio_data, prRatio_data,
-    quarter_dates
-):
-    """
-    BFS console prints:
-     1) A raw BFS table => mergesRaw, closedRaw, ...
-     2) An aggregator BFS table => velocity, uig, mac, sei, plus openIssueRatio, openPRRatio
-    """
-    print(f"=== BFS for Repo: {repo} ===")
-
-    # 1) RAW BFS TABLE
-    print(f"[RAW BFS] (mergesFactor={mergesFactor[repo]:.4f}, closedFactor={closedFactor[repo]:.4f}, etc.)")
-    BFS_data= [[
-       "Q-Range","mergesRaw","closedRaw","forksRaw","starsRaw",
-       "newIssRaw","commentsRaw","reactRaw","pullRaw"
-    ]]
-    BFS_align= ["left"]+ ["center"]*8
-
-    sorted_quarters= sorted(quarter_dates[repo].keys())
-    for q_idx in sorted_quarters:
-        (qs,qe,part_flag)= quarter_dates[repo][q_idx]
-        label_str= f"Q{q_idx}({qs:%Y-%m-%d}..{qe:%Y-%m-%d})"
-        if part_flag:
-            label_str+= " (partial)"
-
-        BFS_data.append([
-           label_str,
-           f"{merges_data[repo].get(q_idx,0.0)}",
-           f"{closed_data[repo].get(q_idx,0.0)}",
-           f"{forks_data[repo].get(q_idx,0.0)}",
-           f"{stars_data[repo].get(q_idx,0.0)}",
-           f"{newIss_data[repo].get(q_idx,0.0)}",
-           f"{comm_data[repo].get(q_idx,0.0)}",
-           f"{reac_data[repo].get(q_idx,0.0)}",
-           f"{pull_data[repo].get(q_idx,0.0)}"
-        ])
-
-    print_aligned_table(BFS_data, BFS_align)
-    print()
-
-    # 2) Aggregator BFS => velocity, uig, mac, sei, openIssueRatio, openPRRatio
-    print(f"[AGGREGATOR BFS]")
-    ABFS= [[
-      "Q-Range","openIssRatio","openPRRatio","Velocity","UIG","MAC","SEI"
-    ]]
-    ABFS_align= ["left"]+ ["center"]*6
-    for q_idx in sorted_quarters:
-        (qs,qe,part_flag)= quarter_dates[repo][q_idx]
-        label_str= f"Q{q_idx}({qs:%Y-%m-%d}..{qe:%Y-%m-%d})"
-        if part_flag:
-            label_str+= " (partial)"
-
-        oi= issueRatio_data[repo].get(q_idx,1.0)
-        op= prRatio_data[repo].get(q_idx,1.0)
-        vel= velocity_data[repo].get(q_idx,0.0)
-        ui= uig_data[repo].get(q_idx,0.0)
-        mc= mac_data[repo].get(q_idx,0.0)
-        se= sei_data[repo].get(q_idx,0.0)
-        ABFS.append([
-            label_str,
-            f"{oi:.3f}", f"{op:.3f}",
-            f"{vel:.3f}", f"{ui:.3f}", f"{mc:.3f}", f"{se:.3f}"
-        ])
-
-    print_aligned_table(ABFS, ABFS_align)
-    print("------------------------------------------------------\n")
-
+# Helper to identify a quarter label based on largest overlap with Q1..Q4
 ###############################################################################
-def compute_non_scaling_target( # aggregator target
-    scaling_repo, all_repos,
-    velocity_data, uig_data, mac_data, sei_data,
-    issueRatio_data, prRatio_data,
-    quarter_dates
-):
-    """
-    Sums aggregator metrics among non-scaling repos, divides by the count
-    => returns a pseudo "TARGET" in BFS style data.
-    We produce velocity_data["TARGET"], etc. so BFS_print can treat it like a normal repo.
-    """
-    target_name= "TARGET(avgNonScaling)"
-    velocity_data[target_name]= {}
-    uig_data[target_name]= {}
-    mac_data[target_name]= {}
-    sei_data[target_name]= {}
-    issueRatio_data[target_name]= {}
-    prRatio_data[target_name]= {}
-
-    # unify quarter indexes from all non-scaling
-    # We'll assume each repo has same quarter indexes => or we handle union
-    # For simplicity, let's pick union of quarter indexes from each non-scaling
-    union_q_idx= set()
-    for r in all_repos:
-        if r==scaling_repo: 
-            continue
-        if r not in quarter_dates:
-            continue
-        union_q_idx.update(quarter_dates[r].keys())
-
-    union_q_idx= sorted(union_q_idx)
-    quarter_dates[target_name]={}
-    # We'll define partial coverage if ANY non-scaling is partial => or you can define other logic
-
-    from collections import defaultdict
-
-    for q_idx in union_q_idx:
-        # gather velocity from each non-scaling that actually has q_idx
-        sum_v=0.0; sum_u=0.0; sum_m=0.0; sum_s=0.0
-        sum_oi=0.0; sum_pr=0.0
-        count=0
-        partial_flag= False
-        # define a window union => or pick first?
-        # We'll pick earliest start + latest end among repos that have q_idx
-        start_dt_list= []
-        end_dt_list= []
-
-        for r in all_repos:
-            if r==scaling_repo:
-                continue
-            if r not in quarter_dates:
-                continue
-            if q_idx in quarter_dates[r]:
-                (qs,qe,pf)= quarter_dates[r][q_idx]
-                start_dt_list.append(qs)
-                end_dt_list.append(qe)
-                if pf: partial_flag= True
-
-                sum_v+= velocity_data[r].get(q_idx,0.0)
-                sum_u+= uig_data[r].get(q_idx,0.0)
-                sum_m+= mac_data[r].get(q_idx,0.0)
-                sum_s+= sei_data[r].get(q_idx,0.0)
-                sum_oi+= issueRatio_data[r].get(q_idx,1.0)
-                sum_pr+= prRatio_data[r].get(q_idx,1.0)
-                count+=1
-
-        if count>0:
-            avg_v= sum_v/ count
-            avg_u= sum_u/ count
-            avg_m= sum_m/ count
-            avg_s= sum_s/ count
-            avg_oi= sum_oi/ count
-            avg_pr= sum_pr/ count
-            # aggregator
-            sdt= min(start_dt_list)
-            edt= max(end_dt_list)
-            quarter_dates[target_name][q_idx]= (sdt, edt, partial_flag)
-            velocity_data[target_name][q_idx]= avg_v
-            uig_data[target_name][q_idx]= avg_u
-            mac_data[target_name][q_idx]= avg_m
-            sei_data[target_name][q_idx]= avg_s
-            issueRatio_data[target_name][q_idx]= avg_oi
-            prRatio_data[target_name][q_idx]= avg_pr
-
-    return target_name
-
-
-###############################################################################
-# produce some final PNGs for raw + aggregator
-###############################################################################
-def build_ranges_for_repo(r, data_dict, quarter_dates):
-    if r not in quarter_dates:
-        return [],[]
-    qk= sorted(quarter_dates[r].keys())
-    qr=[]; vals=[]
-    for qi in qk:
-        (qs,qe,pf)= quarter_dates[r][qi]
-        qr.append((qs,qe,pf))
-        vals.append(data_dict[r].get(qi,0.0))
-    return qr, vals
-
 def find_fy(d):
-    if d.month>=10:
-        return d.year+1
+    """Return the fiscal year for date d. If month>=10 => fy=d.year+1, else d.year."""
+    if d.month >= 10:
+        return d.year + 1
     return d.year
 
 def quarter_fy_ranges(fy):
     import datetime
     return {
-      "Q1":(datetime.datetime(fy-1,10,1),datetime.datetime(fy-1,12,31,23,59,59)),
-      "Q2":(datetime.datetime(fy,1,1),datetime.datetime(fy,3,31,23,59,59)),
-      "Q3":(datetime.datetime(fy,4,1),datetime.datetime(fy,6,30,23,59,59)),
-      "Q4":(datetime.datetime(fy,7,1),datetime.datetime(fy,9,30,23,59,59)),
+      "Q1": (datetime.datetime(fy-1,10,1), datetime.datetime(fy-1,12,31,23,59,59)),
+      "Q2": (datetime.datetime(fy,1,1), datetime.datetime(fy,3,31,23,59,59)),
+      "Q3": (datetime.datetime(fy,4,1), datetime.datetime(fy,6,30,23,59,59)),
+      "Q4": (datetime.datetime(fy,7,1), datetime.datetime(fy,9,30,23,59,59)),
     }
 
-def largest_overlap_quarter(st,ed):
-    import datetime
-    fy= find_fy(st)
-    Q= quarter_fy_ranges(fy)
-    best_lbl="Q?"
-    best_ov= 0
+def largest_overlap_quarter(st, ed):
+    """
+    Return Q1..Q4 for the date range [st,ed] based on largest time overlap 
+    with those quarters in the same fiscal year.
+    """
+    fy = find_fy(st)
+    Q = quarter_fy_ranges(fy)
+    best_lbl = "Q?"
+    best_ov = 0
     for qlbl,(qs,qe) in Q.items():
-        overlap_s= max(st,qs)
-        overlap_e= min(ed,qe)
+        overlap_s= max(st, qs)
+        overlap_e= min(ed, qe)
         overlap_sec= (overlap_e - overlap_s).total_seconds()
         if overlap_sec> best_ov:
             best_ov= overlap_sec
             best_lbl= qlbl
     return best_lbl
 
+###############################################################################
+# produce_chart_with_table => single variable bar chart + side table
+###############################################################################
 def produce_chart_with_table(
     quarter_ranges, bar_values, 
     scaling_repo, all_repos, oldest_map,
     chart_title, filename
 ):
-    # single-plot for a single variable
-    # 2 bars => None => This is for single-repo. If you have multiple repos, adapt side-by-side logic
-    import matplotlib
+    """
+    Creates a figure with:
+     1) A bar chart for 'bar_values'
+     2) A side table listing each repo, oldest_date, and last window end
+     3) X-axis labeled by quarter from 'largest_overlap_quarter'
+    Saves to 'filename' as .png
+    """
     import matplotlib.pyplot as plt
     from matplotlib.table import Table
 
-    # We'll keep code from earlier solution
     fig= plt.figure(figsize=(14,8))
-    ax_chart= fig.add_axes([0.05,0.1,0.55,0.8])
-    ax_table= fig.add_axes([0.65,0.1,0.3,0.8])
+    ax_chart= fig.add_axes([0.05,0.1,0.55,0.8])  # left half
+    ax_table= fig.add_axes([0.65,0.1,0.3,0.8])   # right half
     ax_table.set_axis_off()
 
+    # build X labels from partial overlap
     x_labels=[]
     for (st,ed,part_f) in quarter_ranges:
-        qlbl= largest_overlap_quarter(st,ed)
+        qlbl= largest_overlap_quarter(st, ed)
         x_labels.append(qlbl)
     x= np.arange(len(quarter_ranges))
 
@@ -355,6 +201,7 @@ def produce_chart_with_table(
     ax_chart.set_xticks(x)
     ax_chart.set_xticklabels(x_labels, rotation=0)
 
+    # build the small table
     tbl= Table(ax_table, bbox=[0,0,1,1])
     col_labels= ["Repo","OldestDate","WindowEnd"]
     table_data= [col_labels]
@@ -381,6 +228,7 @@ def produce_chart_with_table(
             we_str+= " (partial)"
         table_data.append([rp, od_str, we_str])
 
+    # layout table cells
     nrows= len(table_data)
     ncols= len(table_data[0])
     row_h= 1.0/ nrows
@@ -389,7 +237,8 @@ def produce_chart_with_table(
     for irow in range(nrows):
         for icol in range(ncols):
             cell_txt= table_data[irow][icol]
-            cell= tbl.add_cell(row=irow,col=icol,
+            cell= tbl.add_cell(
+                row=irow, col=icol,
                 width=col_w, height=row_h,
                 text= cell_txt,
                 loc='center',
@@ -408,7 +257,204 @@ def produce_chart_with_table(
     plt.close(fig)
     print(f"[INFO] Created {filename}")
 
+###############################################################################
+# BFS_print_repo => BFS console prints for raw & aggregator
+###############################################################################
+def BFS_print_repo(
+    repo, 
+    mergesFactor, closedFactor, forksFactor, starsFactor,
+    newIssuesFactor, commentsFactor, reactionsFactor, pullsFactor,
+    merges_data, closed_data, forks_data, stars_data,
+    newIss_data, comm_data, reac_data, pull_data,
+    velocity_data, uig_data, mac_data, sei_data,
+    issueRatio_data, prRatio_data,
+    quarter_dates
+):
+    """
+    BFS console prints for:
+      1) Raw BFS => mergesRaw, closedRaw, forksRaw, etc.
+      2) Aggregator BFS => openIssueRatio, openPRRatio, velocity, uig, mac, sei
+    """
+    print(f"=== BFS for Repo: {repo} ===")
+
+    # If the repo is not in mergesFactor => pseudo-repo => skip factor line
+    if repo in mergesFactor:
+        print(f"[RAW BFS] (mergesFactor={mergesFactor[repo]:.4f}, closedFactor={closedFactor[repo]:.4f}, etc.)")
+    else:
+        print("[RAW BFS] (pseudo-repo, no scale-factors)")
+
+    BFS_data= [[
+       "Q-Range","mergesRaw","closedRaw","forksRaw","starsRaw",
+       "newIssRaw","commentsRaw","reactRaw","pullRaw"
+    ]]
+    BFS_align= ["left"]+ ["center"]*8
+
+    if repo not in quarter_dates:
+        print(f"[WARN] BFS_print_repo: No quarter_dates for {repo}\n")
+        return
+
+    sorted_quarters= sorted(quarter_dates[repo].keys())
+    for q_idx in sorted_quarters:
+        (qs,qe,part_flag)= quarter_dates[repo][q_idx]
+        label_str= f"Q{q_idx}({qs:%Y-%m-%d}..{qe:%Y-%m-%d})"
+        if part_flag:
+            label_str+= " (partial)"
+
+        mg= merges_data.get(repo,{}).get(q_idx,0.0)
+        cl= closed_data.get(repo,{}).get(q_idx,0.0)
+        fo= forks_data.get(repo,{}).get(q_idx,0.0)
+        st= stars_data.get(repo,{}).get(q_idx,0.0)
+        ni= newIss_data.get(repo,{}).get(q_idx,0.0)
+        co= comm_data.get(repo,{}).get(q_idx,0.0)
+        re= reac_data.get(repo,{}).get(q_idx,0.0)
+        pu= pull_data.get(repo,{}).get(q_idx,0.0)
+
+        BFS_data.append([
+           label_str,
+           f"{mg}", f"{cl}", f"{fo}", f"{st}",
+           f"{ni}", f"{co}", f"{re}", f"{pu}"
+        ])
+
+    print_aligned_table(BFS_data, BFS_align)
+    print()
+
+    # aggregator BFS => velocity, uig, mac, sei
+    print(f"[AGGREGATOR BFS]")
+    ABFS= [[
+      "Q-Range","openIssRatio","openPRRatio","Velocity","UIG","MAC","SEI"
+    ]]
+    ABFS_align= ["left"]+ ["center"]*6
+
+    for q_idx in sorted_quarters:
+        (qs,qe,part_flag)= quarter_dates[repo][q_idx]
+        label_str= f"Q{q_idx}({qs:%Y-%m-%d}..{qe:%Y-%m-%d})"
+        if part_flag:
+            label_str+= " (partial)"
+
+        oi= issueRatio_data.get(repo,{}).get(q_idx,1.0)
+        op= prRatio_data.get(repo,{}).get(q_idx,1.0)
+        vel= velocity_data.get(repo,{}).get(q_idx,0.0)
+        ui= uig_data.get(repo,{}).get(q_idx,0.0)
+        mc= mac_data.get(repo,{}).get(q_idx,0.0)
+        se= sei_data.get(repo,{}).get(q_idx,0.0)
+        ABFS.append([
+            label_str,
+            f"{oi:.3f}", f"{op:.3f}",
+            f"{vel:.3f}", f"{ui:.3f}", f"{mc:.3f}", f"{se:.3f}"
+        ])
+
+    print_aligned_table(ABFS, ABFS_align)
+    print("------------------------------------------------------\n")
+
+###############################################################################
+# compute_non_scaling_target => aggregator target for BFS
+###############################################################################
+def compute_non_scaling_target(
+    scaling_repo, all_repos,
+    velocity_data, uig_data, mac_data, sei_data,
+    issueRatio_data, prRatio_data,
+    quarter_dates,
+    merges_data, closed_data, forks_data, stars_data,
+    newIss_data, comm_data, reac_data, pull_data
+):
+    """
+    Builds a pseudo-repo "TARGET(avgNonScaling)" that average aggregator metrics across non-scaling.
+    Also defines empty merges_data[...] so BFS_print_repo won't KeyError.
+    """
+    target_name= "TARGET(avgNonScaling)"
+    velocity_data[target_name]= {}
+    uig_data[target_name]= {}
+    mac_data[target_name]= {}
+    sei_data[target_name]= {}
+    issueRatio_data[target_name]= {}
+    prRatio_data[target_name]= {}
+
+    merges_data[target_name]= {}
+    closed_data[target_name]= {}
+    forks_data[target_name]= {}
+    stars_data[target_name]= {}
+    newIss_data[target_name]= {}
+    comm_data[target_name]= {}
+    reac_data[target_name]= {}
+    pull_data[target_name]= {}
+
+    quarter_dates[target_name]= {}
+
+    union_q_idx= set()
+    non_scalers= [r for r in all_repos if r!=scaling_repo]
+
+    for nr in non_scalers:
+        if nr in quarter_dates:
+            union_q_idx.update(quarter_dates[nr].keys())
+
+    union_q_idx= sorted(union_q_idx)
+    for q_idx in union_q_idx:
+        sum_v=0.0; sum_u=0.0; sum_m=0.0; sum_s=0.0
+        sum_oi=0.0; sum_pr=0.0
+        ccount=0
+        partial_any=False
+        st_list= []
+        ed_list= []
+        for nr in non_scalers:
+            if nr not in quarter_dates:
+                continue
+            if q_idx in quarter_dates[nr]:
+                (qs,qe,pf)= quarter_dates[nr][q_idx]
+                st_list.append(qs)
+                ed_list.append(qe)
+                if pf:
+                    partial_any= True
+
+                val_v= velocity_data[nr].get(q_idx,0.0)
+                val_u= uig_data[nr].get(q_idx,0.0)
+                val_m= mac_data[nr].get(q_idx,0.0)
+                val_s= sei_data[nr].get(q_idx,0.0)
+                val_oi= issueRatio_data[nr].get(q_idx,1.0)
+                val_pr= prRatio_data[nr].get(q_idx,1.0)
+
+                sum_v+= val_v
+                sum_u+= val_u
+                sum_m+= val_m
+                sum_s+= val_s
+                sum_oi+= val_oi
+                sum_pr+= val_pr
+                ccount+=1
+
+        if ccount>0 and st_list and ed_list:
+            avg_v= sum_v/ ccount
+            avg_u= sum_u/ ccount
+            avg_m= sum_m/ ccount
+            avg_s= sum_s/ ccount
+            avg_oi= sum_oi/ ccount
+            avg_pr= sum_pr/ ccount
+
+            sdt= min(st_list)
+            edt= max(ed_list)
+            quarter_dates[target_name][q_idx]= (sdt, edt, partial_any)
+            velocity_data[target_name][q_idx]= avg_v
+            uig_data[target_name][q_idx]= avg_u
+            mac_data[target_name][q_idx]= avg_m
+            sei_data[target_name][q_idx]= avg_s
+            issueRatio_data[target_name][q_idx]= avg_oi
+            prRatio_data[target_name][q_idx]= avg_pr
+
+    return target_name
+
+###############################################################################
+def build_ranges_for_repo(r, data_dict, quarter_dates):
+    if r not in quarter_dates:
+        return [],[]
+    qk= sorted(quarter_dates[r].keys())
+    qr=[]; vals=[]
+    for qi in qk:
+        (qs,qe,pf)= quarter_dates[r][qi]
+        qr.append((qs,qe,pf))
+        vals.append(data_dict[r].get(qi,0.0))
+    return qr, vals
+
+###############################################################################
 def main():
+    # Environment reading
     env_scaling= os.environ.get("SCALING_REPO","<not set>")
     env_quarters= os.environ.get("NUM_FISCAL_QUARTERS","<not set>")
     print("=== ENVIRONMENT VARIABLES ===")
@@ -416,29 +462,39 @@ def main():
     print(f"NUM_FISCAL_QUARTERS={env_quarters}\n")
     print("=== CAPTURED CONSOLE OUTPUT ===\n")
 
-    repos= ["ni/labview-icon-editor","facebook/react","tensorflow/tensorflow","dotnet/core"]
+    # Potentially user-defined
+    repos= [
+        "ni/labview-icon-editor",
+        "facebook/react",
+        "tensorflow/tensorflow",
+        "dotnet/core"
+    ]
     scaling_repo= get_scaling_repo() or "ni/labview-icon-editor"
     if scaling_repo not in repos:
         repos.append(scaling_repo)
 
     q_count= get_num_fiscal_quarters() or 4
     aggregator_weights= load_aggregator_weights()
+
+    # scale_factors => mergesFactor, closedFactor, etc.
     (sfM,sfCl,sfF,sfS,sfNi,sfCo,sfRe,sfP)= compute_scale_factors(scaling_repo, repos)
 
     now= datetime.utcnow()
 
-    # aggregator data structures
+    # aggregator data
     velocity_data={} ; uig_data={} ; mac_data={} ; sei_data={}
     issueRatio_data={} ; prRatio_data={}
 
-    # raw
+    # raw data
     merges_data={} ; closed_data={} ; forks_data={} ; stars_data={}
     newIss_data={} ; comm_data={} ; reac_data={} ; pull_data={}
 
     quarter_dates={}
     oldest_map={}
 
+    # 1) Gather BFS + aggregator
     for r in repos:
+        # aggregator
         velocity_data[r]= {}
         uig_data[r]= {}
         mac_data[r]= {}
@@ -446,6 +502,7 @@ def main():
         issueRatio_data[r]= {}
         prRatio_data[r]= {}
 
+        # raw
         merges_data[r]= {}
         closed_data[r]= {}
         forks_data[r]= {}
@@ -467,7 +524,7 @@ def main():
         partial_any=False
 
         for (qs,qe) in raw_quarters:
-            if qs> now: 
+            if qs> now:
                 break
             p_flag= False
             if qe> now:
@@ -476,7 +533,6 @@ def main():
             if qs>=qe:
                 continue
 
-            # raw
             mg= count_merged_pulls(r, qs, qe)
             cl= count_closed_issues(r, qs, qe)
             fo= count_forks(r, qs, qe)
@@ -495,6 +551,7 @@ def main():
             reac_data[r][idx]= re
             pull_data[r][idx]= pu
 
+            # scaled
             mg_s= mg* sfM[r]
             cl_s= cl* sfCl[r]
             fo_s= fo* sfF[r]
@@ -530,7 +587,7 @@ def main():
             vel= aggregator_velocity(mg_s, cl_s, issRatio, prRat, aggregator_weights)
             ui= aggregator_uig(fo_s, st_s)
             ma= aggregator_mac(ni_s, co_s, re_s, pu_s, aggregator_weights)
-            se= 0.5* ma + 0.3* vel + 0.2* ui
+            se= 0.5* ma + 0.3* vel + 0.2* ui  # standard for SEI
 
             velocity_data[r][idx]= vel
             uig_data[r][idx]= ui
@@ -546,7 +603,7 @@ def main():
 
         oldest_map[r]= (oldest, final_end, partial_any)
 
-    # BFS for each repo => raw + aggregator
+    # 2) BFS for each repo
     for r in repos:
         if r not in quarter_dates:
             continue
@@ -563,17 +620,19 @@ def main():
             quarter_dates= quarter_dates
         )
 
-    # build "TARGET" aggregator BFS => average of non-scaling
-    non_scaling_target= compute_non_scaling_target(
+    # 3) build "TARGET" aggregator
+    target_name= compute_non_scaling_target(
         scaling_repo, repos,
         velocity_data, uig_data, mac_data, sei_data,
         issueRatio_data, prRatio_data,
-        quarter_dates
+        quarter_dates,
+        merges_data, closed_data, forks_data, stars_data,
+        newIss_data, comm_data, reac_data, pull_data
     )
 
-    # BFS for "TARGET"
+    # BFS for pseudo-repo => "TARGET(avgNonScaling)"
     BFS_print_repo(
-        repo= non_scaling_target,
+        repo= target_name,
         mergesFactor= sfM, closedFactor= sfCl, forksFactor= sfF, starsFactor= sfS,
         newIssuesFactor= sfNi, commentsFactor= sfCo, reactionsFactor= sfRe, pullsFactor= sfP,
         merges_data= merges_data, closed_data= closed_data, forks_data= forks_data, stars_data= stars_data,
@@ -585,7 +644,7 @@ def main():
 
     print("\n=== Done BFS aggregator. Now produce separate PNGs for raw & aggregator. ===\n")
 
-    # produce raw variable PNG
+    # 4) produce separate PNG for each raw variable
     raw_vars= {
        "Merges": merges_data,
        "Closed": closed_data,
@@ -597,6 +656,8 @@ def main():
        "Pulls": pull_data
     }
 
+    scaling_repo_final= scaling_repo
+
     def build_ranges_for_r(r, datadict):
         if r not in quarter_dates:
             return [],[]
@@ -606,21 +667,21 @@ def main():
             (qs,qe,pf)= quarter_dates[r][qi]
             qr.append((qs,qe,pf))
             vals.append(datadict[r].get(qi,0.0))
-        return qr,vals
+        return qr, vals
 
     for rv_label, rv_dict in raw_vars.items():
-        qrng, barv= build_ranges_for_r(scaling_repo, rv_dict)
+        qrng, barv= build_ranges_for_r(scaling_repo_final, rv_dict)
         produce_chart_with_table(
           quarter_ranges= qrng,
           bar_values= barv,
-          scaling_repo= scaling_repo,
+          scaling_repo= scaling_repo_final,
           all_repos= repos,
           oldest_map= oldest_map,
-          chart_title= f"{rv_label} ({scaling_repo}) - Fiscal Quarters",
+          chart_title= f"{rv_label} ({scaling_repo_final}) - Fiscal Quarters",
           filename= f"{rv_label.lower()}_fiscal.png"
         )
 
-    # aggregator => velocity, uig, mac, sei
+    # 5) aggregator => velocity, uig, mac, sei
     def aggregator_build(r, dct):
         if r not in quarter_dates:
             return [], []
@@ -633,47 +694,48 @@ def main():
         return Qs,Vs
 
     # velocity
-    vQ,vV= aggregator_build(scaling_repo, velocity_data)
+    vQ,vV= aggregator_build(scaling_repo_final, velocity_data)
     produce_chart_with_table(
       quarter_ranges= vQ, bar_values= vV,
-      scaling_repo= scaling_repo, all_repos= repos,
+      scaling_repo= scaling_repo_final, all_repos= repos,
       oldest_map= oldest_map,
-      chart_title= f"Velocity ({scaling_repo}) - Fiscal",
+      chart_title= f"Velocity ({scaling_repo_final}) - Fiscal",
       filename= "velocity_fiscal.png"
     )
 
     # mac
-    mQ,mV= aggregator_build(scaling_repo, mac_data)
+    mQ,mV= aggregator_build(scaling_repo_final, mac_data)
     produce_chart_with_table(
       quarter_ranges= mQ, bar_values= mV,
-      scaling_repo= scaling_repo, all_repos= repos,
+      scaling_repo= scaling_repo_final, all_repos= repos,
       oldest_map= oldest_map,
-      chart_title= f"MAC ({scaling_repo}) - Fiscal",
+      chart_title= f"MAC ({scaling_repo_final}) - Fiscal",
       filename= "mac_fiscal.png"
     )
 
     # uig
-    uQ,uV= aggregator_build(scaling_repo, uig_data)
+    uQ,uV= aggregator_build(scaling_repo_final, uig_data)
     produce_chart_with_table(
       quarter_ranges= uQ, bar_values= uV,
-      scaling_repo= scaling_repo, all_repos= repos,
+      scaling_repo= scaling_repo_final, all_repos= repos,
       oldest_map= oldest_map,
-      chart_title= f"UIG ({scaling_repo}) - Fiscal",
+      chart_title= f"UIG ({scaling_repo_final}) - Fiscal",
       filename= "uig_fiscal.png"
     )
 
     # sei
-    sQ,sV= aggregator_build(scaling_repo, sei_data)
+    sQ,sV= aggregator_build(scaling_repo_final, sei_data)
     produce_chart_with_table(
       quarter_ranges= sQ, bar_values= sV,
-      scaling_repo= scaling_repo, all_repos= repos,
+      scaling_repo= scaling_repo_final, all_repos= repos,
       oldest_map= oldest_map,
-      chart_title= f"SEI ({scaling_repo}) - Fiscal",
+      chart_title= f"SEI ({scaling_repo_final}) - Fiscal",
       filename= "sei_fiscal.png"
     )
 
     print("\n=== Done. BFS aggregator + target + raw & aggregator charts. ===")
 
+    # finalize => flush & write debug log
     sys.stdout.flush()
     console_out= log_capture.getvalue()
     sys.stdout= original_stdout
@@ -685,84 +747,6 @@ def main():
         f.write(console_out)
 
     print(f"[INFO] Overwrote debug_log => {debug_file}")
-
-
-###############################################################################
-# Non-scaling aggregator
-###############################################################################
-def compute_non_scaling_target(
-    scaling_repo, all_repos,
-    velocity_data, uig_data, mac_data, sei_data,
-    issueRatio_data, prRatio_data,
-    quarter_dates
-):
-    """
-    Summation of aggregator metrics among non-scaling repos, average => BFS pseudo-repo = "TARGET(avgNonScaling)"
-    We also unify partial coverage from all. 
-    Returns the name "TARGET(avgNonScaling)" for BFS usage
-    """
-    target_name= "TARGET(avgNonScaling)"
-    velocity_data[target_name]= {}
-    uig_data[target_name]= {}
-    mac_data[target_name]= {}
-    sei_data[target_name]= {}
-    issueRatio_data[target_name]= {}
-    prRatio_data[target_name]= {}
-    quarter_dates[target_name]= {}
-
-    union_q_idx= set()
-    non_scalers= [r for r in all_repos if r!=scaling_repo]
-
-    # unify quarter indexes
-    for nr in non_scalers:
-        if nr in quarter_dates:
-            union_q_idx.update(quarter_dates[nr].keys())
-
-    union_q_idx= sorted(union_q_idx)
-
-    for q_idx in union_q_idx:
-        sum_v=0.0; sum_u=0.0; sum_m=0.0; sum_s=0.0
-        sum_oi=0.0; sum_pr=0.0
-        ccount=0
-        partial_any= False
-        st_list= []
-        ed_list= []
-
-        for nr in non_scalers:
-            if nr not in quarter_dates:
-                continue
-            if q_idx in quarter_dates[nr]:
-                (qs,qe,pf)= quarter_dates[nr][q_idx]
-                st_list.append(qs)
-                ed_list.append(qe)
-                if pf: 
-                    partial_any= True
-                sum_v+= velocity_data[nr].get(q_idx,0.0)
-                sum_u+= uig_data[nr].get(q_idx,0.0)
-                sum_m+= mac_data[nr].get(q_idx,0.0)
-                sum_s+= sei_data[nr].get(q_idx,0.0)
-                sum_oi+= issueRatio_data[nr].get(q_idx,1.0)
-                sum_pr+= prRatio_data[nr].get(q_idx,1.0)
-                ccount+=1
-
-        if ccount>0 and st_list and ed_list:
-            avg_v= sum_v/ ccount
-            avg_u= sum_u/ ccount
-            avg_m= sum_m/ ccount
-            avg_s= sum_s/ ccount
-            avg_oi= sum_oi/ ccount
-            avg_pr= sum_pr/ ccount
-            sdt= min(st_list)
-            edt= max(ed_list)
-            quarter_dates[target_name][q_idx]= (sdt, edt, partial_any)
-            velocity_data[target_name][q_idx]= avg_v
-            uig_data[target_name][q_idx]= avg_u
-            mac_data[target_name][q_idx]= avg_m
-            sei_data[target_name][q_idx]= avg_s
-            issueRatio_data[target_name][q_idx]= avg_oi
-            prRatio_data[target_name][q_idx]= avg_pr
-
-    return target_name
 
 
 if __name__=="__main__":
