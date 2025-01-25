@@ -25,7 +25,7 @@ from scale_factors import (
 )
 from baseline import find_oldest_date_for_repo
 from quarters import generate_quarter_windows
-from analytics.merges_issues import (
+from merges_issues import (
     count_merged_pulls,
     count_closed_issues,
     count_new_pulls,
@@ -33,8 +33,8 @@ from analytics.merges_issues import (
     count_open_issues_at_date,
     count_open_prs_at_date
 )
-from analytics.forks_stars import count_forks, count_stars
-from analytics.comments_reactions import count_issue_comments, count_all_reactions
+from forks_stars import count_forks, count_stars
+from comments_reactions import count_issue_comments, count_all_reactions
 
 original_stdout= sys.stdout
 log_capture= io.StringIO()
@@ -534,7 +534,24 @@ def main():
     print(f"NUM_FISCAL_QUARTERS={env_quarters}\n")
     print("=== CAPTURED CONSOLE OUTPUT ===\n")
 
-    repos= ["ni/labview-icon-editor","facebook/react","tensorflow/tensorflow","dotnet/core"]
+    repos= [#"ni/labview-icon-editor","facebook/react","tensorflow/tensorflow","dotnet/core"]
+    
+        "ni/labview-icon-editor",
+        "ni/actor-framework",
+        "ni/grpc-labview",
+        "dotnet/core",
+        "facebook/react",
+        "tensorflow/tensorflow",
+        "EPICS/reconos",
+        "OpenFOAM/OpenFOAM-dev",
+        "FreeCAD/freecad",
+        "fritzing/fritzing-app",
+        "qucs/qucs",
+        "OpenSCAD/openscad",
+        "Node-RED/nodered",
+        "OpenPLC/OpenPLC-IDE",
+        "Eclipse/mraa",
+    ]
     scaling_repo= get_scaling_repo() or "ni/labview-icon-editor"
     if scaling_repo not in repos:
         repos.append(scaling_repo)
