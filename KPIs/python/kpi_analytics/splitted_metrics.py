@@ -7,7 +7,7 @@ from db_config import DB_HOST, DB_USER, DB_PASSWORD, DB_DATABASE
 
 def get_db_connection():
     """
-    Creates & returns a MySQL connection. Called repeatedly by gather_data_for_window.
+    Creates a MySQL connection. 
     """
     return mysql.connector.connect(
         host=DB_HOST,
@@ -18,14 +18,12 @@ def get_db_connection():
 
 def gather_data_for_window(repo_name, start_dt, end_dt):
     """
-    Gathers splitted raw metrics for BFS from [start_dt..end_dt):
-      - mergesRaw, closedIssRaw, closedPRRaw
-      - forksRaw, starsRaw, newIssRaw
-      - commentsIssRaw, commentsPRRaw
-      - reactIssRaw, reactPRRaw
-      - pullRaw
-
-    Adjust queries for your real schema as needed.
+    Gathers splitted metrics for BFS from [start_dt..end_dt).
+    We handle stars carefully to ensure we properly count them if partial coverage.
+    Returns a dict with the following keys:
+      mergesRaw, closedIssRaw, closedPRRaw, forksRaw, starsRaw,
+      newIssRaw, commentsIssRaw, commentsPRRaw,
+      reactIssRaw, reactPRRaw, pullRaw
     """
     results= {
       "mergesRaw":0,
@@ -55,7 +53,7 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
     cursor.execute(q_merges, (repo_name, start_dt, end_dt))
     results["mergesRaw"]= cursor.fetchone()[0]
 
-    # closedIssRaw => from issue_events event='closed', real issues (not PR)
+    # closedIssRaw => from issue_events event='closed' for real issues only
     q_closed_iss= """
         SELECT COUNT(*)
         FROM issue_events ie
@@ -87,17 +85,20 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
         SELECT COUNT(*)
         FROM forks
         WHERE repo_name=%s
-          AND created_at >= %s AND created_at < %s
+          AND created_at >= %s
+          AND created_at < %s
     """
     cursor.execute(q_forks, (repo_name, start_dt, end_dt))
     results["forksRaw"]= cursor.fetchone()[0]
 
     # starsRaw => from stars.starred_at
+    # We'll treat partial coverage the same as merges, i.e. only count star events in [start_dt..end_dt).
     q_stars= """
         SELECT COUNT(*)
         FROM stars
         WHERE repo_name=%s
-          AND starred_at >= %s AND starred_at < %s
+          AND starred_at >= %s
+          AND starred_at < %s
     """
     cursor.execute(q_stars, (repo_name, start_dt, end_dt))
     results["starsRaw"]= cursor.fetchone()[0]
@@ -107,7 +108,8 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
         SELECT COUNT(*)
         FROM issues
         WHERE repo_name=%s
-          AND created_at >= %s AND created_at < %s
+          AND created_at >= %s
+          AND created_at < %s
     """
     cursor.execute(q_iss, (repo_name, start_dt, end_dt))
     results["newIssRaw"]= cursor.fetchone()[0]
@@ -117,7 +119,8 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
         SELECT COUNT(*)
         FROM pulls
         WHERE repo_name=%s
-          AND created_at >= %s AND created_at < %s
+          AND created_at >= %s
+          AND created_at < %s
     """
     cursor.execute(q_pull, (repo_name, start_dt, end_dt))
     results["pullRaw"]= cursor.fetchone()[0]
@@ -146,7 +149,7 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
     cursor.execute(q_comm_pr, (repo_name, start_dt, end_dt))
     results["commentsPRRaw"]= cursor.fetchone()[0]
 
-    # reactIssRaw => from issue_comments joined with issues, body LIKE +1 or -1
+    # reactIssRaw => issue_comments + issues, body LIKE +1 or -1
     q_react_iss= """
         SELECT COUNT(*)
         FROM issue_comments ic
@@ -158,7 +161,7 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
     cursor.execute(q_react_iss, (repo_name, start_dt, end_dt))
     results["reactIssRaw"]= cursor.fetchone()[0]
 
-    # reactPRRaw => from issue_comments joined with pulls, body LIKE +1 or -1
+    # reactPRRaw => issue_comments + pulls, body LIKE +1 or -1
     q_react_pr= """
         SELECT COUNT(*)
         FROM issue_comments ic

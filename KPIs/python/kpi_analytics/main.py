@@ -35,36 +35,45 @@ def main():
       'sei_mac': float(os.environ.get('SEI_M','0.5'))
     }
 
-    # BFS config
     NUM_FISCAL_QUARTERS= int(os.environ.get('NUM_FISCAL_QUARTERS','8'))
     GLOBAL_OFFSET= int(os.environ.get('GLOBAL_OFFSET','0'))
     scaling_repo= os.environ.get("SCALING_REPO","ni/labview-icon-editor")
 
-    # define your repos
+    # define repos
     all_repos= [
-      "ni/labview-icon-editor",
-      "facebook/react",
-      "tensorflow/tensorflow",
-      "dotnet/core"
+        "tensorflow/tensorflow",
+        "facebook/react", 
+        "ni/grpc-labview",
+        "dotnet/core",
+        "facebook/react",
+        "EPICS/reconos",
+        "OpenFOAM/OpenFOAM-dev",
+        "FreeCAD/freecad",
+        "fritzing/fritzing-app",
+        "qucs/qucs",
+        "OpenSCAD/openscad",
+        "OpenPLC/OpenPLC-IDE",
+        "Eclipse/mraa",
     ]
-    # find earliest date + offset
+
+    # Find oldest dates + global offset
     oldest_dates={}
     for r in all_repos:
         od= find_oldest_date_for_repo(r)
         if not od:
-            # no data
-            od= datetime(2099,1,1)
+            # no data => future date
+            od= datetime(2100,1,1)
         od= od+ timedelta(days=GLOBAL_OFFSET)
         oldest_dates[r]= od
 
-    # BFS_data => BFS_data[repo][quarterIndex] => { start, end, partial, raw, agg, ratio }
-    BFS_data= {}
+    # BFS_data => BFS_data[repo][q_idx] => { start, end, partial, raw{}, agg{}, ratio{} }
+    BFS_data={}
     for r in all_repos:
         BFS_data[r]= {}
         startdt= oldest_dates[r]
         for q_idx in range(1, NUM_FISCAL_QUARTERS+1):
             q_start= startdt
-            q_end= q_start+ timedelta(days=90)  # approximate 3 months
+            q_end= q_start+ timedelta(days=90) # approximate 3 months
             BFS_data[r][q_idx]= {
               'start': q_start,
               'end': q_end,
@@ -75,7 +84,7 @@ def main():
             }
             startdt= q_end
 
-    # 2) gather splitted raw data
+    # Gather splitted data
     for r in all_repos:
         for q_idx in BFS_data[r]:
             st= BFS_data[r][q_idx]['start']
@@ -87,24 +96,22 @@ def main():
     for r in all_repos:
         for q_idx in BFS_data[r]:
             rawd= BFS_data[r][q_idx]['raw']
-
-            # splitted raw
             merges= rawd["mergesRaw"]
-            cIss = rawd["closedIssRaw"]
-            cPR  = rawd["closedPRRaw"]
+            cIss=  rawd["closedIssRaw"]
+            cPR=   rawd["closedPRRaw"]
             forks= rawd["forksRaw"]
             stars= rawd["starsRaw"]
             newIss= rawd["newIssRaw"]
             comIss= rawd["commentsIssRaw"]
-            comPR = rawd["commentsPRRaw"]
-            reaIss= rawd["reactIssRaw"]
-            reaPR = rawd["reactPRRaw"]
-            pull=  rawd["pullRaw"]
+            comPR=  rawd["commentsPRRaw"]
+            reactIss= rawd["reactIssRaw"]
+            reactPR= rawd["reactPRRaw"]
+            pull=   rawd["pullRaw"]
 
-            # aggregator
             velocityVal= compute_velocity(merges, cIss, cPR, AGG_CONFIG)
             uigVal= compute_uig(forks, stars, AGG_CONFIG)
-            macVal= compute_mac(newIss, comIss, comPR, reaIss, reaPR, pull, AGG_CONFIG)
+            # sumAll => newIss + comIss + comPR + reactIss + reactPR
+            macVal= compute_mac(newIss, comIss, comPR, reactIss, reactPR, pull, AGG_CONFIG)
             seiVal= compute_sei(velocityVal, uigVal, macVal, AGG_CONFIG)
 
             BFS_data[r][q_idx]['agg']= {
@@ -116,8 +123,8 @@ def main():
               'newIssScaled': newIss,
               'commentsIssScaled': comIss,
               'commentsPRScaled': comPR,
-              'reactIssScaled': reaIss,
-              'reactPRScaled': reaPR,
+              'reactIssScaled': reactIss,
+              'reactPRScaled': reactPR,
               'pullScaled': pull,
               'velocity': velocityVal,
               'uig': uigVal,
@@ -125,25 +132,24 @@ def main():
               'sei': seiVal
             }
 
-    # ratio vs group average
     splitted_keys= [
       "mergesRaw","closedIssRaw","closedPRRaw","forksRaw","starsRaw",
       "newIssRaw","commentsIssRaw","commentsPRRaw","reactIssRaw","reactPRRaw","pullRaw"
     ]
     aggregator_keys= ["velocity","uig","mac","sei"]
 
-    def compute_avg_of_var(q_idx, var, BFS_data, skip_repo=None):
+    def compute_avg_var(q_idx, var, BFS_data, skip_repo=None):
         sum_v= 0.0
         count= 0
-        for orp in BFS_data:
-            if orp== skip_repo:
+        for rp in BFS_data:
+            if rp== skip_repo:
                 continue
-            if q_idx not in BFS_data[orp]:
+            if q_idx not in BFS_data[rp]:
                 continue
             if var in splitted_keys:
-                val= BFS_data[orp][q_idx]['raw'][var]
+                val= BFS_data[rp][q_idx]['raw'][var]
             else:
-                val= BFS_data[orp][q_idx]['agg'][var]
+                val= BFS_data[rp][q_idx]['agg'][var]
             sum_v+= val
             count+=1
         if count>0:
@@ -151,25 +157,26 @@ def main():
         else:
             return 0.0
 
+    # ratio vs group
     for q_idx in range(1, NUM_FISCAL_QUARTERS+1):
         for var in splitted_keys+ aggregator_keys:
-            groupAvg= compute_avg_of_var(q_idx, var, BFS_data, skip_repo=None)
-            # store ratio => BFS_data[r][q_idx]['ratio'][var]
+            groupAvg= compute_avg_var(q_idx, var, BFS_data, skip_repo=None)
             for r in BFS_data:
                 if q_idx not in BFS_data[r]:
                     continue
                 if var in splitted_keys:
-                    val= BFS_data[r][q_idx]['raw'][var]
+                    myVal= BFS_data[r][q_idx]['raw'][var]
                 else:
-                    val= BFS_data[r][q_idx]['agg'][var]
+                    myVal= BFS_data[r][q_idx]['agg'][var]
                 if groupAvg>0:
-                    BFS_data[r][q_idx]['ratio'][var]= val/groupAvg
+                    BFS_data[r][q_idx]['ratio'][var]= myVal/groupAvg
                 else:
                     BFS_data[r][q_idx]['ratio'][var]= 0.0
 
-    # a helper to align console columns
+    # a helper to align columns + put a row of dashes after header
     def monospaced_table(rows):
-        # rows is a list of lists
+        if not rows:
+            return ""
         col_count= len(rows[0])
         col_widths= [0]* col_count
         for row in rows:
@@ -177,46 +184,56 @@ def main():
                 clen= len(str(cell))
                 if clen> col_widths[i]:
                     col_widths[i]= clen
-        aligned= []
-        for row in rows:
+        lines= []
+        for idx,row in enumerate(rows):
             line_parts= []
             for i,cell in enumerate(row):
                 c_str= str(cell)
-                line_parts.append( c_str.ljust(col_widths[i]) )
-            aligned.append(" | ".join(line_parts))
-        return "\n".join(aligned)
+                # left-justify
+                line_parts.append(c_str.ljust(col_widths[i]))
+            line_str= " | ".join(line_parts)
+            lines.append(line_str)
+            if idx==0:
+                # insert a row of dashes after header
+                dash_parts= []
+                for width in col_widths:
+                    dash_parts.append("-"* width)
+                dash_line= " | ".join(dash_parts)
+                lines.append(dash_line)
+        return "\n".join(lines)
 
-    # BFS console print
+    # BFS console prints
     for r in all_repos:
         print(f"=== BFS for Repo: {r} ===")
+        # Hardcode scale factor? or produce logic. We'll just show mergesFactor=1.0 etc. for demonstration
         print(f"Existing Quarter Data for {r} | (mergesFactor=1.0000, closedIssFactor=1.0000, closedPRFactor=1.0000, forksFactor=1.0000, starsFactor=1.0000, newIssuesFactor=1.0000, commentsIssFactor=1.0000, commentsPRFactor=1.0000, reactIssFactor=1.0000, reactPRFactor=1.0000, pullFactor=1.0000)")
 
-        # build a table
         header= [
           "Q-Range",
-          "mergesRaw","mRatio",
-          "cIssRaw","cIssRat",
-          "cPRRaw","cPRRat",
-          "forks","fRatio",
-          "stars","sRatio",
-          "newIss","nIRat",
-          "comIss","ciRat",
-          "comPR","cpRat",
-          "reaIss","riRat",
-          "reaPR","rpRat",
-          "pull","pRatio",
-          "velocity","vRatio",
-          "uig","uRatio",
-          "mac","mRatio",
-          "sei","sRatio"
+          "mRaw","mRat",
+          "cIss","cIRt",
+          "cPR","cPRt",
+          "fork","fRat",
+          "star","sRat",
+          "nIss","nIRt",
+          "comI","comIR",
+          "comP","comPR",
+          "reaI","reaIR",
+          "reaP","reaPR",
+          "pull","pRat",
+          "vel","vRat",
+          "uig","uRat",
+          "mac","mRat",
+          "sei","sRat"
         ]
-        rows= []
-        rows.append(header)
+        rows= [header]
 
-        for q_idx in sorted(BFS_data[r].keys()):
+        # BFS data
+        all_quarters= sorted(BFS_data[r].keys())
+        for q_idx in all_quarters:
             st= BFS_data[r][q_idx]['start']
             ed= BFS_data[r][q_idx]['end']
-            lab= f"Q{q_idx}({st.strftime('%Y-%m-%d')}..{ed.strftime('%Y-%m-%d')})"
+            label= f"Q{q_idx}({st.strftime('%Y-%m-%d')}..{ed.strftime('%Y-%m-%d')})"
 
             rawd= BFS_data[r][q_idx]['raw']
             aggd= BFS_data[r][q_idx]['agg']
@@ -240,16 +257,16 @@ def main():
             nIssR= rawd["newIssRaw"]
             nIssRat= ratio["newIssRaw"]
 
-            comIssR= rawd["commentsIssRaw"]
-            comIssRat= ratio["commentsIssRaw"]
+            cIssCommR= rawd["commentsIssRaw"]
+            cIssCommRat= ratio["commentsIssRaw"]
 
-            comPRR= rawd["commentsPRRaw"]
-            comPRRat= ratio["commentsPRRaw"]
+            cPRCommR= rawd["commentsPRRaw"]
+            cPRCommRat= ratio["commentsPRRaw"]
 
-            reactIssR= rawd["reactIssRaw"]
+            rIss= rawd["reactIssRaw"]
             rIssRat= ratio["reactIssRaw"]
 
-            reactPRR= rawd["reactPRRaw"]
+            rPR= rawd["reactPRRaw"]
             rPRRat= ratio["reactPRRaw"]
 
             pullR= rawd["pullRaw"]
@@ -258,47 +275,32 @@ def main():
             vel= aggd["velocity"]
             velRat= ratio["velocity"]
 
-            ug= aggd["uig"]
-            ugRat= ratio["uig"]
+            ui= aggd["uig"]
+            uiRat= ratio["uig"]
 
-            mc= aggd["mac"]
-            mcRat= ratio["mac"]
+            mac= aggd["mac"]
+            macRat= ratio["mac"]
 
-            se= aggd["sei"]
-            seRat= ratio["sei"]
+            sei= aggd["sei"]
+            seiRat= ratio["sei"]
 
             row= [
-              lab,
-              str(mergesR),
-              f"{mergesRat:.3f}",
-              str(cIssR),
-              f"{cIssRat:.3f}",
-              str(cPRR),
-              f"{cPRRat:.3f}",
-              str(forksR),
-              f"{forksRat:.3f}",
-              str(starsR),
-              f"{starsRat:.3f}",
-              str(nIssR),
-              f"{nIssRat:.3f}",
-              str(comIssR),
-              f"{comIssRat:.3f}",
-              str(comPRR),
-              f"{comPRRat:.3f}",
-              str(reactIssR),
-              f"{rIssRat:.3f}",
-              str(reactPRR),
-              f"{rPRRat:.3f}",
-              str(pullR),
-              f"{pullRat:.3f}",
-              f"{vel:.3f}",
-              f"{velRat:.3f}",
-              f"{ug:.3f}",
-              f"{ugRat:.3f}",
-              f"{mc:.3f}",
-              f"{mcRat:.3f}",
-              f"{se:.3f}",
-              f"{seRat:.3f}"
+              label,
+              str(mergesR), f"{mergesRat:.3f}",
+              str(cIssR),   f"{cIssRat:.3f}",
+              str(cPRR),    f"{cPRRat:.3f}",
+              str(forksR),  f"{forksRat:.3f}",
+              str(starsR),  f"{starsRat:.3f}",
+              str(nIssR),   f"{nIssRat:.3f}",
+              str(cIssCommR), f"{cIssCommRat:.3f}",
+              str(cPRCommR), f"{cPRCommRat:.3f}",
+              str(rIss), f"{rIssRat:.3f}",
+              str(rPR),  f"{rPRRat:.3f}",
+              str(pullR), f"{pullRat:.3f}",
+              f"{vel:.3f}", f"{velRat:.3f}",
+              f"{ui:.3f}",  f"{uiRat:.3f}",
+              f"{mac:.3f}", f"{macRat:.3f}",
+              f"{sei:.3f}", f"{seiRat:.3f}"
             ]
             rows.append(row)
 
@@ -306,74 +308,85 @@ def main():
         print(table_str)
         print()
 
-        # Additional aggregator expansions
-        print(f"--- Additional Calculation Details for {r} (Velocity, UIG, MAC, SEI) ---")
+        # aggregator expansions
+        print(f"--- Additional Calculation Details for {r} (Velocity, UIG, MAC, SEI) ---\n")
 
-        # Example expansions for velocity
-        # build a sub-table
-        sub_header= ["Q-Range","mergesScaled","closedIssScaled","closedPRScaled","Velocity=..."]
-        sub_rows= [sub_header]
-        for q_idx in sorted(BFS_data[r].keys()):
+        # velocity
+        h2= ["Q-Range","mergesScaled","closedIssScaled","closedPRScaled","Velocity=..."]
+        r2= [h2]
+        for q_idx in all_quarters:
             st= BFS_data[r][q_idx]['start']
             ed= BFS_data[r][q_idx]['end']
-            lab= f"Q{q_idx}({st.strftime('%Y-%m-%d')}..{ed.strftime('%Y-%m-%d')})"
-            aggd= BFS_data[r][q_idx]['agg']
-            mergesS= aggd["mergesScaled"]
-            cIssS= aggd["closedIssScaled"]
-            cPRS= aggd["closedPRScaled"]
-            vel= aggd["velocity"]
-            sub_rows.append([lab, f"{mergesS:.1f}", f"{cIssS:.1f}", f"{cPRS:.1f}", f"{vel:.3f}"])
-        sub_table= monospaced_table(sub_rows)
-        print(sub_table)
+            label= f"Q{q_idx}({st.strftime('%Y-%m-%d')}..{ed.strftime('%Y-%m-%d')})"
+            a= BFS_data[r][q_idx]['agg']
+            row= [
+              label,
+              f"{a['mergesScaled']:.1f}",
+              f"{a['closedIssScaled']:.1f}",
+              f"{a['closedPRScaled']:.1f}",
+              f"{a['velocity']:.3f}"
+            ]
+            r2.append(row)
+        print(monospaced_table(r2))
         print()
 
-        # Similarly for uig
-        sub_header2= ["Q-Range","forksScaled","starsScaled","UIG=0.4*F+0.6*S"]
-        sub_rows2= [sub_header2]
-        for q_idx in sorted(BFS_data[r].keys()):
+        # uig
+        h3= ["Q-Range","forksScaled","starsScaled","UIG=0.4F+0.6S"]
+        r3= [h3]
+        for q_idx in all_quarters:
             st= BFS_data[r][q_idx]['start']
             ed= BFS_data[r][q_idx]['end']
-            lab= f"Q{q_idx}({st.strftime('%Y-%m-%d')}..{ed.strftime('%Y-%m-%d')})"
-            aggd= BFS_data[r][q_idx]['agg']
-            fS= aggd["forksScaled"]
-            sS= aggd["starsScaled"]
-            uVal= aggd["uig"]
-            sub_rows2.append([lab, f"{fS:.1f}", f"{sS:.1f}", f"{uVal:.3f}"])
-        print(monospaced_table(sub_rows2))
+            label= f"Q{q_idx}({st.strftime('%Y-%m-%d')}..{ed.strftime('%Y-%m-%d')})"
+            a= BFS_data[r][q_idx]['agg']
+            row= [
+              label,
+              f"{a['forksScaled']:.1f}",
+              f"{a['starsScaled']:.1f}",
+              f"{a['uig']:.3f}"
+            ]
+            r3.append(row)
+        print(monospaced_table(r3))
         print()
 
         # mac
-        sub_header3= ["Q-Range","(Iss+Comm+React)Scaled","pullScaled","MAC=0.8*(sum)+0.2*pull"]
-        sub_rows3= [sub_header3]
-        for q_idx in sorted(BFS_data[r].keys()):
+        h4= ["Q-Range","(Iss+Comm+React)Scaled","pullScaled","MAC=0.8*(sum)+0.2*pull"]
+        r4= [h4]
+        for q_idx in all_quarters:
             st= BFS_data[r][q_idx]['start']
             ed= BFS_data[r][q_idx]['end']
-            lab= f"Q{q_idx}({st.strftime('%Y-%m-%d')}..{ed.strftime('%Y-%m-%d')})"
-            aggd= BFS_data[r][q_idx]['agg']
-            issComRea= (aggd["newIssScaled"]+ aggd["commentsIssScaled"]+ aggd["commentsPRScaled"]+ aggd["reactIssScaled"]+ aggd["reactPRScaled"])
-            pullS= aggd["pullScaled"]
-            macVal= aggd["mac"]
-            sub_rows3.append([lab, f"{issComRea:.1f}", f"{pullS:.1f}", f"{macVal:.3f}"])
-        print(monospaced_table(sub_rows3))
+            label= f"Q{q_idx}({st.strftime('%Y-%m-%d')}..{ed.strftime('%Y-%m-%d')})"
+            a= BFS_data[r][q_idx]['agg']
+            sumAll= (a["newIssScaled"]+ a["commentsIssScaled"]+ a["commentsPRScaled"]+ a["reactIssScaled"]+ a["reactPRScaled"])
+            row= [
+              label,
+              f"{sumAll:.1f}",
+              f"{a['pullScaled']:.1f}",
+              f"{a['mac']:.3f}"
+            ]
+            r4.append(row)
+        print(monospaced_table(r4))
         print()
 
         # sei
-        sub_header4= ["Q-Range","Velocity","UIG","MAC","SEI= wv*vel + wu*uig + wm*mac"]
-        sub_rows4= [sub_header4]
-        for q_idx in sorted(BFS_data[r].keys()):
+        h5= ["Q-Range","Velocity","UIG","MAC","SEI= (wv*vel + wu*uig + wm*mac)"]
+        r5= [h5]
+        for q_idx in all_quarters:
             st= BFS_data[r][q_idx]['start']
             ed= BFS_data[r][q_idx]['end']
-            lab= f"Q{q_idx}({st.strftime('%Y-%m-%d')}..{ed.strftime('%Y-%m-%d')})"
-            aggd= BFS_data[r][q_idx]['agg']
-            vv= aggd["velocity"]
-            uu= aggd["uig"]
-            mm= aggd["mac"]
-            ss= aggd["sei"]
-            sub_rows4.append([lab, f"{vv:.3f}", f"{uu:.3f}", f"{mm:.3f}", f"{ss:.3f}"])
-        print(monospaced_table(sub_rows4))
+            label= f"Q{q_idx}({st.strftime('%Y-%m-%d')}..{ed.strftime('%Y-%m-%d')})"
+            a= BFS_data[r][q_idx]['agg']
+            row= [
+              label,
+              f"{a['velocity']:.3f}",
+              f"{a['uig']:.3f}",
+              f"{a['mac']:.3f}",
+              f"{a['sei']:.3f}"
+            ]
+            r5.append(row)
+        print(monospaced_table(r5))
         print()
 
-    # produce side-by-side scaled charts
+    # produce side-by-side scaled charts for splitted and aggregator
     splitted_vars= [
       "mergesRaw","closedIssRaw","closedPRRaw","forksRaw","starsRaw",
       "newIssRaw","commentsIssRaw","commentsPRRaw","reactIssRaw","reactPRRaw","pullRaw"
@@ -400,40 +413,39 @@ def main():
             return 0.0
 
     def produce_side_by_side_chart(variableName, BFS_data, all_repos, scaling_repo):
-        """
-        Chart with x-axis= quarters in scaling_repo,
-        2 bars: scaling_repo's value & the group average (excluding scaling repo).
-        We'll label x-ticks with QX plus the actual date range.
-        """
-        x_vals=[]
-        scale_vals=[]
-        group_vals=[]
-        q_labels=[]
+        # We'll create 2 bars per BFS quarter => scaling's value and group average
         if scaling_repo not in BFS_data:
             return
         sorted_quarters= sorted(BFS_data[scaling_repo].keys())
-        for q_idx in sorted_quarters:
+        x_vals= []
+        scale_vals=[]
+        group_vals=[]
+        q_labels=[]
+        for i,q_idx in enumerate(sorted_quarters):
             st= BFS_data[scaling_repo][q_idx]['start'].strftime("%Y-%m-%d")
             ed= BFS_data[scaling_repo][q_idx]['end'].strftime("%Y-%m-%d")
             qlbl= f"Q{q_idx}\n({st}..{ed})"
             q_labels.append(qlbl)
+            # scaling
             if variableName in splitted_vars:
                 s_val= BFS_data[scaling_repo][q_idx]['raw'][variableName]
             else:
                 s_val= BFS_data[scaling_repo][q_idx]['agg'][variableName]
-            ga= compute_avg_for_var(q_idx, variableName, BFS_data, skip_repo=scaling_repo)
-            x_vals.append(q_idx)
+            # group average
+            g_val= compute_avg_for_var(q_idx, variableName, BFS_data, skip_repo=scaling_repo)
             scale_vals.append(s_val)
-            group_vals.append(ga)
+            group_vals.append(g_val)
+            x_vals.append(i)
 
-        bar_width= 0.35
+        bar_width= 0.4
         x_arr= np.arange(len(x_vals))
 
         plt.figure(figsize=(10,6))
-        plt.bar(x_arr - bar_width/2, scale_vals, bar_width, label=scaling_repo)
-        plt.bar(x_arr + bar_width/2, group_vals, bar_width, label="NonScalingAvg")
+        plt.bar(x_arr- bar_width/2, scale_vals, bar_width, label=scaling_repo, color='tab:blue')
+        plt.bar(x_arr+ bar_width/2, group_vals, bar_width, label='NonScalingAvg', color='tab:orange')
+
         plt.title(f"{variableName} (Scaling vs. Group Avg)")
-        plt.xlabel("Quarter Index (Index-based BFS)")
+        plt.xlabel("BFS Quarter Index (Scaled Timeline)")
         plt.ylabel(variableName)
         plt.xticks(x_arr, q_labels, rotation=45, ha='right')
         plt.legend()
@@ -450,7 +462,7 @@ def main():
     for var in aggregator_vars:
         produce_side_by_side_chart(var, BFS_data, all_repos, scaling_repo)
 
-    print("=== Done BFS aggregator + side-by-side scaled charts. ===")
+    print("=== BFS aggregator + side-by-side scaled charts done. ===")
 
 if __name__=="__main__":
     main()

@@ -4,11 +4,9 @@
 
 def compute_velocity(mergesScaled, closedIssScaled, closedPRScaled, config):
     """
-    velocity = v_merges * mergesScaled + v_closedIss * closedIssScaled + v_closedPR * closedPRScaled
-
-    Example defaults might be 0.4 merges, 0.2 closedIss, 0.4 closedPR.
-    'config' is a dict with keys like:
-      'velocity_merges':0.4, 'velocity_closedIss':0.2, 'velocity_closedPR':0.4
+    velocity = v_mergesFactor * mergesScaled
+             + v_closedIssFactor * closedIssScaled
+             + v_closedPRFactor  * closedPRScaled
     """
     v_m= config.get('velocity_merges', 0.4)
     v_ci= config.get('velocity_closedIss', 0.2)
@@ -18,35 +16,27 @@ def compute_velocity(mergesScaled, closedIssScaled, closedPRScaled, config):
 
 def compute_uig(forksScaled, starsScaled, config):
     """
-    uig = (uig_forks * forksScaled) + (uig_stars * starsScaled)
-
-    e.g. default 0.4 for forks, 0.6 for stars
+    uig = u_forks * forksScaled + u_stars * starsScaled
     """
-    f_w= config.get('uig_forks', 0.4)
-    s_w= config.get('uig_stars', 0.6)
-    val= f_w* forksScaled + s_w* starsScaled
-    return val
+    u_f= config.get('uig_forks', 0.4)
+    u_s= config.get('uig_stars', 0.6)
+    return (u_f* forksScaled + u_s* starsScaled)
 
-def compute_mac(newIssScaled, commentsIssScaled, commentsPRScaled,
-                reactIssScaled, reactPRScaled, pullScaled, config):
+def compute_mac(newIssScaled, comIssScaled, comPRScaled, reactIssScaled, reactPRScaled, pullScaled, config):
     """
-    mac = mainWeight*(newIss+commentsIss+commentsPR+reactIss+reactPR) + subWeight*(pulls)
-
-    Typically mainWeight=0.8, subWeight=0.2
+    mac = mainW*(newIss+comIss+comPR+reactIss+reactPR) + subW*(pulls)
     """
     mainW= config.get('mac_mainWeight', 0.8)
     subW= config.get('mac_subWeight', 0.2)
-    sumAll= newIssScaled + commentsIssScaled + commentsPRScaled + reactIssScaled + reactPRScaled
+    sumAll= newIssScaled + comIssScaled + comPRScaled + reactIssScaled + reactPRScaled
     val= mainW* sumAll + subW* pullScaled
     return val
 
 def compute_sei(velocityVal, uigVal, macVal, config):
     """
-    sei = wv*velocity + wu*uig + wm*mac
-    typically wv=0.3, wu=0.2, wm=0.5
+    sei = wv*velocityVal + wu*uigVal + wm*macVal
     """
     wv= config.get('sei_velocity', 0.3)
     wu= config.get('sei_uig', 0.2)
     wm= config.get('sei_mac', 0.5)
-    val= wv* velocityVal + wu* uigVal + wm* macVal
-    return val
+    return (wv* velocityVal + wu* uigVal + wm* macVal)
