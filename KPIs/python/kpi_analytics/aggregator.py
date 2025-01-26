@@ -3,24 +3,36 @@
 ############################################
 
 def compute_velocity(mergesScaled, closedIssScaled, closedPRScaled, config):
-    v_m = config.get('velocity_merges', 0.4)
-    v_ci= config.get('velocity_closedIss', 0.2)
-    v_cp= config.get('velocity_closedPR', 0.4)
-    return (v_m* mergesScaled + v_ci* closedIssScaled + v_cp* closedPRScaled)
+    """
+    velocity = mergesScaled* velocity_merges + closedIssScaled* velocity_closedIss + closedPRScaled* velocity_closedPR
+    """
+    vm= config.get("velocity_merges", 0.4)
+    vci= config.get("velocity_closedIss",0.2)
+    vcp= config.get("velocity_closedPR", 0.4)
+    return vm* mergesScaled + vci* closedIssScaled + vcp* closedPRScaled
 
 def compute_uig(forksScaled, starsScaled, config):
-    u_f= config.get('uig_forks', 0.4)
-    u_s= config.get('uig_stars', 0.6)
-    return (u_f* forksScaled + u_s* starsScaled)
+    """
+    uig = forksScaled* uig_forks + starsScaled* uig_stars
+    """
+    uf= config.get("uig_forks", 0.4)
+    us= config.get("uig_stars", 0.6)
+    return uf* forksScaled + us* starsScaled
 
-def compute_mac(newIssScaled, comIssScaled, comPRScaled, reactIssScaled, reactPRScaled, pullScaled, config):
-    mainW= config.get('mac_mainWeight', 0.8)
-    subW= config.get('mac_subWeight', 0.2)
-    sumAll= newIssScaled + comIssScaled + comPRScaled + reactIssScaled + reactPRScaled
-    return (mainW* sumAll + subW* pullScaled)
+def compute_mac(newIss, comIss, comPR, reactIss, reactPR, pull, config):
+    """
+    mac = mainW*(newIss + comIss + comPR + reactIss + reactPR) + subW*pull
+    """
+    mainW= config.get("mac_mainWeight", 0.8)
+    subW= config.get("mac_subWeight", 0.2)
+    sumAll= newIss + comIss + comPR + reactIss + reactPR
+    return mainW* sumAll + subW* pull
 
 def compute_sei(velocityVal, uigVal, macVal, config):
-    wv= config.get('sei_velocity', 0.3)
-    wu= config.get('sei_uig', 0.2)
-    wm= config.get('sei_mac', 0.5)
-    return (wv* velocityVal + wu* uigVal + wm* macVal)
+    """
+    sei = wv* velocityVal + wu* uigVal + wm* macVal
+    """
+    wv= config.get("sei_velocity",0.3)
+    wu= config.get("sei_uig",0.2)
+    wm= config.get("sei_mac",0.5)
+    return wv*velocityVal + wu*uigVal + wm*macVal
