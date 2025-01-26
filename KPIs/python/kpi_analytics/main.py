@@ -49,10 +49,18 @@ def main():
 
     # BFS Repos
     all_repos= [
-       "ni/labview-icon-editor",
-       "facebook/react",
-       "tensorflow/tensorflow",
-       "dotnet/core"
+        "dotnet/core",
+        "facebook/react",
+        "tensorflow/tensorflow",
+        "EPICS/reconos",
+        "OpenFOAM/OpenFOAM-dev",
+        "FreeCAD/freecad",
+        "fritzing/fritzing-app",
+        "qucs/qucs",
+        "OpenSCAD/openscad",
+        "Node-RED/nodered",
+        "OpenPLC/OpenPLC-IDE",
+        "Eclipse/mraa",
     ]
 
     print(f"=== BFS Aggregator (Refined, Overwriting debug_log.txt) ===\n")
