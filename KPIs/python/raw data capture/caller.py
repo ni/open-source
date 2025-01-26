@@ -1,49 +1,52 @@
 #!/usr/bin/env python
 # caller.py
 
-import os
 from repo_list import repo_list
 from fetch_data import (
     load_tokens,
+    init_metadata_db,
+    create_ephemeral_db,
     create_tables,
-    DAYS_PER_CHUNK,  # default chunk size, can modify or override
-    fetch_fork_data,
-    fetch_pull_data,
-    fetch_issue_data,
-    fetch_star_data
+    fetch_all_data_for_repo
 )
 
 def main():
-    # 1) Load tokens from 'tokens.txt' or env vars
+    # 1) Load tokens
     load_tokens()
 
-    # 2) Create DB tables
-    create_tables()
+    # 2) Connect to persistent metadata DB
+    metadata_conn = init_metadata_db()
 
-    # Optionally override the default DAYS_PER_CHUNK here:
-    # e.g. DAYS_PER_CHUNK = 2
-    # or read from command-line arguments if you like.
-    # For now, let's keep it as the default in fetch_data.py
+    # 3) Create ephemeral DB for this run
+    ephemeral_conn, ephemeral_name = create_ephemeral_db()
+    create_tables(ephemeral_conn)
 
-    for cfg in repo_list:
-        if not cfg["enabled"]:
-            print(f"Skipping disabled: {cfg['owner']}/{cfg['repo']}")
+    # 4) Loop over repos
+    for rinfo in repo_list:
+        if not rinfo.get("enabled", False):
             continue
 
-        owner = cfg["owner"]
-        repo = cfg["repo"]
-        start_date = cfg["start_date"]
-        end_date = cfg["end_date"] or ""
+        owner = rinfo["owner"]
+        repo  = rinfo["repo"]
+        fallback_str = rinfo.get("start_date", "") or ""
+        end_str = rinfo.get("end_date", "") or None
 
-        print(f"\n=== Processing {owner}/{repo} from {start_date} to {end_date or 'NOW'} ===")
+        print("\n=============================================")
+        print(f"Processing {owner}/{repo} from {fallback_str or 'METADATA'} to {end_str or 'NOW'}")
 
-        # fetch_fork_data with user-defined days_per_chunk
-        fetch_fork_data(owner, repo, start_date, end_date, days_per_chunk=DAYS_PER_CHUNK)
-        fetch_pull_data(owner, repo, start_date, end_date, days_per_chunk=DAYS_PER_CHUNK)
-        fetch_issue_data(owner, repo, start_date, end_date, days_per_chunk=DAYS_PER_CHUNK)
-        fetch_star_data(owner, repo, start_date, end_date, days_per_chunk=DAYS_PER_CHUNK)
+        fetch_all_data_for_repo(
+            ephemeral_conn,
+            metadata_conn,
+            owner,
+            repo,
+            fallback_str,
+            end_str
+        )
 
-    print("\nAll done.")
+    ephemeral_conn.close()
+    metadata_conn.close()
+
+    print(f"\nAll done. Ephemeral DB was: {ephemeral_name}")
 
 if __name__ == "__main__":
     main()
