@@ -16,21 +16,26 @@ def get_db_connection():
 
 def find_oldest_date_for_repo(repo_name):
     """
-    Searches multiple tables (issues, pulls, forks, stars)
-    for earliest known date for that repo.
-    Returns None if no data found.
+    Searches multiple tables for earliest known date:
+    - issues.created_at
+    - pulls.created_at
+    - forks.created_at
+    - stars.starred_at
+
+    Returns earliest or None if no data found.
     """
     queries = [
-      "SELECT MIN(created_at) FROM issues WHERE repo_name=%s",
-      "SELECT MIN(created_at) FROM pulls  WHERE repo_name=%s",
-      "SELECT MIN(created_at) FROM forks  WHERE repo_name=%s",
-      "SELECT MIN(starred_at) FROM stars WHERE repo_name=%s"
+        "SELECT MIN(created_at) FROM issues WHERE repo_name=%s",
+        "SELECT MIN(created_at) FROM pulls  WHERE repo_name=%s",
+        "SELECT MIN(created_at) FROM forks  WHERE repo_name=%s",
+        # stars => starred_at
+        "SELECT MIN(starred_at) FROM stars WHERE repo_name=%s"
     ]
     cnx= get_db_connection()
     cursor= cnx.cursor()
     earliest= None
     for q in queries:
-        cursor.execute(q, (repo_name,))
+        cursor.execute(q,(repo_name,))
         row= cursor.fetchone()
         if row and row[0]:
             dt= row[0]

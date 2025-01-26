@@ -3,8 +3,11 @@
 ############################################
 
 import os
+import sys
+import io
 from datetime import datetime, timedelta
 
+import mysql.connector
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -18,61 +21,67 @@ from aggregator import compute_velocity, compute_uig, compute_mac, compute_sei
 from scale_factors import ratio_vs_group_average
 
 def main():
-    # 1) Load config
+    # 1) Prepare to capture console for debug_log
+    old_stdout= sys.stdout
+    buffer= io.StringIO()
+    sys.stdout= buffer
+
+    # 2) Load aggregator config (no chart toggle)
     conf= load_config("config.ini")
-    general_conf= conf["general"]
     aggregator_conf= conf["aggregator"]
 
-    ENABLE_PNG_CHARTS= general_conf.get("ENABLE_PNG_CHARTS", True)
-
-    # Some environment or defaults
+    # environment vars
     NUM_FISCAL_QUARTERS= int(os.environ.get("NUM_FISCAL_QUARTERS","8"))
     GLOBAL_OFFSET= int(os.environ.get("GLOBAL_OFFSET","0"))
     scaling_repo= os.environ.get("SCALING_REPO","ni/labview-icon-editor")
 
-    # Repos list
+    # List of repos
     all_repos= [
        "ni/labview-icon-editor",
        "facebook/react",
        "tensorflow/tensorflow",
        "dotnet/core"
     ]
+    print(f"=== BFS Aggregator (Refined) ===\n")
+    print(f"NUM_FISCAL_QUARTERS={NUM_FISCAL_QUARTERS}, GLOBAL_OFFSET={GLOBAL_OFFSET}")
+    print(f"SCALING_REPO={scaling_repo}")
+    print()
 
-    # 2) Find oldest date + apply offset
+    # 3) Find oldest date + apply offset
     oldest_dates={}
     for r in all_repos:
         od= find_oldest_date_for_repo(r)
         if od is None:
-            # fallback
             od= datetime(2100,1,1)
-        od= od+ timedelta(days= GLOBAL_OFFSET)
+        od= od+ timedelta(days=GLOBAL_OFFSET)
         oldest_dates[r]= od
 
-    # 3) BFS_data => BFS_data[repo][q_idx]= {start, end, raw, agg, ratio}
-    BFS_data= {}
-    for r in all_repos:
-        BFS_data[r]= {}
-        sdt= oldest_dates[r]
-        for q_idx in range(1,NUM_FISCAL_QUARTERS+1):
-            q_start= sdt
-            q_end= q_start+ timedelta(days=90)  # 3-month BFS approach
-            BFS_data[r][q_idx]= {
-              'start': q_start,
-              'end': q_end,
-              'raw':{},
-              'agg':{},
-              'ratio':{}
-            }
-            sdt= q_end
-
-    # splitted keys
+    # splitted + aggregator var names
     splitted_vars= [
       "mergesRaw","closedIssRaw","closedPRRaw","forksRaw","starsRaw",
       "newIssRaw","commentsIssRaw","commentsPRRaw","reactIssRaw","reactPRRaw","pullRaw"
     ]
     aggregator_vars= ["velocity","uig","mac","sei"]
 
-    # 4) Gather splitted data
+    # BFS_data structure
+    BFS_data={}
+    for r in all_repos:
+        BFS_data[r]= {}
+        sdt= oldest_dates[r]
+        # build N quarters in 3-month increments
+        for q_idx in range(1, NUM_FISCAL_QUARTERS+1):
+            q_start= sdt
+            q_end= q_start+ timedelta(days=90)
+            BFS_data[r][q_idx]= {
+              'start': q_start,
+              'end': q_end,
+              'raw': {},
+              'agg': {},
+              'ratio': {}
+            }
+            sdt= q_end
+
+    # 4) gather splitted data
     for r in all_repos:
         for q_idx in BFS_data[r]:
             st= BFS_data[r][q_idx]['start']
@@ -85,29 +94,28 @@ def main():
         merges= splitted["mergesRaw"]
         cIss=  splitted["closedIssRaw"]
         cPR=   splitted["closedPRRaw"]
-        forks= splitted["forksRaw"]
-        stars= splitted["starsRaw"]
+        frk=   splitted["forksRaw"]
+        stx=   splitted["starsRaw"]
         nIss=  splitted["newIssRaw"]
-        cIssC= splitted["commentsIssRaw"]
-        cPRC=  splitted["commentsPRRaw"]
+        cIssX= splitted["commentsIssRaw"]
+        cPRX=  splitted["commentsPRRaw"]
         rIss=  splitted["reactIssRaw"]
         rPR=   splitted["reactPRRaw"]
         pl=    splitted["pullRaw"]
 
         velocityVal= compute_velocity(merges, cIss, cPR, conf)
-        uigVal=      compute_uig(forks, stars, conf)
-        macVal=      compute_mac(nIss, cIssC, cPRC, rIss, rPR, pl, conf)
+        uigVal=      compute_uig(frk, stx, conf)
+        macVal=      compute_mac(nIss, cIssX, cPRX, rIss, rPR, pl, conf)
         seiVal=      compute_sei(velocityVal, uigVal, macVal, conf)
-
         return {
           "mergesScaled": merges,
           "closedIssScaled": cIss,
           "closedPRScaled": cPR,
-          "forksScaled": forks,
-          "starsScaled": stars,
+          "forksScaled": frk,
+          "starsScaled": stx,
           "newIssScaled": nIss,
-          "commentsIssScaled": cIssC,
-          "commentsPRScaled": cPRC,
+          "commentsIssScaled": cIssX,
+          "commentsPRScaled": cPRX,
           "reactIssScaled": rIss,
           "reactPRScaled": rPR,
           "pullScaled": pl,
@@ -118,33 +126,31 @@ def main():
           "sei": seiVal
         }
 
-    # 5) aggregator
+    # 5) aggregator for each quarter
     for r in all_repos:
         for q_idx in BFS_data[r]:
             splitted= BFS_data[r][q_idx]['raw']
             BFS_data[r][q_idx]['agg']= aggregator_compute(splitted, aggregator_conf)
 
-    # 6) ratio => we compute group average
+    # group average
     def group_avg_var(q_idx, var, BFS_data, skip=None):
         s= 0.0
-        c=0
+        c= 0
         for rp in BFS_data:
             if rp== skip:
                 continue
             if q_idx not in BFS_data[rp]:
                 continue
             if var in splitted_vars:
-                val= BFS_data[rp][q_idx]['raw'][var]
+                v= BFS_data[rp][q_idx]['raw'][var]
             else:
-                val= BFS_data[rp][q_idx]['agg'][var]
-            s+= val
+                v= BFS_data[rp][q_idx]['agg'][var]
+            s+= v
             c+=1
-        if c>0:
-            return s/c
-        else:
-            return 0.0
+        return (s/c) if c>0 else 0.0
 
-    for q_idx in range(1,NUM_FISCAL_QUARTERS+1):
+    # 6) ratio vs group
+    for q_idx in range(1, NUM_FISCAL_QUARTERS+1):
         for var in splitted_vars+ aggregator_vars:
             avg_val= group_avg_var(q_idx, var, BFS_data, skip=None)
             for r in BFS_data:
@@ -154,7 +160,7 @@ def main():
                     mine= BFS_data[r][q_idx]['raw'][var]
                 else:
                     mine= BFS_data[r][q_idx]['agg'][var]
-                BFS_data[r][q_idx]['ratio'][var]= (mine/ avg_val) if avg_val>0 else 0.0
+                BFS_data[r][q_idx]['ratio'][var]= ratio_vs_group_average(mine, avg_val)
 
     # 7) BFS console prints
     def monospaced_table(rows):
@@ -177,29 +183,33 @@ def main():
             if idx==0:
                 dash_parts= []
                 for w in widths:
-                    dash_parts.append("-"* w)
-                dash_line= " | ".join(dash_parts)
+                    dash_parts.append("-"*w)
+                dash_line= "-+-".join(dash_parts)
                 lines.append(dash_line)
         return "\n".join(lines)
 
-    print("=== BFS Aggregator (Refined) ===\n")
+    splitted_vars_label= [
+      "mergesRaw","closedIssRaw","closedPRRaw","forksRaw","starsRaw",
+      "newIssRaw","commentsIssRaw","commentsPRRaw","reactIssRaw","reactPRRaw","pullRaw"
+    ]
 
     for r in all_repos:
         print(f"=== BFS for Repo: {r} ===")
-        # Just example factors=1.0 for splitted, or you can show aggregator_conf in detail if you prefer
-        print(f"Existing Quarter Data for {r} | (mergesFactor=1.0000, closedIssFactor=1.0000, closedPRFactor=1.0000, forksFactor=1.0000, starsFactor=1.0000, newIssuesFactor=1.0000, commentsIssFactor=1.0000, commentsPRFactor=1.0000, reactIssFactor=1.0000, reactPRFactor=1.0000, pullFactor=1.0000)")
+        # Print a summary line of splitted factor=1
+        print(f"Existing Quarter Data for {r} | (mergesFactor=1.0000, closedIssFactor=1.0000, closedPRFactor=1.0000, forksFactor=1.0000, starsFactor=1.0000, newIssFactor=1.0000, commentsIssFactor=1.0000, commentsPRFactor=1.0000, reactIssFactor=1.0000, reactPRFactor=1.0000, pullFactor=1.0000)")
+        # Build BFS table
         header= [
           "Q-Range",
-          "mRaw","mRat",
-          "cIss","cIssR",
-          "cPR","cPRR",
-          "fork","fRat",
-          "star","sRat",
-          "nIss","nIRt",
-          "comI","cIRt",
-          "comP","cPRt",
-          "reaI","rIRt",
-          "reaP","rPRt",
+          "mergesRaw","mRat",
+          "cIssRaw","cIssR",
+          "cPRRaw","cPRR",
+          "forks","fRat",
+          "stars","sRat",
+          "newIss","nIRt",
+          "comIss","cIssRt",
+          "comPR","cPRRt",
+          "reaIss","rIssRt",
+          "reaPR","rPRRt",
           "pull","pRat",
           "vel","vRat",
           "uig","uRat",
@@ -212,6 +222,8 @@ def main():
             st= BFS_data[r][q_idx]['start']
             ed= BFS_data[r][q_idx]['end']
             label= f"Q{q_idx}({st.strftime('%Y-%m-%d')}..{ed.strftime('%Y-%m-%d')})"
+            # optional partial label if we want to detect any reason
+            # (omitted for brevity here, or you can add logic if needed)
 
             rawd= BFS_data[r][q_idx]['raw']
             aggd= BFS_data[r][q_idx]['agg']
@@ -219,31 +231,31 @@ def main():
 
             merges= rawd["mergesRaw"]
             mergesRat= ratd["mergesRaw"]
-            cIss= rawd["closedIssRaw"]
-            cIssRat= ratd["closedIssRaw"]
-            cPR= rawd["closedPRRaw"]
-            cPRRat= ratd["closedPRRaw"]
+            ciIss= rawd["closedIssRaw"]
+            ciIssRat= ratd["closedIssRaw"]
+            ciPR= rawd["closedPRRaw"]
+            ciPRRat= ratd["closedPRRaw"]
             frk= rawd["forksRaw"]
             frkRat= ratd["forksRaw"]
             stx= rawd["starsRaw"]
             stxRat= ratd["starsRaw"]
             ni= rawd["newIssRaw"]
             niRat= ratd["newIssRaw"]
-            ci= rawd["commentsIssRaw"]
-            ciRat= ratd["commentsIssRaw"]
-            cp= rawd["commentsPRRaw"]
-            cpRat= ratd["commentsPRRaw"]
-            ri= rawd["reactIssRaw"]
-            riRat= ratd["reactIssRaw"]
-            rp= rawd["reactPRRaw"]
-            rpRat= ratd["reactPRRaw"]
+            cIss= rawd["commentsIssRaw"]
+            cIssRat= ratd["commentsIssRaw"]
+            cPR= rawd["commentsPRRaw"]
+            cPRRat= ratd["commentsPRRaw"]
+            rIss= rawd["reactIssRaw"]
+            rIssRat= ratd["reactIssRaw"]
+            rPR= rawd["reactPRRaw"]
+            rPRRat= ratd["reactPRRaw"]
             pl= rawd["pullRaw"]
             plRat= ratd["pullRaw"]
 
             vel= aggd["velocity"]
             velRat= ratd["velocity"]
-            u= aggd["uig"]
-            uRat= ratd["uig"]
+            uig= aggd["uig"]
+            uigRat= ratd["uig"]
             mac= aggd["mac"]
             macRat= ratd["mac"]
             sei= aggd["sei"]
@@ -252,29 +264,30 @@ def main():
             row= [
               label,
               str(merges),   f"{mergesRat:.3f}",
-              str(cIss),     f"{cIssRat:.3f}",
-              str(cPR),      f"{cPRRat:.3f}",
+              str(ciIss),    f"{ciIssRat:.3f}",
+              str(ciPR),     f"{ciPRRat:.3f}",
               str(frk),      f"{frkRat:.3f}",
               str(stx),      f"{stxRat:.3f}",
               str(ni),       f"{niRat:.3f}",
-              str(ci),       f"{ciRat:.3f}",
-              str(cp),       f"{cpRat:.3f}",
-              str(ri),       f"{riRat:.3f}",
-              str(rp),       f"{rpRat:.3f}",
+              str(cIss),     f"{cIssRat:.3f}",
+              str(cPR),      f"{cPRRat:.3f}",
+              str(rIss),     f"{rIssRat:.3f}",
+              str(rPR),      f"{rPRRat:.3f}",
               str(pl),       f"{plRat:.3f}",
               f"{vel:.3f}",  f"{velRat:.3f}",
-              f"{u:.3f}",    f"{uRat:.3f}",
+              f"{uig:.3f}",  f"{uigRat:.3f}",
               f"{mac:.3f}",  f"{macRat:.3f}",
               f"{sei:.3f}",  f"{seiRat:.3f}"
             ]
             rows.append(row)
+
         print(monospaced_table(rows))
         print()
 
         # aggregator expansions
         print(f"--- Additional Calculation Details for {r} (Velocity, UIG, MAC, SEI) ---\n")
 
-        # show mergesScaled, closedIssScaled, closedPRScaled, velocity
+        # mergesScaled, closedIssScaled, closedPRScaled, velocity
         h2= ["Q-Range","mergesScaled","closedIssScaled","closedPRScaled","Velocity"]
         r2= [h2]
         for q_idx in sorted_q:
@@ -319,7 +332,9 @@ def main():
             ed= BFS_data[r][q_idx]['end']
             lbl= f"Q{q_idx}({st.strftime('%Y-%m-%d')}..{ed.strftime('%Y-%m-%d')})"
             agg= BFS_data[r][q_idx]['agg']
-            sumAll= (agg["newIssScaled"]+ agg["commentsIssScaled"]+ agg["commentsPRScaled"]+ agg["reactIssScaled"]+ agg["reactPRScaled"])
+            sumAll= (agg["newIssScaled"]
+                     + agg["commentsIssScaled"]+ agg["commentsPRScaled"]
+                     + agg["reactIssScaled"]+ agg["reactPRScaled"])
             row= [
               lbl,
               f"{sumAll:.1f}",
@@ -349,13 +364,8 @@ def main():
         print(monospaced_table(r5))
         print()
 
-    # produce side-by-side scaled charts
-    splitted_vars= [
-      "mergesRaw","closedIssRaw","closedPRRaw","forksRaw","starsRaw",
-      "newIssRaw","commentsIssRaw","commentsPRRaw","reactIssRaw","reactPRRaw","pullRaw"
-    ]
-    aggregator_vars= ["velocity","uig","mac","sei"]
-
+    # 8) produce side-by-side scaled charts for splitted + aggregator
+    # lumps them all in one loop
     def compute_avg_for_var(q_idx, var, BFS_data, skip_repo=None):
         s=0.0
         c=0
@@ -373,6 +383,7 @@ def main():
         return (s/c) if c>0 else 0.0
 
     def produce_side_by_side_chart(variableName, BFS_data, all_repos, scaling_repo):
+        # pick sorted BFS indices from scaling repo
         if scaling_repo not in BFS_data:
             return
         sorted_quarters= sorted(BFS_data[scaling_repo].keys())
@@ -386,25 +397,28 @@ def main():
             qlbl= f"Q{q_idx}\n({st}..{ed})"
             q_labels.append(qlbl)
 
+            # scaling
             if variableName in splitted_vars:
                 s_val= BFS_data[scaling_repo][q_idx]['raw'][variableName]
             else:
                 s_val= BFS_data[scaling_repo][q_idx]['agg'][variableName]
 
+            # group
             g_val= compute_avg_for_var(q_idx, variableName, BFS_data, skip_repo=scaling_repo)
+
             scale_vals.append(s_val)
             group_vals.append(g_val)
             x_vals.append(i)
 
-        bar_width= 0.4
+        bar_width=0.4
         x_arr= np.arange(len(x_vals))
 
         plt.figure(figsize=(10,6))
         plt.bar(x_arr- bar_width/2, scale_vals, bar_width, label=scaling_repo, color='tab:blue')
-        plt.bar(x_arr+ bar_width/2, group_vals, bar_width, label='NonScalingAvg', color='tab:orange')
+        plt.bar(x_arr+ bar_width/2, group_vals, bar_width, label="NonScalingAvg", color='tab:orange')
 
         plt.title(f"{variableName} ({scaling_repo} vs. group avg)")
-        plt.xlabel("BFS Quarter Index")
+        plt.xlabel("3-month BFS Quarters")
         plt.ylabel(variableName)
         plt.xticks(x_arr, q_labels, rotation=45, ha='right')
         plt.legend()
@@ -415,15 +429,20 @@ def main():
         plt.close()
         print(f"[INFO] Created {out_name}")
 
-    if ENABLE_PNG_CHARTS:
-        print("\n=== Producing side-by-side scaled charts... ===")
-        for var in splitted_vars + aggregator_vars:
-            produce_side_by_side_chart(var, BFS_data, all_repos, scaling_repo)
-        print("\n=== BFS aggregator done. ===")
-    else:
-        print("\n[INFO] PNG chart creation disabled by config.\n")
-        print("=== BFS aggregator done. ===")
+    print("=== Now produce side-by-side scaled charts for splitted + aggregator. ===")
+    for var in splitted_vars + aggregator_vars:
+        produce_side_by_side_chart(var, BFS_data, all_repos, scaling_repo)
 
+    print("\n=== BFS aggregator done. Now capturing debug log... ===")
+
+    # 9) Save console buffer to debug_log.txt
+    sys.stdout= old_stdout
+    console_output= buffer.getvalue()
+    with open("debug_log.txt","w", encoding="utf-8") as dbg:
+        dbg.write(console_output)
+    print("[INFO] Overwrote debug_log.txt with BFS aggregator logs.\n")
+
+    print("=== Done. ===")
 
 if __name__=="__main__":
     main()

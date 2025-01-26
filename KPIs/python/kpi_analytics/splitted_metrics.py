@@ -15,18 +15,20 @@ def get_db_connection():
 
 def gather_data_for_window(repo_name, start_dt, end_dt):
     """
-    Gathers splitted BFS raw variables:
-      mergesRaw,
-      closedIssRaw,
-      closedPRRaw,
-      forksRaw,
-      starsRaw,
-      newIssRaw,
-      commentsIssRaw,
-      commentsPRRaw,
-      reactIssRaw,
-      reactPRRaw,
-      pullRaw
+    Gathers splitted BFS raw variables for [start_dt..end_dt).
+    {
+      "mergesRaw": int,
+      "closedIssRaw": int,
+      "closedPRRaw": int,
+      "forksRaw": int,
+      "starsRaw": int,
+      "newIssRaw": int,
+      "commentsIssRaw": int,
+      "commentsPRRaw": int,
+      "reactIssRaw": int,
+      "reactPRRaw": int,
+      "pullRaw": int
+    }
     """
     results= {
       "mergesRaw": 0,
@@ -51,65 +53,64 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
       FROM pull_events
       WHERE repo_name=%s
         AND created_at >= %s AND created_at < %s
-        AND JSON_EXTRACT(raw_json, '$.event')='merged'
+        AND JSON_EXTRACT(raw_json,'$.event')='merged'
     """
     cursor.execute(q_merges,(repo_name, start_dt, end_dt))
     results["mergesRaw"]= cursor.fetchone()[0]
 
-    # closedIssRaw => from issue_events, event='closed', ensure it's an issue not a PR
+    # closedIssRaw => from issue_events, event='closed', must be an issue not a PR
     q_closed_iss= """
       SELECT COUNT(*)
       FROM issue_events ie
       WHERE ie.repo_name=%s
         AND ie.created_at >= %s AND ie.created_at < %s
-        AND JSON_EXTRACT(ie.raw_json, '$.event')='closed'
+        AND JSON_EXTRACT(ie.raw_json,'$.event')='closed'
         AND ie.issue_number IN (
            SELECT i.issue_number FROM issues i WHERE i.repo_name=%s
         )
     """
-    cursor.execute(q_closed_iss, (repo_name, start_dt, end_dt, repo_name))
+    cursor.execute(q_closed_iss,(repo_name, start_dt, end_dt, repo_name))
     results["closedIssRaw"]= cursor.fetchone()[0]
 
-    # closedPRRaw => from pull_events event IN('closed','merged')
+    # closedPRRaw => from pull_events event in ('closed','merged')
     q_closed_pr= """
       SELECT COUNT(*)
       FROM pull_events
       WHERE repo_name=%s
         AND created_at >= %s AND created_at < %s
-        AND JSON_EXTRACT(raw_json, '$.event') IN ('closed','merged')
+        AND JSON_EXTRACT(raw_json,'$.event') in ('closed','merged')
     """
-    cursor.execute(q_closed_pr, (repo_name, start_dt, end_dt))
+    cursor.execute(q_closed_pr,(repo_name, start_dt, end_dt))
     results["closedPRRaw"]= cursor.fetchone()[0]
 
-    # forksRaw => from forks.created_at
+    # forksRaw => forks.created_at
     q_forks= """
       SELECT COUNT(*)
       FROM forks
       WHERE repo_name=%s
         AND created_at >= %s AND created_at < %s
     """
-    cursor.execute(q_forks, (repo_name, start_dt, end_dt))
+    cursor.execute(q_forks,(repo_name, start_dt, end_dt))
     results["forksRaw"]= cursor.fetchone()[0]
 
-    # starsRaw => from stars.starred_at
+    # starsRaw => stars.starred_at
     q_stars= """
       SELECT COUNT(*)
       FROM stars
       WHERE repo_name=%s
         AND starred_at >= %s AND starred_at < %s
     """
-    cursor.execute(q_stars, (repo_name, start_dt, end_dt))
+    cursor.execute(q_stars,(repo_name, start_dt, end_dt))
     results["starsRaw"]= cursor.fetchone()[0]
 
     # newIssRaw => from issues.created_at
-    q_iss= """
+    q_new_iss= """
       SELECT COUNT(*)
       FROM issues
       WHERE repo_name=%s
-        AND created_at >= %s
-        AND created_at < %s
+        AND created_at >= %s AND created_at < %s
     """
-    cursor.execute(q_iss,(repo_name, start_dt, end_dt))
+    cursor.execute(q_new_iss,(repo_name,start_dt,end_dt))
     results["newIssRaw"]= cursor.fetchone()[0]
 
     # pullRaw => from pulls.created_at
@@ -117,14 +118,14 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
       SELECT COUNT(*)
       FROM pulls
       WHERE repo_name=%s
-        AND created_at >= %s
-        AND created_at < %s
+        AND created_at >= %s AND created_at < %s
     """
-    cursor.execute(q_pull,(repo_name, start_dt, end_dt))
+    cursor.execute(q_pull,(repo_name,start_dt,end_dt))
     results["pullRaw"]= cursor.fetchone()[0]
 
     # commentsIssRaw => issue_comments + issues
-    q_comm_iss= """
+    # ignoring +1/-1 => (ic.body not like '%+1%' and '%-1%')
+    q_c_iss= """
       SELECT COUNT(*)
       FROM issue_comments ic
       JOIN issues i ON (i.repo_name=ic.repo_name AND i.issue_number=ic.issue_number)
@@ -132,11 +133,11 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
         AND ic.created_at >= %s AND ic.created_at < %s
         AND (ic.body NOT LIKE '%+1%' AND ic.body NOT LIKE '%-1%')
     """
-    cursor.execute(q_comm_iss,(repo_name, start_dt, end_dt))
+    cursor.execute(q_c_iss,(repo_name,start_dt,end_dt))
     results["commentsIssRaw"]= cursor.fetchone()[0]
 
     # commentsPRRaw => issue_comments + pulls
-    q_comm_pr= """
+    q_c_pr= """
       SELECT COUNT(*)
       FROM issue_comments ic
       JOIN pulls p ON (p.repo_name=ic.repo_name AND p.pull_number=ic.issue_number)
@@ -144,11 +145,11 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
         AND ic.created_at >= %s AND ic.created_at < %s
         AND (ic.body NOT LIKE '%+1%' AND ic.body NOT LIKE '%-1%')
     """
-    cursor.execute(q_comm_pr,(repo_name, start_dt, end_dt))
+    cursor.execute(q_c_pr,(repo_name,start_dt,end_dt))
     results["commentsPRRaw"]= cursor.fetchone()[0]
 
     # reactIssRaw => +1/-1 in issues
-    q_react_iss= """
+    q_r_iss= """
       SELECT COUNT(*)
       FROM issue_comments ic
       JOIN issues i ON (i.repo_name=ic.repo_name AND i.issue_number=ic.issue_number)
@@ -156,11 +157,11 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
         AND ic.created_at >= %s AND ic.created_at < %s
         AND (ic.body LIKE '%+1%' OR ic.body LIKE '%-1%')
     """
-    cursor.execute(q_react_iss,(repo_name, start_dt, end_dt))
+    cursor.execute(q_r_iss,(repo_name,start_dt,end_dt))
     results["reactIssRaw"]= cursor.fetchone()[0]
 
     # reactPRRaw => +1/-1 in PRs
-    q_react_pr= """
+    q_r_pr= """
       SELECT COUNT(*)
       FROM issue_comments ic
       JOIN pulls p ON (p.repo_name=ic.repo_name AND p.pull_number=ic.issue_number)
@@ -168,7 +169,7 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
         AND ic.created_at >= %s AND ic.created_at < %s
         AND (ic.body LIKE '%+1%' OR ic.body LIKE '%-1%')
     """
-    cursor.execute(q_react_pr,(repo_name, start_dt, end_dt))
+    cursor.execute(q_r_pr,(repo_name,start_dt,end_dt))
     results["reactPRRaw"]= cursor.fetchone()[0]
 
     cursor.close()

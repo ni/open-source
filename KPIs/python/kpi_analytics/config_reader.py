@@ -7,23 +7,15 @@ import os
 
 def load_config(file_path="config.ini"):
     """
-    Loads configuration from config.ini or returns defaults if missing.
+    Reads config.ini only for aggregator weighting keys now.
+    We removed any toggle logic for chart creation.
     """
     parser = configparser.ConfigParser()
     if os.path.exists(file_path):
         parser.read(file_path)
     config_data = {}
 
-    # [general]
-    general = {}
-    if "general" in parser.sections():
-        sec = parser["general"]
-        general["ENABLE_PNG_CHARTS"] = sec.getboolean("ENABLE_PNG_CHARTS", fallback=True)
-    else:
-        general["ENABLE_PNG_CHARTS"] = True
-    config_data["general"] = general
-
-    # [aggregator]
+    # aggregator
     aggregator = {}
     if "aggregator" in parser.sections():
         sec = parser["aggregator"]
@@ -31,30 +23,30 @@ def load_config(file_path="config.ini"):
         aggregator["velocity_closedIss"] = sec.getfloat("velocity_closedIss", fallback=0.2)
         aggregator["velocity_closedPR"]  = sec.getfloat("velocity_closedPR", fallback=0.4)
 
-        aggregator["uig_forks"]         = sec.getfloat("uig_forks", fallback=0.4)
-        aggregator["uig_stars"]         = sec.getfloat("uig_stars", fallback=0.6)
+        aggregator["uig_forks"] = sec.getfloat("uig_forks", fallback=0.4)
+        aggregator["uig_stars"] = sec.getfloat("uig_stars", fallback=0.6)
 
-        aggregator["mac_mainWeight"]    = sec.getfloat("mac_mainWeight", fallback=0.8)
-        aggregator["mac_subWeight"]     = sec.getfloat("mac_subWeight", fallback=0.2)
+        aggregator["mac_mainWeight"] = sec.getfloat("mac_mainWeight", fallback=0.8)
+        aggregator["mac_subWeight"]  = sec.getfloat("mac_subWeight", fallback=0.2)
 
-        aggregator["sei_velocity"]      = sec.getfloat("sei_velocity", fallback=0.3)
-        aggregator["sei_uig"]           = sec.getfloat("sei_uig", fallback=0.2)
-        aggregator["sei_mac"]           = sec.getfloat("sei_mac", fallback=0.5)
-
+        aggregator["sei_velocity"] = sec.getfloat("sei_velocity", fallback=0.3)
+        aggregator["sei_uig"]      = sec.getfloat("sei_uig", fallback=0.2)
+        aggregator["sei_mac"]      = sec.getfloat("sei_mac", fallback=0.5)
     else:
+        # fallback if no aggregator section
         aggregator["velocity_merges"]    = 0.4
         aggregator["velocity_closedIss"] = 0.2
         aggregator["velocity_closedPR"]  = 0.4
 
-        aggregator["uig_forks"]         = 0.4
-        aggregator["uig_stars"]         = 0.6
+        aggregator["uig_forks"] = 0.4
+        aggregator["uig_stars"] = 0.6
 
-        aggregator["mac_mainWeight"]    = 0.8
-        aggregator["mac_subWeight"]     = 0.2
+        aggregator["mac_mainWeight"] = 0.8
+        aggregator["mac_subWeight"]  = 0.2
 
-        aggregator["sei_velocity"]      = 0.3
-        aggregator["sei_uig"]           = 0.2
-        aggregator["sei_mac"]           = 0.5
+        aggregator["sei_velocity"] = 0.3
+        aggregator["sei_uig"]      = 0.2
+        aggregator["sei_mac"]      = 0.5
 
     config_data["aggregator"] = aggregator
 
