@@ -1,10 +1,14 @@
 ############################################
 # splitted_metrics.py
 ############################################
+
 import mysql.connector
 from db_config import DB_HOST, DB_USER, DB_PASSWORD, DB_DATABASE
 
 def get_db_connection():
+    """
+    Creates & returns a MySQL connection. Called repeatedly by gather_data_for_window.
+    """
     return mysql.connector.connect(
         host=DB_HOST,
         user=DB_USER,
@@ -14,13 +18,15 @@ def get_db_connection():
 
 def gather_data_for_window(repo_name, start_dt, end_dt):
     """
-    Return a dict with splitted metrics:
-      mergesRaw, closedIssRaw, closedPRRaw, forksRaw, starsRaw, newIssRaw,
-      commentsIssRaw, commentsPRRaw, reactIssRaw, reactPRRaw, pullRaw
+    Gathers splitted raw metrics for BFS from [start_dt..end_dt):
+      - mergesRaw, closedIssRaw, closedPRRaw
+      - forksRaw, starsRaw, newIssRaw
+      - commentsIssRaw, commentsPRRaw
+      - reactIssRaw, reactPRRaw
+      - pullRaw
 
-    No placeholders; real queries referencing your schema columns.
+    Adjust queries for your real schema as needed.
     """
-
     results= {
       "mergesRaw":0,
       "closedIssRaw":0,
@@ -49,7 +55,7 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
     cursor.execute(q_merges, (repo_name, start_dt, end_dt))
     results["mergesRaw"]= cursor.fetchone()[0]
 
-    # closedIssRaw => from issue_events with event='closed' for real issues
+    # closedIssRaw => from issue_events event='closed', real issues (not PR)
     q_closed_iss= """
         SELECT COUNT(*)
         FROM issue_events ie
@@ -57,20 +63,21 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
           AND ie.created_at >= %s AND ie.created_at < %s
           AND JSON_EXTRACT(ie.raw_json, '$.event')='closed'
           AND ie.issue_number IN (
-             SELECT i.issue_number FROM issues i
+             SELECT i.issue_number
+             FROM issues i
              WHERE i.repo_name=%s
           )
     """
     cursor.execute(q_closed_iss, (repo_name, start_dt, end_dt, repo_name))
     results["closedIssRaw"]= cursor.fetchone()[0]
 
-    # closedPRRaw => from pull_events with event in (closed, merged)
+    # closedPRRaw => from pull_events with event in ('closed','merged')
     q_closed_pr= """
         SELECT COUNT(*)
-        FROM pull_events pe
-        WHERE pe.repo_name=%s
-          AND pe.created_at >= %s AND pe.created_at < %s
-          AND JSON_EXTRACT(pe.raw_json, '$.event') IN ('closed','merged')
+        FROM pull_events
+        WHERE repo_name=%s
+          AND created_at >= %s AND created_at < %s
+          AND JSON_EXTRACT(raw_json, '$.event') IN ('closed','merged')
     """
     cursor.execute(q_closed_pr, (repo_name, start_dt, end_dt))
     results["closedPRRaw"]= cursor.fetchone()[0]
@@ -115,7 +122,7 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
     cursor.execute(q_pull, (repo_name, start_dt, end_dt))
     results["pullRaw"]= cursor.fetchone()[0]
 
-    # commentsIssRaw => from issue_comments joined with issues (excluding +1/-1)
+    # commentsIssRaw => from issue_comments joined with issues (exclude +1/-1)
     q_comm_iss= """
         SELECT COUNT(*)
         FROM issue_comments ic
@@ -127,7 +134,7 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
     cursor.execute(q_comm_iss, (repo_name, start_dt, end_dt))
     results["commentsIssRaw"]= cursor.fetchone()[0]
 
-    # commentsPRRaw => from issue_comments joined with pulls (excluding +1/-1)
+    # commentsPRRaw => from issue_comments joined with pulls (exclude +1/-1)
     q_comm_pr= """
         SELECT COUNT(*)
         FROM issue_comments ic
@@ -165,4 +172,5 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
 
     cursor.close()
     cnx.close()
+
     return results
