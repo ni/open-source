@@ -1,5 +1,6 @@
 ############################################################
 # aggregator.py
+# BFS aggregator formulas for velocity, uig, mac, sei
 ############################################################
 
 def compute_velocity(mergesScaled, closedIssScaled, closedPRScaled, config):
@@ -23,7 +24,7 @@ def compute_uig(forksScaled, starsScaled, config):
 
 def compute_mac(newIss, cIssX, cPRX, rIss, rPR, pull, config):
     """
-    mac = mainW*(newIss + cIssX + cPRX + rIss + rPR) + subW*(pull)
+    mac = mainW*( newIss + cIssX + cPRX + rIss + rPR ) + subW*(pull)
     """
     mainW= config.get("mac_mainWeight", 0.8)
     subW= config.get("mac_subWeight",  0.2)
@@ -37,4 +38,4 @@ def compute_sei(velocityVal, uigVal, macVal, config):
     wv= config.get("sei_velocity",0.3)
     wu= config.get("sei_uig",0.2)
     wm= config.get("sei_mac",0.5)
-    return wv*velocityVal + wu*uigVal + wm*macVal
+    return wv* velocityVal + wu* uigVal + wm* macVal

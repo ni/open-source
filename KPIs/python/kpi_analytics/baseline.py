@@ -1,5 +1,7 @@
 ############################################################
 # baseline.py
+# Finds the earliest date for a given repo across multiple
+# tables (issues, pulls, forks, stars).
 ############################################################
 
 import mysql.connector

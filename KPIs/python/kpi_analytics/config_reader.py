@@ -1,5 +1,7 @@
 ############################################################
 # config_reader.py
+# Reads aggregator weighting from config.ini (if present),
+# else uses defaults
 ############################################################
 
 import configparser
@@ -9,6 +11,7 @@ def load_config(file_path="config.ini"):
     """
     Reads aggregator weighting from config.ini, if present.
     Fallback for any missing aggregator keys.
+    Returns a dict with "aggregator" subkey.
     """
     parser = configparser.ConfigParser()
     if os.path.exists(file_path):
@@ -32,6 +35,7 @@ def load_config(file_path="config.ini"):
         aggregator["sei_uig"]      = sec.getfloat("sei_uig",      fallback=0.2)
         aggregator["sei_mac"]      = sec.getfloat("sei_mac",      fallback=0.5)
     else:
+        # Defaults if aggregator not found
         aggregator["velocity_merges"]    = 0.4
         aggregator["velocity_closedIss"] = 0.2
         aggregator["velocity_closedPR"]  = 0.4
