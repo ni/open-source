@@ -1,12 +1,12 @@
-############################################
+############################################################
 # aggregator.py
-############################################
+############################################################
 
 def compute_velocity(mergesScaled, closedIssScaled, closedPRScaled, config):
     """
     velocity = mergesScaled * velocity_merges
              + closedIssScaled * velocity_closedIss
-             + closedPRScaled  * velocity_closedPR
+             + closedPRScaled * velocity_closedPR
     """
     vm= config.get("velocity_merges", 0.4)
     vci= config.get("velocity_closedIss",0.2)
@@ -21,20 +21,18 @@ def compute_uig(forksScaled, starsScaled, config):
     us= config.get("uig_stars", 0.6)
     return uf* forksScaled + us* starsScaled
 
-def compute_mac(newIss, cIss, cPR, rIss, rPR, pull, config):
+def compute_mac(newIss, cIssX, cPRX, rIss, rPR, pull, config):
     """
-    mac = mainW*(newIss + cIss + cPR + rIss + rPR) + subW*(pull)
-    For example, default mainW=0.8, subW=0.2
+    mac = mainW*(newIss + cIssX + cPRX + rIss + rPR) + subW*(pull)
     """
     mainW= config.get("mac_mainWeight", 0.8)
-    subW= config.get("mac_subWeight", 0.2)
-    sumAll= newIss + cIss + cPR + rIss + rPR
+    subW= config.get("mac_subWeight",  0.2)
+    sumAll= newIss + cIssX + cPRX + rIss + rPR
     return mainW* sumAll + subW* pull
 
 def compute_sei(velocityVal, uigVal, macVal, config):
     """
     sei = wv*velocityVal + wu*uigVal + wm*macVal
-    default: wv=0.3, wu=0.2, wm=0.5
     """
     wv= config.get("sei_velocity",0.3)
     wu= config.get("sei_uig",0.2)

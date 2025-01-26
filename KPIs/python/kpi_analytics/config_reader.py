@@ -1,6 +1,6 @@
-############################################
+############################################################
 # config_reader.py
-############################################
+############################################################
 
 import configparser
 import os
@@ -8,7 +8,7 @@ import os
 def load_config(file_path="config.ini"):
     """
     Reads aggregator weighting from config.ini, if present.
-    Always fallback if missing any key.
+    Fallback for any missing aggregator keys.
     """
     parser = configparser.ConfigParser()
     if os.path.exists(file_path):
@@ -18,21 +18,20 @@ def load_config(file_path="config.ini"):
     aggregator = {}
     if "aggregator" in parser.sections():
         sec = parser["aggregator"]
-        aggregator["velocity_merges"]    = sec.getfloat("velocity_merges", fallback=0.4)
+        aggregator["velocity_merges"]    = sec.getfloat("velocity_merges",    fallback=0.4)
         aggregator["velocity_closedIss"] = sec.getfloat("velocity_closedIss", fallback=0.2)
-        aggregator["velocity_closedPR"]  = sec.getfloat("velocity_closedPR", fallback=0.4)
+        aggregator["velocity_closedPR"]  = sec.getfloat("velocity_closedPR",  fallback=0.4)
 
         aggregator["uig_forks"] = sec.getfloat("uig_forks", fallback=0.4)
         aggregator["uig_stars"] = sec.getfloat("uig_stars", fallback=0.6)
 
         aggregator["mac_mainWeight"] = sec.getfloat("mac_mainWeight", fallback=0.8)
-        aggregator["mac_subWeight"]  = sec.getfloat("mac_subWeight", fallback=0.2)
+        aggregator["mac_subWeight"]  = sec.getfloat("mac_subWeight",  fallback=0.2)
 
         aggregator["sei_velocity"] = sec.getfloat("sei_velocity", fallback=0.3)
-        aggregator["sei_uig"]      = sec.getfloat("sei_uig", fallback=0.2)
-        aggregator["sei_mac"]      = sec.getfloat("sei_mac", fallback=0.5)
+        aggregator["sei_uig"]      = sec.getfloat("sei_uig",      fallback=0.2)
+        aggregator["sei_mac"]      = sec.getfloat("sei_mac",      fallback=0.5)
     else:
-        # fallback
         aggregator["velocity_merges"]    = 0.4
         aggregator["velocity_closedIss"] = 0.2
         aggregator["velocity_closedPR"]  = 0.4

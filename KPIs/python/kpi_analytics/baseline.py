@@ -1,6 +1,6 @@
-############################################
+############################################################
 # baseline.py
-############################################
+############################################################
 
 import mysql.connector
 from datetime import datetime, timedelta
@@ -21,7 +21,6 @@ def find_oldest_date_for_repo(repo_name):
       - pulls.created_at
       - forks.created_at
       - stars.starred_at
-
     Returns earliest or None if no data.
     """
     queries = [
