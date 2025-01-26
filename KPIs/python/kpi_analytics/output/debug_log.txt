@@ -1,5 +1,4 @@
 === BFS Aggregator (Refined, Overwriting debug_log.txt) ===
-
 OUTPUT_FOLDER=output
 NUM_FISCAL_QUARTERS=8, GLOBAL_OFFSET=0
 SCALING_REPO=ni/labview-icon-editor
@@ -713,6 +712,7 @@ Q7(2101-06-25..2101-09-23) | 0.000    | 0.000 | 0.000 | 0.000
 Q8(2101-09-23..2101-12-22) | 0.000    | 0.000 | 0.000 | 0.000
 
 === Now produce side-by-side scaled charts for splitted + aggregator. ===
+
 
 === QUERIES USED (by splitted variable => repo => date range) ===
 
@@ -10721,3 +10721,4 @@ pullRaw : Eclipse/mraa - 2101-09-23 00:00:00 to 2101-12-22 00:00:00
         AND created_at >= '2101-09-23 00:00:00' AND created_at < '2101-12-22 00:00:00'
     
 
+=== Done BFS aggregator + side-by-side scaled charts. ===

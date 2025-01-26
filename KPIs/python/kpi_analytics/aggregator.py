@@ -7,7 +7,7 @@ def compute_velocity(mergesScaled, closedIssScaled, closedPRScaled, config):
     """
     velocity = mergesScaled * velocity_merges
              + closedIssScaled * velocity_closedIss
-             + closedPRScaled * velocity_closedPR
+             + closedPRScaled  * velocity_closedPR
     """
     vm= config.get("velocity_merges", 0.4)
     vci= config.get("velocity_closedIss",0.2)

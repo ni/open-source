@@ -27,10 +27,6 @@ def get_db_connection():
     )
 
 def _escape_single_quotes(val):
-    """
-    Basic naive approach to handle single quotes in param
-    by doubling them or backslash them.
-    """
     return val.replace("'","\\'")
 
 def _inject_params_into_sql(query_str, param_list):
@@ -56,7 +52,7 @@ def _inject_params_into_sql(query_str, param_list):
 def gather_data_for_window(repo_name, start_dt, end_dt):
     """
     Returns a dict of splitted BFS raw variables for [start_dt..end_dt),
-    plus 'queriesUsed' capturing actual SQL used.
+    plus 'queriesUsed' capturing actual SQL used with param injection.
     """
     results= {
       "mergesRaw": 0,
@@ -86,7 +82,7 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
     """
     pm= (repo_name, start_dt, end_dt)
     cursor.execute(q_merges, pm)
-    merges_val= cursor.fetchone()[0]
+    merges_val= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
     results["mergesRaw"]= merges_val
     results["queriesUsed"]["mergesRaw"]= {
        "originalSQL": q_merges.strip(),
@@ -106,7 +102,7 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
     """
     pci= (repo_name, start_dt, end_dt, repo_name)
     cursor.execute(q_ci, pci)
-    ci_val= cursor.fetchone()[0]
+    ci_val= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
     results["closedIssRaw"]= ci_val
     results["queriesUsed"]["closedIssRaw"]= {
        "originalSQL": q_ci.strip(),
@@ -123,7 +119,7 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
     """
     pcpr= (repo_name, start_dt, end_dt)
     cursor.execute(q_cpr, pcpr)
-    cpr_val= cursor.fetchone()[0]
+    cpr_val= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
     results["closedPRRaw"]= cpr_val
     results["queriesUsed"]["closedPRRaw"]= {
        "originalSQL": q_cpr.strip(),
@@ -140,7 +136,7 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
     """
     pf= (repo_name, start_dt, end_dt)
     cursor.execute(q_forks, pf)
-    f_val= cursor.fetchone()[0]
+    f_val= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
     results["forksRaw"]= f_val
     results["queriesUsed"]["forksRaw"]= {
        "originalSQL": q_forks.strip(),
@@ -157,7 +153,7 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
     """
     ps= (repo_name, start_dt, end_dt)
     cursor.execute(q_stars, ps)
-    s_val= cursor.fetchone()[0]
+    s_val= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
     results["starsRaw"]= s_val
     results["queriesUsed"]["starsRaw"]= {
        "originalSQL": q_stars.strip(),
@@ -173,7 +169,7 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
     """
     pniss= (repo_name, start_dt, end_dt)
     cursor.execute(q_niss, pniss)
-    niss_val= cursor.fetchone()[0]
+    niss_val= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
     results["newIssRaw"]= niss_val
     results["queriesUsed"]["newIssRaw"]= {
        "originalSQL": q_niss.strip(),
@@ -189,7 +185,7 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
     """
     ppr= (repo_name, start_dt, end_dt)
     cursor.execute(q_pr, ppr)
-    pr_val= cursor.fetchone()[0]
+    pr_val= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
     results["pullRaw"]= pr_val
     results["queriesUsed"]["pullRaw"]= {
        "originalSQL": q_pr.strip(),
@@ -207,7 +203,7 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
     """
     pciss= (repo_name, start_dt, end_dt)
     cursor.execute(q_c_iss, pciss)
-    ciss_val= cursor.fetchone()[0]
+    ciss_val= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
     results["commentsIssRaw"]= ciss_val
     results["queriesUsed"]["commentsIssRaw"]= {
        "originalSQL": q_c_iss.strip(),
@@ -225,7 +221,7 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
     """
     pcpr2= (repo_name, start_dt, end_dt)
     cursor.execute(q_c_pr, pcpr2)
-    cpr_val2= cursor.fetchone()[0]
+    cpr_val2= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
     results["commentsPRRaw"]= cpr_val2
     results["queriesUsed"]["commentsPRRaw"]= {
        "originalSQL": q_c_pr.strip(),
@@ -243,7 +239,7 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
     """
     priss= (repo_name, start_dt, end_dt)
     cursor.execute(q_r_iss, priss)
-    ri_val= cursor.fetchone()[0]
+    ri_val= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
     results["reactIssRaw"]= ri_val
     results["queriesUsed"]["reactIssRaw"]= {
        "originalSQL": q_r_iss.strip(),
@@ -261,7 +257,7 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
     """
     prpr= (repo_name, start_dt, end_dt)
     cursor.execute(q_r_pr, prpr)
-    rpr_val= cursor.fetchone()[0]
+    rpr_val= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
     results["reactPRRaw"]= rpr_val
     results["queriesUsed"]["reactPRRaw"]= {
        "originalSQL": q_r_pr.strip(),

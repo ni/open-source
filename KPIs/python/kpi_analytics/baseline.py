@@ -23,7 +23,7 @@ def find_oldest_date_for_repo(repo_name):
       - pulls.created_at
       - forks.created_at
       - stars.starred_at
-    Returns earliest or None if no data.
+    Returns earliest or None if no data at all for that repo.
     """
     queries = [
         "SELECT MIN(created_at) FROM issues WHERE repo_name=%s",
