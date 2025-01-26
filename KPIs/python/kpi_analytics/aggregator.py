@@ -15,7 +15,7 @@ def compute_velocity(mergesScaled, closedIssScaled, closedPRScaled, config):
 
 def compute_uig(forksScaled, starsScaled, config):
     """
-    uig = forksScaled* uig_forks + starsScaled* uig_stars
+    uig = forksScaled * uig_forks + starsScaled * uig_stars
     """
     uf= config.get("uig_forks", 0.4)
     us= config.get("uig_stars", 0.6)
@@ -24,6 +24,7 @@ def compute_uig(forksScaled, starsScaled, config):
 def compute_mac(newIss, cIss, cPR, rIss, rPR, pull, config):
     """
     mac = mainW*(newIss + cIss + cPR + rIss + rPR) + subW*(pull)
+    For example, default mainW=0.8, subW=0.2
     """
     mainW= config.get("mac_mainWeight", 0.8)
     subW= config.get("mac_subWeight", 0.2)
@@ -33,6 +34,7 @@ def compute_mac(newIss, cIss, cPR, rIss, rPR, pull, config):
 def compute_sei(velocityVal, uigVal, macVal, config):
     """
     sei = wv*velocityVal + wu*uigVal + wm*macVal
+    default: wv=0.3, wu=0.2, wm=0.5
     """
     wv= config.get("sei_velocity",0.3)
     wu= config.get("sei_uig",0.2)

@@ -7,15 +7,14 @@ import os
 
 def load_config(file_path="config.ini"):
     """
-    Reads config.ini only for aggregator weighting keys now.
-    We removed any toggle logic for chart creation.
+    Reads aggregator weighting from config.ini, if present.
+    Always fallback if missing any key.
     """
     parser = configparser.ConfigParser()
     if os.path.exists(file_path):
         parser.read(file_path)
     config_data = {}
 
-    # aggregator
     aggregator = {}
     if "aggregator" in parser.sections():
         sec = parser["aggregator"]
@@ -33,7 +32,7 @@ def load_config(file_path="config.ini"):
         aggregator["sei_uig"]      = sec.getfloat("sei_uig", fallback=0.2)
         aggregator["sei_mac"]      = sec.getfloat("sei_mac", fallback=0.5)
     else:
-        # fallback if no aggregator section
+        # fallback
         aggregator["velocity_merges"]    = 0.4
         aggregator["velocity_closedIss"] = 0.2
         aggregator["velocity_closedPR"]  = 0.4
@@ -49,5 +48,4 @@ def load_config(file_path="config.ini"):
         aggregator["sei_mac"]      = 0.5
 
     config_data["aggregator"] = aggregator
-
     return config_data

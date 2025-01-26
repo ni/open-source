@@ -15,19 +15,29 @@ def get_db_connection():
 
 def gather_data_for_window(repo_name, start_dt, end_dt):
     """
-    Gathers splitted BFS raw variables for [start_dt..end_dt).
+    Returns a dict of splitted BFS raw variables for [start_dt..end_dt),
+    PLUS a 'queriesUsed' sub-dict capturing the actual SQL queries & parameters.
+
+    keys:
+      mergesRaw
+      closedIssRaw
+      closedPRRaw
+      forksRaw
+      starsRaw
+      newIssRaw
+      commentsIssRaw
+      commentsPRRaw
+      reactIssRaw
+      reactPRRaw
+      pullRaw
+
+    Example returned structure:
     {
-      "mergesRaw": int,
-      "closedIssRaw": int,
-      "closedPRRaw": int,
-      "forksRaw": int,
-      "starsRaw": int,
-      "newIssRaw": int,
-      "commentsIssRaw": int,
-      "commentsPRRaw": int,
-      "reactIssRaw": int,
-      "reactPRRaw": int,
-      "pullRaw": int
+      "mergesRaw": int,  "closedIssRaw": int, ...
+      "queriesUsed": {
+         "mergesRaw": ("<the SQL>", [params...]),
+         ...
+      }
     }
     """
     results= {
@@ -41,7 +51,8 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
       "commentsPRRaw": 0,
       "reactIssRaw": 0,
       "reactPRRaw": 0,
-      "pullRaw": 0
+      "pullRaw": 0,
+      "queriesUsed": {}
     }
 
     cnx= get_db_connection()
@@ -56,9 +67,11 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
         AND JSON_EXTRACT(raw_json,'$.event')='merged'
     """
     cursor.execute(q_merges,(repo_name, start_dt, end_dt))
-    results["mergesRaw"]= cursor.fetchone()[0]
+    merges_val= cursor.fetchone()[0]
+    results["mergesRaw"]= merges_val
+    results["queriesUsed"]["mergesRaw"]= (q_merges, [repo_name, str(start_dt), str(end_dt)])
 
-    # closedIssRaw => from issue_events, event='closed', must be an issue not a PR
+    # closedIssRaw => from issue_events, event='closed'
     q_closed_iss= """
       SELECT COUNT(*)
       FROM issue_events ie
@@ -70,7 +83,9 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
         )
     """
     cursor.execute(q_closed_iss,(repo_name, start_dt, end_dt, repo_name))
-    results["closedIssRaw"]= cursor.fetchone()[0]
+    ci_val= cursor.fetchone()[0]
+    results["closedIssRaw"]= ci_val
+    results["queriesUsed"]["closedIssRaw"]= (q_closed_iss, [repo_name, str(start_dt), str(end_dt), repo_name])
 
     # closedPRRaw => from pull_events event in ('closed','merged')
     q_closed_pr= """
@@ -81,19 +96,24 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
         AND JSON_EXTRACT(raw_json,'$.event') in ('closed','merged')
     """
     cursor.execute(q_closed_pr,(repo_name, start_dt, end_dt))
-    results["closedPRRaw"]= cursor.fetchone()[0]
+    cpr_val= cursor.fetchone()[0]
+    results["closedPRRaw"]= cpr_val
+    results["queriesUsed"]["closedPRRaw"]= (q_closed_pr, [repo_name, str(start_dt), str(end_dt)])
 
-    # forksRaw => forks.created_at
+    # forksRaw
     q_forks= """
       SELECT COUNT(*)
       FROM forks
       WHERE repo_name=%s
-        AND created_at >= %s AND created_at < %s
+        AND created_at >= %s
+        AND created_at < %s
     """
     cursor.execute(q_forks,(repo_name, start_dt, end_dt))
-    results["forksRaw"]= cursor.fetchone()[0]
+    f_val= cursor.fetchone()[0]
+    results["forksRaw"]= f_val
+    results["queriesUsed"]["forksRaw"]= (q_forks, [repo_name, str(start_dt), str(end_dt)])
 
-    # starsRaw => stars.starred_at
+    # starsRaw
     q_stars= """
       SELECT COUNT(*)
       FROM stars
@@ -101,9 +121,11 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
         AND starred_at >= %s AND starred_at < %s
     """
     cursor.execute(q_stars,(repo_name, start_dt, end_dt))
-    results["starsRaw"]= cursor.fetchone()[0]
+    st_val= cursor.fetchone()[0]
+    results["starsRaw"]= st_val
+    results["queriesUsed"]["starsRaw"]= (q_stars, [repo_name, str(start_dt), str(end_dt)])
 
-    # newIssRaw => from issues.created_at
+    # newIssRaw => issues.created_at
     q_new_iss= """
       SELECT COUNT(*)
       FROM issues
@@ -111,7 +133,9 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
         AND created_at >= %s AND created_at < %s
     """
     cursor.execute(q_new_iss,(repo_name,start_dt,end_dt))
-    results["newIssRaw"]= cursor.fetchone()[0]
+    ni_val= cursor.fetchone()[0]
+    results["newIssRaw"]= ni_val
+    results["queriesUsed"]["newIssRaw"]= (q_new_iss, [repo_name, str(start_dt), str(end_dt)])
 
     # pullRaw => from pulls.created_at
     q_pull= """
@@ -121,10 +145,11 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
         AND created_at >= %s AND created_at < %s
     """
     cursor.execute(q_pull,(repo_name,start_dt,end_dt))
-    results["pullRaw"]= cursor.fetchone()[0]
+    pr_val= cursor.fetchone()[0]
+    results["pullRaw"]= pr_val
+    results["queriesUsed"]["pullRaw"]= (q_pull, [repo_name, str(start_dt), str(end_dt)])
 
-    # commentsIssRaw => issue_comments + issues
-    # ignoring +1/-1 => (ic.body not like '%+1%' and '%-1%')
+    # commentsIssRaw => ignoring +1/-1 => body not like
     q_c_iss= """
       SELECT COUNT(*)
       FROM issue_comments ic
@@ -134,9 +159,11 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
         AND (ic.body NOT LIKE '%+1%' AND ic.body NOT LIKE '%-1%')
     """
     cursor.execute(q_c_iss,(repo_name,start_dt,end_dt))
-    results["commentsIssRaw"]= cursor.fetchone()[0]
+    ciss_val= cursor.fetchone()[0]
+    results["commentsIssRaw"]= ciss_val
+    results["queriesUsed"]["commentsIssRaw"]= (q_c_iss, [repo_name, str(start_dt), str(end_dt)])
 
-    # commentsPRRaw => issue_comments + pulls
+    # commentsPRRaw => ignoring +1/-1 => body not like
     q_c_pr= """
       SELECT COUNT(*)
       FROM issue_comments ic
@@ -146,7 +173,9 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
         AND (ic.body NOT LIKE '%+1%' AND ic.body NOT LIKE '%-1%')
     """
     cursor.execute(q_c_pr,(repo_name,start_dt,end_dt))
-    results["commentsPRRaw"]= cursor.fetchone()[0]
+    cpr_val2= cursor.fetchone()[0]
+    results["commentsPRRaw"]= cpr_val2
+    results["queriesUsed"]["commentsPRRaw"]= (q_c_pr, [repo_name, str(start_dt), str(end_dt)])
 
     # reactIssRaw => +1/-1 in issues
     q_r_iss= """
@@ -158,7 +187,9 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
         AND (ic.body LIKE '%+1%' OR ic.body LIKE '%-1%')
     """
     cursor.execute(q_r_iss,(repo_name,start_dt,end_dt))
-    results["reactIssRaw"]= cursor.fetchone()[0]
+    ri_val= cursor.fetchone()[0]
+    results["reactIssRaw"]= ri_val
+    results["queriesUsed"]["reactIssRaw"]= (q_r_iss, [repo_name, str(start_dt), str(end_dt)])
 
     # reactPRRaw => +1/-1 in PRs
     q_r_pr= """
@@ -170,9 +201,10 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
         AND (ic.body LIKE '%+1%' OR ic.body LIKE '%-1%')
     """
     cursor.execute(q_r_pr,(repo_name,start_dt,end_dt))
-    results["reactPRRaw"]= cursor.fetchone()[0]
+    rpr_val= cursor.fetchone()[0]
+    results["reactPRRaw"]= rpr_val
+    results["queriesUsed"]["reactPRRaw"]= (q_r_pr, [repo_name, str(start_dt), str(end_dt)])
 
     cursor.close()
     cnx.close()
-
     return results
