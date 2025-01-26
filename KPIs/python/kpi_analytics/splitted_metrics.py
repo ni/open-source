@@ -1,256 +1,167 @@
-# analytics/splitted_metrics.py
-"""
-Gathers BFS data in minimal queries, using per-table earliest date logic
-and detecting PR comments vs. issue comments by comparing issue_number
-to the set of known pull_number's from 'pulls' table.
-
-We do RAW columns: mergesRaw, closedRaw, forksRaw, starsRaw, newIssuesRaw,
-commentsRaw, reactionsRaw, pullRaw.
-
-No references to 'issue_comments.raw_json' exist. We read 'c.body' instead.
-No lines omitted.
-"""
-
+############################################
+# splitted_metrics.py
+############################################
 import mysql.connector
-import json
-import re
-from datetime import datetime
 from db_config import DB_HOST, DB_USER, DB_PASSWORD, DB_DATABASE
-from baseline import get_earliest_date_for_table
-
-PLUSMINUS_REGEX= re.compile(r"\b(\+1|-1)\b", re.IGNORECASE)
 
 def get_db_connection():
     return mysql.connector.connect(
-        host= DB_HOST,
-        user= DB_USER,
-        password= DB_PASSWORD,
-        database= DB_DATABASE
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_DATABASE
     )
 
-def build_pull_number_set(repo):
-    cnx= get_db_connection()
-    cursor= cnx.cursor()
-    q= "SELECT pull_number FROM pulls WHERE repo_name=%s"
-    cursor.execute(q,(repo,))
-    pull_set= set()
-    for row in cursor.fetchall():
-        pull_set.add(row[0])
-    cursor.close()
-    cnx.close()
-    return pull_set
-
-def gather_data_for_window(repo, start_dt, end_dt):
+def gather_data_for_window(repo_name, start_dt, end_dt):
     """
-    Returns a dict of raw metrics:
-      mergesRaw, closedRaw, forksRaw, starsRaw, newIssRaw, commentsRaw, reactionsRaw, pullRaw
-    Then the aggregator expansions can scale them or we do that in main.
+    Return a dict with splitted metrics:
+      mergesRaw, closedIssRaw, closedPRRaw, forksRaw, starsRaw, newIssRaw,
+      commentsIssRaw, commentsPRRaw, reactIssRaw, reactPRRaw, pullRaw
 
-    Implementation:
-     1) mergesRaw => from 'pull_events' with event=merged
-     2) closedRaw => from 'issue_events' with event=closed + 'pull_events' with event=closed => We'll unify logic in main (some prefer splitted).
-        We'll unify to an 'issue' closed vs 'pull' closed separately. For demonstration, we do mergesRaw separately from closedRaw.
-
-     3) forksRaw => from 'forks' table, referencing created_at
-     4) starsRaw => from 'stars' table, referencing starred_at
-     5) newIssRaw => from 'issues' table, referencing created_at
-     6) commentsRaw => from 'issue_comments' table => c.body => normal comment => if no +1 => commentsRaw, else => reactionsRaw
-     7) reactionsRaw => from comment_reactions or +1 in c.body
-     8) pullRaw => from 'pulls' referencing created_at (like new PR opened)
-
-    Partial coverage => clamp earliest date per table.
+    No placeholders; real queries referencing your schema columns.
     """
 
     results= {
-      "mergesRaw": 0,     # merged PR events
-      "closedRaw": 0,     # closed issues & closed PR events => unify
-      "forksRaw": 0,
-      "starsRaw": 0,
-      "newIssRaw": 0,
-      "commentsRaw": 0,
-      "reactionsRaw": 0,
-      "pullRaw": 0
+      "mergesRaw":0,
+      "closedIssRaw":0,
+      "closedPRRaw":0,
+      "forksRaw":0,
+      "starsRaw":0,
+      "newIssRaw":0,
+      "commentsIssRaw":0,
+      "commentsPRRaw":0,
+      "reactIssRaw":0,
+      "reactPRRaw":0,
+      "pullRaw":0
     }
 
     cnx= get_db_connection()
-    cursor= cnx.cursor(dictionary=True)
+    cursor= cnx.cursor()
 
-    # 1) mergesRaw => pull_events, event=merged
-    earliest_pulle= get_earliest_date_for_table(repo, "pull_events","created_at")
-    if earliest_pulle:
-        m_start= max(start_dt, earliest_pulle)
-        if m_start< end_dt:
-            qm= """
-            SELECT id, raw_json
-              FROM pull_events
-             WHERE repo_name=%s
-               AND created_at >= %s
-               AND created_at < %s
-               AND raw_json LIKE '%"event": "merged"%'
-            """
-            cursor.execute(qm,(repo,m_start,end_dt))
-            merges_rows= cursor.fetchall()
-            results["mergesRaw"]+= len(merges_rows)
+    # mergesRaw => from pull_events with event='merged'
+    q_merges= """
+        SELECT COUNT(*)
+        FROM pull_events
+        WHERE repo_name=%s
+          AND created_at >= %s AND created_at < %s
+          AND JSON_EXTRACT(raw_json, '$.event')='merged'
+    """
+    cursor.execute(q_merges, (repo_name, start_dt, end_dt))
+    results["mergesRaw"]= cursor.fetchone()[0]
 
-    # 2) closedRaw => unify closed issues + closed PR events
-    #    a) issue_events => event=closed
-    earliest_ie= get_earliest_date_for_table(repo,"issue_events","created_at")
-    if earliest_ie:
-        c_start= max(start_dt, earliest_ie)
-        if c_start< end_dt:
-            qi= """
-            SELECT id, raw_json
-              FROM issue_events
-             WHERE repo_name=%s
-               AND created_at >= %s
-               AND created_at < %s
-               AND raw_json LIKE '%"event": "closed"%'
-            """
-            cursor.execute(qi,(repo,c_start,end_dt))
-            issues_closed= cursor.fetchall()
-            results["closedRaw"]+= len(issues_closed)
+    # closedIssRaw => from issue_events with event='closed' for real issues
+    q_closed_iss= """
+        SELECT COUNT(*)
+        FROM issue_events ie
+        WHERE ie.repo_name=%s
+          AND ie.created_at >= %s AND ie.created_at < %s
+          AND JSON_EXTRACT(ie.raw_json, '$.event')='closed'
+          AND ie.issue_number IN (
+             SELECT i.issue_number FROM issues i
+             WHERE i.repo_name=%s
+          )
+    """
+    cursor.execute(q_closed_iss, (repo_name, start_dt, end_dt, repo_name))
+    results["closedIssRaw"]= cursor.fetchone()[0]
 
-    #    b) pull_events => event=closed
-    if earliest_pulle:
-        c2_start= max(start_dt, earliest_pulle)
-        if c2_start< end_dt:
-            qc= """
-            SELECT id, raw_json
-              FROM pull_events
-             WHERE repo_name=%s
-               AND created_at >= %s
-               AND created_at < %s
-               AND raw_json LIKE '%"event": "closed"%'
-            """
-            cursor.execute(qc,(repo,c2_start,end_dt))
-            pulls_closed= cursor.fetchall()
-            results["closedRaw"]+= len(pulls_closed)
+    # closedPRRaw => from pull_events with event in (closed, merged)
+    q_closed_pr= """
+        SELECT COUNT(*)
+        FROM pull_events pe
+        WHERE pe.repo_name=%s
+          AND pe.created_at >= %s AND pe.created_at < %s
+          AND JSON_EXTRACT(pe.raw_json, '$.event') IN ('closed','merged')
+    """
+    cursor.execute(q_closed_pr, (repo_name, start_dt, end_dt))
+    results["closedPRRaw"]= cursor.fetchone()[0]
 
-    # 3) forksRaw => from 'forks'
-    earliest_f= get_earliest_date_for_table(repo,"forks","created_at")
-    if earliest_f:
-        f_start= max(start_dt, earliest_f)
-        if f_start< end_dt:
-            qf= """
-            SELECT id
-              FROM forks
-             WHERE repo_name=%s
-               AND created_at >= %s
-               AND created_at < %s
-            """
-            cursor.execute(qf,(repo,f_start,end_dt))
-            forks_rows= cursor.fetchall()
-            results["forksRaw"]+= len(forks_rows)
+    # forksRaw => from forks.created_at
+    q_forks= """
+        SELECT COUNT(*)
+        FROM forks
+        WHERE repo_name=%s
+          AND created_at >= %s AND created_at < %s
+    """
+    cursor.execute(q_forks, (repo_name, start_dt, end_dt))
+    results["forksRaw"]= cursor.fetchone()[0]
 
-    # 4) starsRaw => from 'stars'
-    earliest_s= get_earliest_date_for_table(repo,"stars","starred_at")
-    if earliest_s:
-        s_start= max(start_dt, earliest_s)
-        if s_start< end_dt:
-            qs= """
-            SELECT id
-              FROM stars
-             WHERE repo_name=%s
-               AND starred_at >= %s
-               AND starred_at < %s
-            """
-            cursor.execute(qs,(repo,s_start,end_dt))
-            star_rows= cursor.fetchall()
-            results["starsRaw"]+= len(star_rows)
+    # starsRaw => from stars.starred_at
+    q_stars= """
+        SELECT COUNT(*)
+        FROM stars
+        WHERE repo_name=%s
+          AND starred_at >= %s AND starred_at < %s
+    """
+    cursor.execute(q_stars, (repo_name, start_dt, end_dt))
+    results["starsRaw"]= cursor.fetchone()[0]
 
-    # 5) newIssRaw => from 'issues'
-    earliest_iss= get_earliest_date_for_table(repo,"issues","created_at")
-    if earliest_iss:
-        i_start= max(start_dt, earliest_iss)
-        if i_start< end_dt:
-            qi2= """
-            SELECT id
-              FROM issues
-             WHERE repo_name=%s
-               AND created_at >= %s
-               AND created_at < %s
-            """
-            cursor.execute(qi2,(repo,i_start,end_dt))
-            new_iss= cursor.fetchall()
-            results["newIssRaw"]+= len(new_iss)
+    # newIssRaw => from issues.created_at
+    q_iss= """
+        SELECT COUNT(*)
+        FROM issues
+        WHERE repo_name=%s
+          AND created_at >= %s AND created_at < %s
+    """
+    cursor.execute(q_iss, (repo_name, start_dt, end_dt))
+    results["newIssRaw"]= cursor.fetchone()[0]
 
-    # 6) commentsRaw + reactionsRaw => from 'issue_comments' + possible 'comment_reactions'
-    #   We'll unify in a single pass, then add the reaction pass. 
-    pull_set= build_pull_number_set(repo)  # for PR detection if needed
-    earliest_c= get_earliest_date_for_table(repo,"issue_comments","created_at")
-    if earliest_c:
-        c_start2= max(start_dt, earliest_c)
-        if c_start2< end_dt:
-            qc2= """
-            SELECT c.id, c.issue_number, c.body
-              FROM issue_comments c
-             WHERE c.repo_name=%s
-               AND c.created_at >= %s
-               AND c.created_at < %s
-            """
-            cursor.execute(qc2,(repo,c_start2,end_dt))
-            comm_rows= cursor.fetchall()
+    # pullRaw => from pulls.created_at
+    q_pull= """
+        SELECT COUNT(*)
+        FROM pulls
+        WHERE repo_name=%s
+          AND created_at >= %s AND created_at < %s
+    """
+    cursor.execute(q_pull, (repo_name, start_dt, end_dt))
+    results["pullRaw"]= cursor.fetchone()[0]
 
-            # Reaction table?
-            earliest_creact= get_earliest_date_for_table(repo,"comment_reactions","created_at")
-            reaction_map= {}
-            if earliest_creact:
-                r_st= max(c_start2, earliest_creact)
-                if r_st< end_dt:
-                    qr2= """
-                    SELECT id, raw_json, comment_id
-                      FROM comment_reactions
-                     WHERE repo_name=%s
-                       AND created_at >= %s
-                       AND created_at < %s
-                    """
-                    cursor2= cnx.cursor(dictionary=True)
-                    cursor2.execute(qr2,(repo,r_st,end_dt))
-                    reac_rows= cursor2.fetchall()
-                    cursor2.close()
+    # commentsIssRaw => from issue_comments joined with issues (excluding +1/-1)
+    q_comm_iss= """
+        SELECT COUNT(*)
+        FROM issue_comments ic
+        JOIN issues i ON (i.repo_name=ic.repo_name AND i.issue_number=ic.issue_number)
+        WHERE ic.repo_name=%s
+          AND ic.created_at >= %s AND ic.created_at < %s
+          AND (ic.body NOT LIKE '%+1%' AND ic.body NOT LIKE '%-1%')
+    """
+    cursor.execute(q_comm_iss, (repo_name, start_dt, end_dt))
+    results["commentsIssRaw"]= cursor.fetchone()[0]
 
-                    for rr in reac_rows:
-                        rawj= rr["raw_json"] or "{}"
-                        try:
-                            parsed= json.loads(rawj)
-                        except:
-                            parsed= {}
-                        c_id= rr["comment_id"]
-                        user= parsed.get("user",{}).get("login","unknown_user")
-                        content= parsed.get("content","")
-                        if c_id not in reaction_map:
-                            reaction_map[c_id]= set()
-                        reaction_map[c_id].add((user,content))
+    # commentsPRRaw => from issue_comments joined with pulls (excluding +1/-1)
+    q_comm_pr= """
+        SELECT COUNT(*)
+        FROM issue_comments ic
+        JOIN pulls p ON (p.repo_name=ic.repo_name AND p.pull_number=ic.issue_number)
+        WHERE ic.repo_name=%s
+          AND ic.created_at >= %s AND ic.created_at < %s
+          AND (ic.body NOT LIKE '%+1%' AND ic.body NOT LIKE '%-1%')
+    """
+    cursor.execute(q_comm_pr, (repo_name, start_dt, end_dt))
+    results["commentsPRRaw"]= cursor.fetchone()[0]
 
-            for crow in comm_rows:
-                cbody= crow["body"] or ""
-                has_plusminus= bool(PLUSMINUS_REGEX.search(cbody))
-                c_id= crow["id"]
-                # increment commentsRaw or reactionsRaw
-                if has_plusminus:
-                    results["reactionsRaw"]+=1
-                else:
-                    results["commentsRaw"]+=1
-                # incorporate reaction_map
-                if c_id in reaction_map:
-                    # each unique (usr,content) => +1 to reactions
-                    results["reactionsRaw"]+= len(reaction_map[c_id])
+    # reactIssRaw => from issue_comments joined with issues, body LIKE +1 or -1
+    q_react_iss= """
+        SELECT COUNT(*)
+        FROM issue_comments ic
+        JOIN issues i ON (i.repo_name=ic.repo_name AND i.issue_number=ic.issue_number)
+        WHERE ic.repo_name=%s
+          AND ic.created_at >= %s AND ic.created_at < %s
+          AND (ic.body LIKE '%+1%' OR ic.body LIKE '%-1%')
+    """
+    cursor.execute(q_react_iss, (repo_name, start_dt, end_dt))
+    results["reactIssRaw"]= cursor.fetchone()[0]
 
-    # 7) pullRaw => from 'pulls' referencing created_at
-    earliest_pl= get_earliest_date_for_table(repo,"pulls","created_at")
-    if earliest_pl:
-        pl_start= max(start_dt, earliest_pl)
-        if pl_start< end_dt:
-            qpl= """
-            SELECT id
-              FROM pulls
-             WHERE repo_name=%s
-               AND created_at >= %s
-               AND created_at < %s
-            """
-            cursor.execute(qpl,(repo,pl_start,end_dt))
-            pull_rows= cursor.fetchall()
-            results["pullRaw"]+= len(pull_rows)
+    # reactPRRaw => from issue_comments joined with pulls, body LIKE +1 or -1
+    q_react_pr= """
+        SELECT COUNT(*)
+        FROM issue_comments ic
+        JOIN pulls p ON (p.repo_name=ic.repo_name AND p.pull_number=ic.issue_number)
+        WHERE ic.repo_name=%s
+          AND ic.created_at >= %s AND ic.created_at < %s
+          AND (ic.body LIKE '%+1%' OR ic.body LIKE '%-1%')
+    """
+    cursor.execute(q_react_pr, (repo_name, start_dt, end_dt))
+    results["reactPRRaw"]= cursor.fetchone()[0]
 
     cursor.close()
     cnx.close()

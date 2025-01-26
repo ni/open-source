@@ -1,30 +1,45 @@
+############################################
 # aggregator.py
-"""
-Optional aggregator formulas (Velocity, UIG, MAC, SEI).
-We also define placeholders for openIssRatio/openPRRatio => 1.0.
-No lines omitted.
-"""
-
-def velocity(merges_s, closed_s):
-    return 0.4* merges_s + 0.6* closed_s
-
-def user_interest_growth(forks_s, stars_s):
-    return 0.4* forks_s + 0.6* stars_s
-
-def monthly_active_contributors(issCommReac_s, pulls_s):
-    return 0.8* issCommReac_s + 0.2* pulls_s
-
-def compute_sei(velocity_val, uig_val, mac_val):
-    return 0.5* mac_val + 0.3* velocity_val + 0.2* uig_val
-
-def open_iss_ratio_stub():
+############################################
+def compute_velocity(mergesScaled, closedIssScaled, closedPRScaled, config):
     """
-    Hard-coded to 1.0 for demonstration, since we have no real logic for # open issues vs. closed.
+    velocity = v_merges*mergesScaled + v_closedIss*closedIssScaled + v_closedPR*closedPRScaled
+    Default weights might be 0.4 merges, 0.2 closedIss, 0.4 closedPR, or any config you prefer.
     """
-    return 1.0
+    v_m= config.get('velocity_merges', 0.4)
+    v_ci= config.get('velocity_closedIss', 0.2)
+    v_cp= config.get('velocity_closedPR', 0.4)
+    val= v_m* mergesScaled + v_ci* closedIssScaled + v_cp* closedPRScaled
+    return val
 
-def open_pr_ratio_stub():
+def compute_uig(forksScaled, starsScaled, config):
     """
-    Hard-coded to 1.0, same reason as above.
+    uig = uig_forks * forksScaled + uig_stars * starsScaled
+    Default might be 0.4 forks, 0.6 stars.
     """
-    return 1.0
+    f_w= config.get('uig_forks', 0.4)
+    s_w= config.get('uig_stars', 0.6)
+    val= f_w* forksScaled + s_w* starsScaled
+    return val
+
+def compute_mac(newIssScaled, commentsIssScaled, commentsPRScaled, reactIssScaled, reactPRScaled, pullScaled, config):
+    """
+    mac = mainWeight*(sumOf splitted comment+reaction+newIss) + subWeight*(pullScaled)
+    e.g. mainWeight=0.8, subWeight=0.2
+    """
+    mainW= config.get('mac_mainWeight', 0.8)
+    subW= config.get('mac_subWeight', 0.2)
+    sumAll= newIssScaled + commentsIssScaled + commentsPRScaled + reactIssScaled + reactPRScaled
+    val= mainW* sumAll + subW* pullScaled
+    return val
+
+def compute_sei(velocityVal, uigVal, macVal, config):
+    """
+    sei = wv*velocity + wu*uig + wm*mac
+    e.g. wv=0.3, wu=0.2, wm=0.5
+    """
+    wv= config.get('sei_velocity', 0.3)
+    wu= config.get('sei_uig', 0.2)
+    wm= config.get('sei_mac', 0.5)
+    val= wv* velocityVal + wu* uigVal + wm* macVal
+    return val

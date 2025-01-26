@@ -13,7 +13,7 @@ def get_num_groups():
     """
     If an environment variable NUM_GROUPS is set, use it; otherwise default to 4.
     """
-    raw= os.environ.get("NUM_GROUPS","4")
+    raw= os.environ.get("NUM_GROUPS","8")
     try:
         return int(raw)
     except:
