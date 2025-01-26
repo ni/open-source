@@ -103,7 +103,28 @@ def main():
 
     print("\n=== CAPTURED CONSOLE OUTPUT ===\n")
 
-    repos= ["ni/labview-icon-editor","facebook/react","tensorflow/tensorflow","dotnet/core"]
+    repos= [#"ni/labview-icon-editor","facebook/react","tensorflow/tensorflow","dotnet/core"]
+    
+        "ni/actor-framework",
+        "ni/grpc-labview",
+        "dotnet/core",
+        #"ni/labview-icon-editor",
+        #"ni/actor-framework",
+        #"ni/grpc-labview",
+        #"dotnet/core",
+        "facebook/react",
+        "tensorflow/tensorflow",
+        "EPICS/reconos",
+        "OpenFOAM/OpenFOAM-dev",
+        "FreeCAD/freecad",
+        "fritzing/fritzing-app",
+        "qucs/qucs",
+        "OpenSCAD/openscad",
+        "Node-RED/nodered",
+        "OpenPLC/OpenPLC-IDE",
+        "Eclipse/mraa",
+       ]
+    
     scaling_repo= get_scaling_repo()
     if scaling_repo not in repos:
         repos.append(scaling_repo)
