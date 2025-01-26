@@ -100,7 +100,9 @@ When selecting active LVAddons, LabVIEW uses the following precedence:
 - LabVIEW files must have a save version that is no later than the minimum supported version of the add-on. Note that LabVIEW 2024 Q3 and later allows you to easily save VIs, libraries, and classes in older save versions.
 
 ### Packed Library (PPL) Considerations
-TBD
+Packed Library builds must enable "Allow future versions of LabVIEW to load this packed library" in Properties>Advanced.
+NI recommends putting the 32-bit and 64-bit builds of a packed library in their respective *Targets* folders.
+Note that (as mentioned above) the *Targets* folders for desktop LabVIEW are only supported in LabVIEW 2023 Q3 and later.
 
 ## Editor Tips When Developing for LVAddons
 You typically want to develop files in a location that's backed by a source control system (e.g., C:\\dev\\MyAddon), but LabVIEW loads add-ons from LVAddons. As noted above, you can use configuration tokens to define alternative or additional locations for LVAddons.
