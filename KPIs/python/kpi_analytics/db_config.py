@@ -5,4 +5,4 @@ import os
 DB_HOST = os.environ.get("DB_HOST","localhost")
 DB_USER = os.environ.get("DB_USER","root")
 DB_PASSWORD = os.environ.get("DB_PASSWORD","root")
-DB_DATABASE = os.environ.get("DB_DATABASE","my_kpis_analytics_db")
+DB_DATABASE = os.environ.get("DB_DATABASE","my_kpis_db_rev")
