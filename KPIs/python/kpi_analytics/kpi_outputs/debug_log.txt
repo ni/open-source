@@ -1,0 +1,65 @@
+=== Starting BFS aggregator (Diagnostic) ===
+[INFO] Attempting DB connect...
+[INFO] DB connected successfully.
+[INFO] Repos => ['ni/labview-icon-editor', 'facebook/react', 'tensorflow/tensorflow', 'dotnet/core']
+[INFO] scaling_repo => ni/labview-icon-editor
+[INFO] oldest_date => 2024-01-01 00:00:00
+[INFO] intervals => [(datetime.datetime(2024, 1, 1, 0, 0), datetime.datetime(2024, 1, 31, 0, 0)), (datetime.datetime(2024, 1, 31, 0, 0), datetime.datetime(2024, 3, 1, 0, 0)), (datetime.datetime(2024, 3, 1, 0, 0), datetime.datetime(2024, 3, 31, 0, 0))]
+
+=== BFS for Repo: ni/labview-icon-editor ===
+[SQL-Query merges for ni/labview-icon-editor from 2024-01-01 00:00:00 to 2024-01-31 00:00:00]
+               SELECT COUNT(*)                FROM pulls               WHERE repo_name=%s                 AND created_at >= %s                 AND created_at < %s                 AND merged_at IS NOT NULL             
+[params] => (repo=ni/labview-icon-editor, c_start=2024-01-01 00:00:00, c_end=2024-01-31 00:00:00)
+[ERROR] splitted_metrics => gather data for ni/labview-icon-editor from 2024-01-01 00:00:00 to 2024-01-31 00:00:00, ex=1054 (42S22): Unknown column 'merged_at' in 'where clause'
+[ERROR] gather_bfs_data => ni/labview-icon-editor, ex=1054 (42S22): Unknown column 'merged_at' in 'where clause'
+Interval                         | mergesRaw | closedIssRaw | closedPRRaw | forksRaw | starsRaw | watchersRaw | commentsIssueRaw | commentsPRRaw | reactIssueRaw | reactPRRaw | distinctPartRaw | mergesScaled | watchersScaled | velocity | uig | mac | sei
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+=== BFS for Repo: facebook/react ===
+[SQL-Query merges for facebook/react from 2024-01-01 00:00:00 to 2024-01-31 00:00:00]
+               SELECT COUNT(*)                FROM pulls               WHERE repo_name=%s                 AND created_at >= %s                 AND created_at < %s                 AND merged_at IS NOT NULL             
+[params] => (repo=facebook/react, c_start=2024-01-01 00:00:00, c_end=2024-01-31 00:00:00)
+[ERROR] splitted_metrics => gather data for facebook/react from 2024-01-01 00:00:00 to 2024-01-31 00:00:00, ex=1054 (42S22): Unknown column 'merged_at' in 'where clause'
+[ERROR] gather_bfs_data => facebook/react, ex=1054 (42S22): Unknown column 'merged_at' in 'where clause'
+Interval                         | mergesRaw | closedIssRaw | closedPRRaw | forksRaw | starsRaw | watchersRaw | commentsIssueRaw | commentsPRRaw | reactIssueRaw | reactPRRaw | distinctPartRaw | mergesScaled | watchersScaled | velocity | uig | mac | sei
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+=== BFS for Repo: tensorflow/tensorflow ===
+[SQL-Query merges for tensorflow/tensorflow from 2024-01-01 00:00:00 to 2024-01-31 00:00:00]
+               SELECT COUNT(*)                FROM pulls               WHERE repo_name=%s                 AND created_at >= %s                 AND created_at < %s                 AND merged_at IS NOT NULL             
+[params] => (repo=tensorflow/tensorflow, c_start=2024-01-01 00:00:00, c_end=2024-01-31 00:00:00)
+[ERROR] splitted_metrics => gather data for tensorflow/tensorflow from 2024-01-01 00:00:00 to 2024-01-31 00:00:00, ex=1054 (42S22): Unknown column 'merged_at' in 'where clause'
+[ERROR] gather_bfs_data => tensorflow/tensorflow, ex=1054 (42S22): Unknown column 'merged_at' in 'where clause'
+Interval                         | mergesRaw | closedIssRaw | closedPRRaw | forksRaw | starsRaw | watchersRaw | commentsIssueRaw | commentsPRRaw | reactIssueRaw | reactPRRaw | distinctPartRaw | mergesScaled | watchersScaled | velocity | uig | mac | sei
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+=== BFS for Repo: dotnet/core ===
+[SQL-Query merges for dotnet/core from 2024-01-01 00:00:00 to 2024-01-31 00:00:00]
+               SELECT COUNT(*)                FROM pulls               WHERE repo_name=%s                 AND created_at >= %s                 AND created_at < %s                 AND merged_at IS NOT NULL             
+[params] => (repo=dotnet/core, c_start=2024-01-01 00:00:00, c_end=2024-01-31 00:00:00)
+[ERROR] splitted_metrics => gather data for dotnet/core from 2024-01-01 00:00:00 to 2024-01-31 00:00:00, ex=1054 (42S22): Unknown column 'merged_at' in 'where clause'
+[ERROR] gather_bfs_data => dotnet/core, ex=1054 (42S22): Unknown column 'merged_at' in 'where clause'
+Interval                         | mergesRaw | closedIssRaw | closedPRRaw | forksRaw | starsRaw | watchersRaw | commentsIssueRaw | commentsPRRaw | reactIssueRaw | reactPRRaw | distinctPartRaw | mergesScaled | watchersScaled | velocity | uig | mac | sei
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+[INFO] watchers_weighted_group_avg => BFSkey=mergesScaled, weighting=watchers
+[WARN] watchers_weighted_group_avg => no BFS data => returning empty aggregator
+[INFO] watchers_weighted_group_avg => BFSkey=velocity, weighting=watchers
+[WARN] watchers_weighted_group_avg => no BFS data => returning empty aggregator
+[INFO] watchers_weighted_group_avg => BFSkey=mac, weighting=watchers
+[WARN] watchers_weighted_group_avg => no BFS data => returning empty aggregator
+[INFO] watchers_weighted_group_avg => BFSkey=uig, weighting=watchers
+[WARN] watchers_weighted_group_avg => no BFS data => returning empty aggregator
+[INFO] watchers_weighted_group_avg => BFSkey=sei, weighting=watchers
+[WARN] watchers_weighted_group_avg => no BFS data => returning empty aggregator
+[INFO] Now produce side-by-side scaled charts
+[INFO] produce_side_by_side_chart => BFSkey=mergesScaled, out_png=kpi_outputs\merges_scaled.png
+[WARN] scaling_repo=ni/labview-icon-editor has no BFS data => skip chart kpi_outputs\merges_scaled.png
+[INFO] produce_side_by_side_chart => BFSkey=velocity, out_png=kpi_outputs\velocity_compare.png
+[WARN] scaling_repo=ni/labview-icon-editor has no BFS data => skip chart kpi_outputs\velocity_compare.png
+[INFO] produce_side_by_side_chart => BFSkey=mac, out_png=kpi_outputs\mac_compare.png
+[WARN] scaling_repo=ni/labview-icon-editor has no BFS data => skip chart kpi_outputs\mac_compare.png
+[INFO] produce_side_by_side_chart => BFSkey=uig, out_png=kpi_outputs\uig_compare.png
+[WARN] scaling_repo=ni/labview-icon-editor has no BFS data => skip chart kpi_outputs\uig_compare.png
+[INFO] produce_side_by_side_chart => BFSkey=sei, out_png=kpi_outputs\sei_compare.png
+[WARN] scaling_repo=ni/labview-icon-editor has no BFS data => skip chart kpi_outputs\sei_compare.png
+[INFO] aggregator done, saving debug_log now

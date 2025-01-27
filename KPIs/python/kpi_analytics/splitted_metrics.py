@@ -1,269 +1,229 @@
-############################################################
 # splitted_metrics.py
-# Gathers BFS splitted variables from DB for [start_dt..end_dt)
-# and logs EXACT queries (no placeholders).
-#
-# We separate:
-#   mergesRaw
-#   closedIssRaw, closedPRRaw
-#   forksRaw
-#   starsRaw
-#   newIssRaw
-#   commentsIssRaw, commentsPRRaw
-#   reactIssRaw, reactPRRaw
-#   pullRaw
-############################################################
 
-import mysql.connector
-import re
-from db_config import DB_HOST, DB_USER, DB_PASSWORD, DB_DATABASE
+"""
+splitted_metrics.py
+Collect BFS data for each interval: merges, closedIss, closedPR, forks, watchers, etc.
+Ensure placeholders and parameters line up.
+"""
 
-def get_db_connection():
-    return mysql.connector.connect(
-        host=DB_HOST,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        database=DB_DATABASE
-    )
+from datetime import datetime
 
-def _escape_single_quotes(val):
-    return val.replace("'","\\'")
-
-def _inject_params_into_sql(query_str, param_list):
+def gather_bfs_data(repo, intervals, cursor, debug_lines):
     """
-    Transforms a query with '%s' placeholders into a final
-    literal SQL statement, substituting param values with basic
-    string escaping. This allows copy/paste into MySQL Workbench.
-    """
-    final_sql= query_str
-    for p in param_list:
-        if p is None:
-            p_str= "NULL"
-        else:
-            # convert datetime to string if needed
-            if hasattr(p,"strftime"):
-                p= p.strftime("%Y-%m-%d %H:%M:%S")
-            p_str= str(p)
-            p_str= _escape_single_quotes(p_str)
-            p_str= f"'{p_str}'"
-        final_sql= final_sql.replace("%s", p_str, 1)
-    return final_sql
-
-def gather_data_for_window(repo_name, start_dt, end_dt):
-    """
-    Returns a dict of splitted BFS raw variables for [start_dt..end_dt),
-    plus 'queriesUsed' capturing actual SQL used with param injection.
-    """
-    results= {
-      "mergesRaw": 0,
-      "closedIssRaw": 0,
-      "closedPRRaw": 0,
-      "forksRaw": 0,
-      "starsRaw": 0,
-      "newIssRaw": 0,
-      "commentsIssRaw": 0,
-      "commentsPRRaw": 0,
-      "reactIssRaw": 0,
-      "reactPRRaw": 0,
-      "pullRaw": 0,
-      "queriesUsed": {}
+    gather_bfs_data: For each (start_dt, end_dt) in intervals, query various BFS metrics
+    and build a row dict: {
+       'start_dt':..., 'end_dt':..., 'mergesRaw':..., 'closedIssRaw':..., ...
     }
-
-    cnx= get_db_connection()
-    cursor= cnx.cursor()
-
-    # mergesRaw => from pull_events, event='merged'
-    q_merges= """
-      SELECT COUNT(*)
-      FROM pull_events
-      WHERE repo_name=%s
-        AND created_at >= %s AND created_at < %s
-        AND JSON_EXTRACT(raw_json,'$.event')='merged'
+    Return a list of these row dicts, one per interval in 'intervals'.
+    If something goes wrong, raise or return empty.
     """
-    pm= (repo_name, start_dt, end_dt)
-    cursor.execute(q_merges, pm)
-    merges_val= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
-    results["mergesRaw"]= merges_val
-    results["queriesUsed"]["mergesRaw"]= {
-       "originalSQL": q_merges.strip(),
-       "finalSQL": _inject_params_into_sql(q_merges, pm)
-    }
+    results = []
+    for (c_start, c_end) in intervals:
+        row_data = {
+            'start_dt': c_start,
+            'end_dt': c_end,
+            'partialCoverage': False,  # you might set True if c_end> now, etc.
+            'mergesRaw': 0,
+            'closedIssRaw': 0,
+            'closedPRRaw': 0,
+            'forksRaw': 0,
+            'starsRaw': 0,
+            'watchersRaw': 0,
+            'commentsIssueRaw': 0,
+            'commentsPRRaw': 0,
+            'reactIssueRaw': 0,
+            'reactPRRaw': 0,
+            'distinctPartRaw': 0,
+        }
 
-    # closedIssRaw => from issue_events, event='closed'
-    q_ci= """
-      SELECT COUNT(*)
-      FROM issue_events ie
-      WHERE ie.repo_name=%s
-        AND ie.created_at >= %s AND ie.created_at < %s
-        AND JSON_EXTRACT(ie.raw_json,'$.event')='closed'
-        AND ie.issue_number IN (
-           SELECT i.issue_number FROM issues i WHERE i.repo_name=%s
-        )
-    """
-    pci= (repo_name, start_dt, end_dt, repo_name)
-    cursor.execute(q_ci, pci)
-    ci_val= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
-    results["closedIssRaw"]= ci_val
-    results["queriesUsed"]["closedIssRaw"]= {
-       "originalSQL": q_ci.strip(),
-       "finalSQL": _inject_params_into_sql(q_ci, pci)
-    }
+        try:
+            # 1) merges
+            q_merges = """
+              SELECT COUNT(*) 
+              FROM pulls
+              WHERE repo_name=%s
+                AND created_at >= %s
+                AND created_at < %s
+                AND merged_at IS NOT NULL
+            """
+            # Here we have exactly 3 placeholders => pass exactly 3 params
+            debug_lines.append(
+              f"[SQL-Query merges for {repo} from {c_start} to {c_end}]\n"
+              + q_merges.replace('\n',' ') + "\n"
+              + f"[params] => (repo={repo}, c_start={c_start}, c_end={c_end})"
+            )
+            cursor.execute(q_merges, (repo, c_start, c_end))
+            merges_count = cursor.fetchone()[0]
+            row_data['mergesRaw'] = merges_count
 
-    # closedPRRaw => from pull_events event in ('closed','merged')
-    q_cpr= """
-      SELECT COUNT(*)
-      FROM pull_events
-      WHERE repo_name=%s
-        AND created_at >= %s AND created_at < %s
-        AND JSON_EXTRACT(raw_json,'$.event') in ('closed','merged')
-    """
-    pcpr= (repo_name, start_dt, end_dt)
-    cursor.execute(q_cpr, pcpr)
-    cpr_val= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
-    results["closedPRRaw"]= cpr_val
-    results["queriesUsed"]["closedPRRaw"]= {
-       "originalSQL": q_cpr.strip(),
-       "finalSQL": _inject_params_into_sql(q_cpr, pcpr)
-    }
+            # 2) closed issues
+            q_closedIss = """
+              SELECT COUNT(*)
+              FROM issues
+              WHERE repo_name=%s
+                AND created_at >= %s
+                AND created_at < %s
+                AND state='closed'
+            """
+            # again 3 placeholders => 3 parameters
+            debug_lines.append(
+              f"[SQL-Query closedIss for {repo} from {c_start} to {c_end}]\n"
+              + q_closedIss.replace('\n',' ') + "\n"
+              + f"[params] => (repo={repo}, c_start={c_start}, c_end={c_end})"
+            )
+            cursor.execute(q_closedIss, (repo, c_start, c_end))
+            closed_iss_count = cursor.fetchone()[0]
+            row_data['closedIssRaw'] = closed_iss_count
 
-    # forksRaw
-    q_forks= """
-      SELECT COUNT(*)
-      FROM forks
-      WHERE repo_name=%s
-        AND created_at >= %s
-        AND created_at < %s
-    """
-    pf= (repo_name, start_dt, end_dt)
-    cursor.execute(q_forks, pf)
-    f_val= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
-    results["forksRaw"]= f_val
-    results["queriesUsed"]["forksRaw"]= {
-       "originalSQL": q_forks.strip(),
-       "finalSQL": _inject_params_into_sql(q_forks, pf)
-    }
+            # 3) closed PR
+            q_closedPR = """
+              SELECT COUNT(*)
+              FROM pulls
+              WHERE repo_name=%s
+                AND created_at >= %s
+                AND created_at < %s
+                AND merged_at IS NULL
+                AND state='closed'
+            """
+            # if you do that approach or store 'state' in DB, etc.
+            debug_lines.append(
+              f"[SQL-Query closedPR for {repo} from {c_start} to {c_end}]\n"
+              + q_closedPR.replace('\n',' ') + "\n"
+              + f"[params] => (repo={repo}, c_start={c_start}, c_end={c_end})"
+            )
+            cursor.execute(q_closedPR, (repo, c_start, c_end))
+            closed_pr_count = cursor.fetchone()[0]
+            row_data['closedPRRaw'] = closed_pr_count
 
-    # starsRaw
-    q_stars= """
-      SELECT COUNT(*)
-      FROM stars
-      WHERE repo_name=%s
-        AND starred_at >= %s
-        AND starred_at < %s
-    """
-    ps= (repo_name, start_dt, end_dt)
-    cursor.execute(q_stars, ps)
-    s_val= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
-    results["starsRaw"]= s_val
-    results["queriesUsed"]["starsRaw"]= {
-       "originalSQL": q_stars.strip(),
-       "finalSQL": _inject_params_into_sql(q_stars, ps)
-    }
+            # 4) forks
+            q_forks = """
+              SELECT COUNT(*)
+              FROM forks
+              WHERE repo_name=%s
+                AND created_at >= %s
+                AND created_at < %s
+            """
+            debug_lines.append(
+              f"[SQL-Query forks for {repo} from {c_start} to {c_end}]\n"
+              + q_forks.replace('\n',' ') + "\n"
+              + f"[params] => (repo={repo}, c_start={c_start}, c_end={c_end})"
+            )
+            cursor.execute(q_forks,(repo, c_start, c_end))
+            row_data['forksRaw'] = cursor.fetchone()[0]
 
-    # newIssRaw => issues.created_at
-    q_niss= """
-      SELECT COUNT(*)
-      FROM issues
-      WHERE repo_name=%s
-        AND created_at >= %s AND created_at < %s
-    """
-    pniss= (repo_name, start_dt, end_dt)
-    cursor.execute(q_niss, pniss)
-    niss_val= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
-    results["newIssRaw"]= niss_val
-    results["queriesUsed"]["newIssRaw"]= {
-       "originalSQL": q_niss.strip(),
-       "finalSQL": _inject_params_into_sql(q_niss, pniss)
-    }
+            # 5) watchers or watchersRaw?
+            # watchers is tricky because no created_at column. You might just do a snapshot count.
+            # If your watchers table doesn't store 'created_at', you can't do a time-based subset
+            # e.g. watchers just do total watchers
+            q_watchers = """
+              SELECT COUNT(*)
+              FROM watchers
+              WHERE repo_name=%s
+            """
+            # only 1 placeholder => pass 1 param
+            debug_lines.append(
+              f"[SQL-Query watchers for {repo} (no times)]\n"
+              + q_watchers.replace('\n',' ') + "\n"
+              + f"[params] => (repo={repo})"
+            )
+            cursor.execute(q_watchers,(repo,))
+            row_data['watchersRaw'] = cursor.fetchone()[0]
 
-    # pullRaw => from pulls.created_at
-    q_pr= """
-      SELECT COUNT(*)
-      FROM pulls
-      WHERE repo_name=%s
-        AND created_at >= %s AND created_at < %s
-    """
-    ppr= (repo_name, start_dt, end_dt)
-    cursor.execute(q_pr, ppr)
-    pr_val= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
-    results["pullRaw"]= pr_val
-    results["queriesUsed"]["pullRaw"]= {
-       "originalSQL": q_pr.strip(),
-       "finalSQL": _inject_params_into_sql(q_pr, ppr)
-    }
+            # 6) stars
+            q_stars = """
+              SELECT COUNT(*)
+              FROM stars
+              WHERE repo_name=%s
+                AND starred_at >= %s
+                AND starred_at < %s
+            """
+            # 3 placeholders => pass 3 params
+            debug_lines.append(
+              f"[SQL-Query stars for {repo} from {c_start} to {c_end}]\n"
+              + q_stars.replace('\n',' ') + "\n"
+              + f"[params] => (repo={repo}, c_start={c_start}, c_end={c_end})"
+            )
+            cursor.execute(q_stars,(repo, c_start, c_end))
+            row_data['starsRaw'] = cursor.fetchone()[0]
 
-    # commentsIssRaw => ignoring +1/-1 => body not like
-    q_c_iss= """
-      SELECT COUNT(*)
-      FROM issue_comments ic
-      JOIN issues i ON (i.repo_name=ic.repo_name AND i.issue_number=ic.issue_number)
-      WHERE ic.repo_name=%s
-        AND ic.created_at >= %s AND ic.created_at < %s
-        AND (ic.body NOT LIKE '%+1%' AND ic.body NOT LIKE '%-1%')
-    """
-    pciss= (repo_name, start_dt, end_dt)
-    cursor.execute(q_c_iss, pciss)
-    ciss_val= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
-    results["commentsIssRaw"]= ciss_val
-    results["queriesUsed"]["commentsIssRaw"]= {
-       "originalSQL": q_c_iss.strip(),
-       "finalSQL": _inject_params_into_sql(q_c_iss, pciss)
-    }
+            # 7) commentsIssueRaw vs. commentsPRRaw
+            # For example, we do a naive approach: comments in issue_comments table joined to issues or pulls?
+            q_comm_issue = """
+              SELECT COUNT(*)
+              FROM issue_comments c
+              JOIN issues i ON i.repo_name=c.repo_name AND i.issue_number=c.issue_number
+              WHERE c.repo_name=%s
+                AND c.created_at >= %s
+                AND c.created_at < %s
+                -- Additional logic to confirm it's an 'issue' not a 'pull' if you store that in DB
+            """
+            debug_lines.append(
+              f"[SQL-Query commentsIssue for {repo} from {c_start} to {c_end}]\n"
+              + q_comm_issue.replace('\n',' ') + "\n"
+              + f"[params] => (repo={repo}, c_start={c_start}, c_end={c_end})"
+            )
+            cursor.execute(q_comm_issue,(repo, c_start, c_end))
+            row_data['commentsIssueRaw'] = cursor.fetchone()[0]
 
-    # commentsPRRaw => ignoring +1/-1 => body not like
-    q_c_pr= """
-      SELECT COUNT(*)
-      FROM issue_comments ic
-      JOIN pulls p ON (p.repo_name=ic.repo_name AND p.pull_number=ic.issue_number)
-      WHERE ic.repo_name=%s
-        AND ic.created_at >= %s AND ic.created_at < %s
-        AND (ic.body NOT LIKE '%+1%' AND ic.body NOT LIKE '%-1%')
-    """
-    pcpr2= (repo_name, start_dt, end_dt)
-    cursor.execute(q_c_pr, pcpr2)
-    cpr_val2= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
-    results["commentsPRRaw"]= cpr_val2
-    results["queriesUsed"]["commentsPRRaw"]= {
-       "originalSQL": q_c_pr.strip(),
-       "finalSQL": _inject_params_into_sql(q_c_pr, pcpr2)
-    }
+            # 8) reactions on issue comments
+            # e.g. you might define your own logic
+            q_react_issue = """
+              SELECT COUNT(*)
+              FROM comment_reactions r
+              WHERE r.repo_name=%s
+                AND r.created_at >= %s
+                AND r.created_at < %s
+            """
+            debug_lines.append(
+              f"[SQL-Query reactIssue for {repo} from {c_start} to {c_end}]\n"
+              + q_react_issue.replace('\n',' ') + "\n"
+              + f"[params] => (repo={repo}, c_start={c_start}, c_end={c_end})"
+            )
+            cursor.execute(q_react_issue,(repo, c_start, c_end))
+            row_data['reactIssueRaw'] = cursor.fetchone()[0]
 
-    # reactIssRaw => +1/-1 in issues
-    q_r_iss= """
-      SELECT COUNT(*)
-      FROM issue_comments ic
-      JOIN issues i ON (i.repo_name=ic.repo_name AND i.issue_number=ic.issue_number)
-      WHERE ic.repo_name=%s
-        AND ic.created_at >= %s AND ic.created_at < %s
-        AND (ic.body LIKE '%+1%' OR ic.body LIKE '%-1%')
-    """
-    priss= (repo_name, start_dt, end_dt)
-    cursor.execute(q_r_iss, priss)
-    ri_val= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
-    results["reactIssRaw"]= ri_val
-    results["queriesUsed"]["reactIssRaw"]= {
-       "originalSQL": q_r_iss.strip(),
-       "finalSQL": _inject_params_into_sql(q_r_iss, priss)
-    }
+            # etc. you can replicate for PR-based stuff, or skip if needed
+            q_comm_pr = """
+              SELECT COUNT(*)
+              FROM issue_comments c
+              JOIN pulls p ON p.repo_name=c.repo_name AND p.pull_number=c.issue_number
+              WHERE c.repo_name=%s
+                AND c.created_at >= %s
+                AND c.created_at < %s
+            """
+            debug_lines.append(
+              f"[SQL-Query commentsPR for {repo} from {c_start} to {c_end}]\n"
+              + q_comm_pr.replace('\n',' ') + "\n"
+              + f"[params] => (repo={repo}, c_start={c_start}, c_end={c_end})"
+            )
+            cursor.execute(q_comm_pr,(repo, c_start, c_end))
+            row_data['commentsPRRaw'] = cursor.fetchone()[0]
 
-    # reactPRRaw => +1/-1 in PRs
-    q_r_pr= """
-      SELECT COUNT(*)
-      FROM issue_comments ic
-      JOIN pulls p ON (p.repo_name=ic.repo_name AND p.pull_number=ic.issue_number)
-      WHERE ic.repo_name=%s
-        AND ic.created_at >= %s AND ic.created_at < %s
-        AND (ic.body LIKE '%+1%' OR ic.body LIKE '%-1%')
-    """
-    prpr= (repo_name, start_dt, end_dt)
-    cursor.execute(q_r_pr, prpr)
-    rpr_val= cursor.fetchone()[0] if cursor.rowcount!=-1 else 0
-    results["reactPRRaw"]= rpr_val
-    results["queriesUsed"]["reactPRRaw"]= {
-       "originalSQL": q_r_pr.strip(),
-       "finalSQL": _inject_params_into_sql(q_r_pr, prpr)
-    }
+            q_react_pr = """
+              SELECT COUNT(*)
+              FROM comment_reactions r
+              JOIN pulls p ON p.repo_name=r.repo_name AND p.pull_number=r.issue_number
+              WHERE r.repo_name=%s
+                AND r.created_at >= %s
+                AND r.created_at < %s
+            """
+            debug_lines.append(
+              f"[SQL-Query reactPR for {repo} from {c_start} to {c_end}]\n"
+              + q_react_pr.replace('\n',' ') + "\n"
+              + f"[params] => (repo={repo}, c_start={c_start}, c_end={c_end})"
+            )
+            cursor.execute(q_react_pr,(repo, c_start, c_end))
+            row_data['reactPRRaw'] = cursor.fetchone()[0]
 
-    cursor.close()
-    cnx.close()
+            # distinct participants or other advanced logic ...
+            row_data['distinctPartRaw'] = 0  # placeholders, or do a real query
+
+        except Exception as ex:
+            msg = f"[ERROR] splitted_metrics => gather data for {repo} from {c_start} to {c_end}, ex={ex}"
+            debug_lines.append(msg)
+            # we can either raise or continue with partial data
+            raise
+
+        results.append(row_data)
+
     return results
