@@ -47,17 +47,17 @@ def main():
     # BFS Repos
     all_repos= [
         "dotnet/core",
-        "facebook/react",
-        "tensorflow/tensorflow",
-        "EPICS/reconos",
-        "OpenFOAM/OpenFOAM-dev",
-        "FreeCAD/freecad",
-        "fritzing/fritzing-app",
-        "qucs/qucs",
-        "OpenSCAD/openscad",
-        "Node-RED/nodered",
-        "OpenPLC/OpenPLC-IDE",
-        "Eclipse/mraa",
+#        "facebook/react",
+#        "tensorflow/tensorflow",
+#        "EPICS/reconos",
+#        "OpenFOAM/OpenFOAM-dev",
+#        "FreeCAD/freecad",
+#        "fritzing/fritzing-app",
+#        "qucs/qucs",
+#        "OpenSCAD/openscad",
+#        "Node-RED/nodered",
+#        "OpenPLC/OpenPLC-IDE",
+#        "Eclipse/mraa",
     ]
 
     print(f"=== BFS Aggregator (Refined, Overwriting debug_log.txt) ===")
