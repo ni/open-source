@@ -115,7 +115,7 @@ def gather_data_for_window(repo_name, start_dt, end_dt):
       FROM pull_events
       WHERE repo_name=%s
         AND created_at >= %s AND created_at < %s
-        AND JSON_EXTRACT(raw_json,'$.event') in ('closed','merged')
+        AND JSON_EXTRACT(raw_json,'$.event') in ('closed')
     """
     pcpr= (repo_name, start_dt, end_dt)
     cursor.execute(q_cpr, pcpr)
