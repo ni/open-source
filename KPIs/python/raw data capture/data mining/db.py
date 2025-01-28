@@ -33,7 +33,7 @@ def connect_db(cfg, create_db_if_missing=True):
 def create_tables(conn):
     c = conn.cursor()
 
-    # 1) repo_baselines
+    # TABLE: repo_baselines
     c.execute("""
     CREATE TABLE IF NOT EXISTS repo_baselines (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -224,6 +224,7 @@ def create_tables(conn):
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
 
+    # release_assets
     c.execute("""
     CREATE TABLE IF NOT EXISTS release_assets (
       id INT AUTO_INCREMENT PRIMARY KEY,
