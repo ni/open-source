@@ -1,4 +1,4 @@
-# fetch_issue_reactions.py
+# fetch_issue_comment_reactions.py
 
 import logging
 import time
@@ -9,8 +9,8 @@ def get_last_page(resp):
     link_header=resp.headers.get("Link")
     if not link_header:
         return None
-    import re
     parts=link_header.split(',')
+    import re
     for p in parts:
         if 'rel="last"' in p:
             m=re.search(r'[?&]page=(\d+)', p)
@@ -30,44 +30,48 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
                 if resp.status_code==200:
                     return (resp,True)
                 elif resp.status_code in (403,429,500,502,503,504):
-                    logging.warning("[deadbird/issue_reactions] HTTP %d => attempt %d/%d => retry => %s",
+                    logging.warning("[deadbird/issue_comment_reactions] HTTP %d => attempt %d/%d => retry => %s",
                                     resp.status_code,attempt,max_retries,url)
                     time.sleep(5)
                 else:
-                    logging.warning("[deadbird/issue_reactions] HTTP %d => break => %s",
+                    logging.warning("[deadbird/issue_comment_reactions] HTTP %d => break => %s",
                                     resp.status_code,url)
                     return (resp,False)
                 break
             except ConnectionError:
-                logging.warning("[deadbird/issue_reactions] Connection error => local mini-retry => %s",url)
+                logging.warning("[deadbird/issue_comment_reactions] Connection error => local mini-retry => %s",url)
                 time.sleep(3)
                 local_attempt+=1
         if local_attempt>mini_retry_attempts:
-            logging.warning("[deadbird/issue_reactions] Exhausted mini => break => %s",url)
+            logging.warning("[deadbird/issue_comment_reactions] Exhausted mini => break => %s",url)
             return (None,False)
-    logging.warning("[deadbird/issue_reactions] Exceeded max_retries => give up => %s",url)
+    logging.warning("[deadbird/issue_comment_reactions] Exceeded max_retries => give up => %s",url)
     return (None,False)
 
-def fetch_issue_reactions_for_all_issues(conn, owner, repo, enabled,
-                                         session, handle_rate_limit_func,
-                                         max_retries):
+def fetch_issue_comment_reactions_for_all_comments(conn, owner, repo, enabled,
+                                                   session, handle_rate_limit_func,
+                                                   max_retries):
     if enabled==0:
-        logging.info("Repo %s/%s => disabled => skip issue_reactions",owner,repo)
+        logging.info("Repo %s/%s => disabled => skip issue_comment_reactions",owner,repo)
         return
     repo_name=f"{owner}/{repo}"
     c=conn.cursor()
-    c.execute("SELECT issue_number FROM issues WHERE repo_name=%s",(repo_name,))
+    c.execute("""
+      SELECT issue_number, comment_id
+      FROM issue_comments
+      WHERE repo_name=%s
+    """,(repo_name,))
     rows=c.fetchall()
     c.close()
 
-    for (issue_num,) in rows:
-        fetch_issue_reactions_single_thread(conn, repo_name, issue_num,
-                                            enabled, session,
-                                            handle_rate_limit_func, max_retries)
+    for (issue_num, comment_id) in rows:
+        fetch_issue_comment_reactions_single_thread(conn, repo_name, issue_num, comment_id,
+                                                    enabled, session, handle_rate_limit_func,
+                                                    max_retries)
 
-def fetch_issue_reactions_single_thread(conn, repo_name, issue_number, enabled,
-                                        session, handle_rate_limit_func,
-                                        max_retries):
+def fetch_issue_comment_reactions_single_thread(conn, repo_name, issue_num, comment_id,
+                                                enabled, session, handle_rate_limit_func,
+                                                max_retries):
     if enabled==0:
         return
     old_accept=session.headers.get("Accept","")
@@ -75,8 +79,9 @@ def fetch_issue_reactions_single_thread(conn, repo_name, issue_number, enabled,
     page=1
     last_page=None
     total_inserted=0
+
     while True:
-        url=f"https://api.github.com/repos/{repo_name}/issues/{issue_number}/reactions"
+        url=f"https://api.github.com/repos/{repo_name}/issues/comments/{comment_id}/reactions"
         params={"page":page,"per_page":50}
         (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
         if not success or not resp:
@@ -92,36 +97,36 @@ def fetch_issue_reactions_single_thread(conn, repo_name, issue_number, enabled,
 
         new_count=0
         for reac in data:
-            if store_issue_reaction(conn, repo_name, issue_number, reac):
+            if insert_issue_comment_reaction(conn,repo_name,issue_num,comment_id,reac):
                 new_count+=1
         total_inserted+=new_count
 
         if last_page:
             progress=(page/last_page)*100.0
-            logging.debug("[deadbird/issue_reactions] issue#%d => page=%d/%d => %.4f%% => inserted %d => %s",
-                          issue_number,page,last_page,progress,new_count,repo_name)
+            logging.debug("[deadbird/issue_comment_reactions] issue#%d cmt#%d => page=%d/%d => %.4f%% => inserted %d => %s",
+                          issue_num,comment_id,page,last_page,progress,new_count,repo_name)
             if total_items>0:
-                logging.debug("[deadbird/issue_reactions] => so far %d out of ~%d => %s",
+                logging.debug("[deadbird/issue_comment_reactions] => so far %d out of ~%d => %s",
                               total_inserted,total_items,repo_name)
         else:
-            logging.debug("[deadbird/issue_reactions] issue#%d => page=%d => inserted %d => no last_page => %s",
-                          issue_number,page,new_count,repo_name)
+            logging.debug("[deadbird/issue_comment_reactions] issue#%d cmt#%d => page=%d => inserted %d => no last_page => %s",
+                          issue_num,comment_id,page,new_count,repo_name)
 
         if len(data)<50:
             break
         page+=1
 
     session.headers["Accept"]=old_accept
-    logging.info("[deadbird/issue_reactions] issue#%d => total inserted %d => %s",
-                 issue_number,total_inserted,repo_name)
+    logging.info("[deadbird/issue_comment_reactions] issue#%d cmt#%d => total inserted %d => %s",
+                 issue_num, comment_id, total_inserted, repo_name)
 
-def store_issue_reaction(conn, repo_name, issue_number, reac_obj):
+def insert_issue_comment_reaction(conn, repo_name, issue_num, comment_id, reac_obj):
     c=conn.cursor()
-    reaction_id=reac_obj["id"]
+    reac_id=reac_obj["id"]
     c.execute("""
-      SELECT reaction_id FROM issue_reactions
-      WHERE repo_name=%s AND issue_number=%s AND reaction_id=%s
-    """,(repo_name,issue_number,reaction_id))
+      SELECT reaction_id FROM issue_comment_reactions
+      WHERE repo_name=%s AND issue_number=%s AND comment_id=%s AND reaction_id=%s
+    """,(repo_name,issue_num,comment_id,reac_id))
     row=c.fetchone()
     if row:
         c.close()
@@ -134,12 +139,13 @@ def store_issue_reaction(conn, repo_name, issue_number, reac_obj):
             created_dt=datetime.strptime(created_str,"%Y-%m-%dT%H:%M:%SZ")
         raw_str=json.dumps(reac_obj, ensure_ascii=False)
         sql="""
-        INSERT INTO issue_reactions
-          (repo_name, issue_number, reaction_id, created_at, raw_json)
+        INSERT INTO issue_comment_reactions
+          (repo_name, issue_number, comment_id, reaction_id,
+           created_at, raw_json)
         VALUES
-          (%s,%s,%s,%s,%s)
+          (%s,%s,%s,%s,%s,%s)
         """
-        c.execute(sql,(repo_name,issue_number,reaction_id,created_dt,raw_str))
+        c.execute(sql,(repo_name,issue_num,comment_id,reac_id,created_dt,raw_str))
         conn.commit()
         c.close()
         return True
