@@ -16,6 +16,23 @@ from db import connect_db, create_tables
 from repo_baselines import get_baseline_info, set_baseline_date
 from repos import get_repo_list
 
+# import the final fetch scripts
+from fetch_forks_stars_watchers import (
+    list_watchers_single_thread,
+    list_forks_single_thread,
+    list_stars_single_thread
+)
+from fetch_issues import list_issues_single_thread
+from fetch_pulls import list_pulls_single_thread
+from fetch_commits import list_commits_single_thread
+from fetch_code_scanning import list_code_scanning_alerts_single_thread
+from fetch_releases import list_releases_single_thread
+from fetch_labels import fetch_labels_single_thread
+from fetch_milestones import list_milestones_single_thread
+from fetch_projects import list_projects_single_thread
+from fetch_branches import list_branches_single_thread
+from fetch_actions_runs import list_actions_runs_single_thread
+
 TOKENS=[]
 CURRENT_TOKEN_INDEX=0
 session=None
@@ -31,7 +48,7 @@ def load_config():
         "port":3306,
         "user":"root",
         "password":"root",
-        "db":"my_kpis_db"
+        "db":"my_kpis_db_etags"
     })
     cfg.setdefault("tokens",[])
     cfg.setdefault("logging",{
@@ -43,6 +60,9 @@ def load_config():
     })
     cfg.setdefault("days_to_capture",730)
     cfg.setdefault("max_retries",20)
+    # optional => toggles
+    cfg.setdefault("use_etags", True)
+    cfg.setdefault("use_old_approach", False)
     return cfg
 
 def setup_logging(cfg):
@@ -90,14 +110,14 @@ def rotate_token():
     CURRENT_TOKEN_INDEX=(CURRENT_TOKEN_INDEX+1)%len(TOKENS)
     new_token=TOKENS[CURRENT_TOKEN_INDEX]
     session.headers["Authorization"]=f"token {new_token}"
-    logging.info("[deadbird] Rotated token from idx %d to %d => not showing partial token",
+    logging.info("[deadbird] Rotated token from idx %d to %d => no partial token shown",
                  old_idx,CURRENT_TOKEN_INDEX)
 
 def main():
     global TOKENS, session, token_info, CURRENT_TOKEN_INDEX
     cfg=load_config()
     setup_logging(cfg)
-    logging.info("[deadbird] Starting from scratch => single-thread => advanced endpoints first => watchers/forks/stars => issues/pulls => events => comments => done")
+    logging.info("[deadbird] Starting final orchestrator with ETag usage => watchers/forks/stars, issues/pulls, advanced endpoints...")
 
     conn=connect_db(cfg, create_db_if_missing=True)
     create_tables(conn)
@@ -111,42 +131,18 @@ def main():
 
     days_to_capture=cfg["days_to_capture"]
     max_retries=cfg["max_retries"]
-
-    # Import advanced fetch scripts
-    from fetch_releases import list_releases_single_thread
-    from fetch_labels import fetch_labels_single_thread
-    from fetch_milestones import list_milestones_single_thread
-    from fetch_projects import list_projects_single_thread
-    from fetch_commits import list_commits_single_thread
-    from fetch_branches import list_branches_single_thread
-    from fetch_actions_runs import list_actions_runs_single_thread
-    from fetch_code_scanning import list_code_scanning_alerts_single_thread
-    from fetch_review_requests import list_review_requests_single_thread
-
-    # Import original watchers/forks/stars, issues/pulls, events, comment-level
-    from fetch_forks_stars_watchers import (
-        list_watchers_single_thread, list_forks_single_thread, list_stars_single_thread
-    )
-    from fetch_issues import list_issues_single_thread
-    from fetch_pulls import list_pulls_single_thread
-    from fetch_events import fetch_issue_events_for_all_issues, fetch_pull_events_for_all_pulls
-    from fetch_comments import fetch_comments_for_all_issues
-    from fetch_issue_reactions import fetch_issue_reactions_for_all_issues
-    from fetch_issue_comment_reactions import fetch_issue_comment_reactions_for_all_comments
-    from fetch_pull_review_comments import fetch_pull_review_comments_for_all_pulls
-    from fetch_pull_comment_reactions import fetch_pull_comment_reactions_for_all_comments
-    from fetch_pull_reactions import fetch_pull_reactions_for_all_pulls
+    use_etags=cfg["use_etags"]
+    use_old=cfg["use_old_approach"]
 
     all_repos=get_repo_list()
 
-    advanced_summary=[]
     for (owner,repo) in all_repos:
+        # baseline => skip new items if after baseline, for certain endpoints (stars, etc.)
         baseline_dt, enabled = get_baseline_info(conn,owner,repo)
         if not baseline_dt:
-            earliest_dt=get_earliest_gh_commit_date(owner,repo)
+            earliest_dt = get_earliest_gh_commit_date(owner,repo)
             if earliest_dt:
-                from datetime import timedelta
-                new_base=earliest_dt+timedelta(days=days_to_capture)
+                new_base = earliest_dt+timedelta(days=days_to_capture)
                 set_baseline_date(conn,owner,repo,new_base)
                 baseline_dt=new_base
                 enabled=1
@@ -155,56 +151,78 @@ def main():
             logging.info("Repo %s/%s => disabled => skip everything",owner,repo)
             continue
 
-        # 1) advanced endpoints first
-        list_releases_single_thread(conn, owner, repo, enabled, session, handle_rate_limit_func, max_retries)
-        fetch_labels_single_thread(conn, owner, repo, enabled, session, handle_rate_limit_func, max_retries)
-        list_milestones_single_thread(conn, owner, repo, enabled, session, handle_rate_limit_func, max_retries)
-        list_projects_single_thread(conn, owner, repo, enabled, session, handle_rate_limit_func, max_retries)
-        list_commits_single_thread(conn, owner, repo, enabled, baseline_dt, session, handle_rate_limit_func, max_retries)
-        list_branches_single_thread(conn, owner, repo, enabled, session, handle_rate_limit_func, max_retries)
-        list_actions_runs_single_thread(conn, owner, repo, enabled, session, handle_rate_limit_func, max_retries)
-        list_code_scanning_alerts_single_thread(conn, owner, repo, enabled, session, handle_rate_limit_func, max_retries)
-        list_review_requests_single_thread(conn, owner, repo, enabled, session, handle_rate_limit_func, max_retries)
-
         # watchers/forks/stars
-        list_watchers_single_thread(conn,owner,repo,enabled,session,handle_rate_limit_func,max_retries)
-        list_forks_single_thread(conn,owner,repo,enabled,session,handle_rate_limit_func,max_retries)
-        if baseline_dt:
-            list_stars_single_thread(conn,owner,repo,enabled,baseline_dt,session,handle_rate_limit_func,max_retries)
-        else:
-            list_stars_single_thread(conn,owner,repo,enabled,None,session,handle_rate_limit_func,max_retries)
+        list_watchers_single_thread(conn, owner, repo, enabled,
+                                    session, handle_rate_limit_func,
+                                    max_retries,
+                                    use_etags=(use_etags and not use_old))
+        list_forks_single_thread(conn, owner, repo, enabled,
+                                 session, handle_rate_limit_func,
+                                 max_retries,
+                                 use_etags=(use_etags and not use_old))
+        list_stars_single_thread(conn, owner, repo, enabled,
+                                 baseline_dt,
+                                 session, handle_rate_limit_func,
+                                 max_retries,
+                                 use_etags=(use_etags and not use_old))
 
-        # issues
-        list_issues_single_thread(conn,owner,repo,enabled,session,handle_rate_limit_func,max_retries)
-        # pulls
-        list_pulls_single_thread(conn,owner,repo,enabled,session,handle_rate_limit_func,max_retries)
+        # issues/pulls
+        list_issues_single_thread(conn, owner, repo, enabled,
+                                  session, handle_rate_limit_func,
+                                  max_retries,
+                                  use_etags=(use_etags and not use_old))
+        list_pulls_single_thread(conn, owner, repo, enabled,
+                                 session, handle_rate_limit_func,
+                                 max_retries,
+                                 use_etags=(use_etags and not use_old))
 
-        # events
-        fetch_issue_events_for_all_issues(conn,owner,repo,enabled,session,handle_rate_limit_func,max_retries)
-        fetch_pull_events_for_all_pulls(conn,owner,repo,enabled,session,handle_rate_limit_func,max_retries)
+        # advanced endpoints
+        list_commits_single_thread(conn, owner, repo, enabled,
+                                   baseline_dt,
+                                   session, handle_rate_limit_func,
+                                   max_retries,
+                                   use_etags=(use_etags and not use_old))
 
-        # issue comments
-        fetch_comments_for_all_issues(conn,owner,repo,enabled,session,handle_rate_limit_func,max_retries)
-        # issue top-level reactions
-        fetch_issue_reactions_for_all_issues(conn,owner,repo,enabled,session,handle_rate_limit_func,max_retries)
-        # issue comment reactions
-        fetch_issue_comment_reactions_for_all_comments(conn,owner,repo,enabled,session,handle_rate_limit_func,max_retries)
+        list_code_scanning_alerts_single_thread(conn, owner, repo, enabled,
+                                                session, handle_rate_limit_func,
+                                                max_retries,
+                                                use_etags=(use_etags and not use_old))
 
-        # pull review comments
-        fetch_pull_review_comments_for_all_pulls(conn,owner,repo,enabled,session,handle_rate_limit_func,max_retries)
-        # pull comment reactions
-        fetch_pull_comment_reactions_for_all_comments(conn,owner,repo,enabled,session,handle_rate_limit_func,max_retries)
-        # pull top-level reactions
-        fetch_pull_reactions_for_all_pulls(conn,owner,repo,enabled,session,handle_rate_limit_func,max_retries)
+        list_releases_single_thread(conn, owner, repo, enabled,
+                                    session, handle_rate_limit_func,
+                                    max_retries,
+                                    use_etags=(use_etags and not use_old))
 
-        stats=build_advanced_summary(conn, owner, repo)
-        advanced_summary.append(stats)
-        logging.info("[deadbird] Repo %s/%s => done => advanced summary built",owner,repo)
+        fetch_labels_single_thread(conn, owner, repo, enabled,
+                                   session, handle_rate_limit_func,
+                                   max_retries,
+                                   use_etags=(use_etags and not use_old))
 
-    print_advanced_summary_table(advanced_summary)
+        list_milestones_single_thread(conn, owner, repo, enabled,
+                                      session, handle_rate_limit_func,
+                                      max_retries,
+                                      use_etags=(use_etags and not use_old))
+
+        list_projects_single_thread(conn, owner, repo, enabled,
+                                    session, handle_rate_limit_func,
+                                    max_retries,
+                                    use_etags=(use_etags and not use_old))
+
+        list_branches_single_thread(conn, owner, repo, enabled,
+                                    session, handle_rate_limit_func,
+                                    max_retries,
+                                    use_etags=(use_etags and not use_old))
+
+        list_actions_runs_single_thread(conn, owner, repo, enabled,
+                                        session, handle_rate_limit_func,
+                                        max_retries,
+                                        use_etags=(use_etags and not use_old))
+
+        logging.info("[deadbird] Repo %s/%s => all endpoints done (ETag usage=%s).",owner,repo,(use_etags and not use_old))
 
     conn.close()
-    logging.info("[deadbird] All done => integrated solution => complete")
+    logging.info("[deadbird] All done => final solution => watchers/forks/stars + issues/pulls + advanced endpoints => complete.")
+
 
 def handle_rate_limit_func(resp):
     global TOKENS,CURRENT_TOKEN_INDEX,session,token_info
@@ -252,12 +270,12 @@ def sleep_until_earliest_reset():
             if rst and (earliest is None or rst<earliest):
                 earliest=rst
     if earliest is None:
-        logging.warning("[deadbird] No valid reset => fallback => 1hr sleep")
+        logging.warning("[deadbird] fallback => 1hr sleep => cannot parse earliest reset")
         time.sleep(3600)
         return
     delta=earliest-now_ts+30
     if delta>0:
-        logging.warning("[deadbird] Sleeping %d seconds => earliest token resets at %d (now=%d)",
+        logging.warning("[deadbird] Sleeping %d sec => earliest token resets at %d (now=%d)",
                         delta,earliest,now_ts)
         time.sleep(delta)
     else:
@@ -265,7 +283,7 @@ def sleep_until_earliest_reset():
 
 def do_sleep_based_on_reset():
     import time
-    logging.warning("[deadbird] fallback => 1hr sleep => cannot parse reset")
+    logging.warning("[deadbird] fallback => 1hr sleep => cannot parse reset header")
     time.sleep(3600)
 
 def update_token_info(token_idx, resp):
@@ -284,10 +302,9 @@ def update_token_info(token_idx, resp):
         token_info[token_idx]={"remaining":remaining,"reset":reset_ts}
 
 def get_earliest_gh_commit_date(owner,repo):
-    # We do a minimal approach => fetch the first commit in ascending order
     import requests
     url=f"https://api.github.com/repos/{owner}/{repo}/commits"
-    params={"sort":"committer-date","direction":"asc","per_page":1,"page":1}
+    params={"sort":"committer-date","direction":"asc","per_page":1}
     try:
         r=requests.get(url,params=params)
         if r.status_code==200:
@@ -305,88 +322,6 @@ def get_earliest_gh_commit_date(owner,repo):
     except:
         logging.warning("[deadbird] earliest GH commit => error => skip => %s/%s",owner,repo)
     return None
-
-def build_advanced_summary(conn, owner, repo):
-    """
-    Query advanced tables => create a dict of stats for 'owner/repo'.
-    """
-    repo_name=f"{owner}/{repo}"
-    c=conn.cursor()
-    stats={}
-    # releases
-    c.execute("SELECT COUNT(*) FROM releases WHERE repo_name=%s",(repo_name,))
-    stats["releases_count"]=c.fetchone()[0]
-
-    # release_assets
-    c.execute("SELECT COUNT(*) FROM release_assets WHERE repo_name=%s",(repo_name,))
-    stats["release_assets_count"]=c.fetchone()[0]
-
-    # labels
-    c.execute("SELECT COUNT(*) FROM repo_labels WHERE repo_name=%s",(repo_name,))
-    stats["labels_count"]=c.fetchone()[0]
-
-    # milestones
-    c.execute("SELECT COUNT(*) FROM repo_milestones WHERE repo_name=%s",(repo_name,))
-    stats["milestones_count"]=c.fetchone()[0]
-
-    # projects
-    c.execute("SELECT COUNT(*) FROM repo_projects WHERE repo_name=%s",(repo_name,))
-    stats["projects_count"]=c.fetchone()[0]
-
-    # commits
-    c.execute("SELECT COUNT(*) FROM commits WHERE repo_name=%s",(repo_name,))
-    stats["commits_count"]=c.fetchone()[0]
-
-    # branches
-    c.execute("SELECT COUNT(*) FROM branches WHERE repo_name=%s",(repo_name,))
-    stats["branches_count"]=c.fetchone()[0]
-
-    # actions_runs
-    c.execute("SELECT COUNT(*) FROM actions_runs WHERE repo_name=%s",(repo_name,))
-    stats["actions_runs_count"]=c.fetchone()[0]
-
-    # code_scanning_alerts
-    c.execute("SELECT COUNT(*) FROM code_scanning_alerts WHERE repo_name=%s",(repo_name,))
-    stats["code_scanning_count"]=c.fetchone()[0]
-
-    # specialized review requests
-    c.execute("SELECT COUNT(*) FROM review_request_events WHERE repo_name=%s",(repo_name,))
-    stats["review_requests_count"]=c.fetchone()[0]
-
-    c.close()
-    stats["owner_repo"]=repo_name
-    return stats
-
-def print_advanced_summary_table(advanced_summary):
-    col_repo_width=25
-    header_parts=[
-      f"{'Repo':{col_repo_width}s}",
-      "Releases","RelAssets","Labels","Mstones","Projects","Commits","Branches",
-      "Actions","SecAlerts","ReviewReq"
-    ]
-    header_line="  ".join(header_parts)
-    print("")
-    print("========== ADVANCED SUMMARY (DEADBIRD) ==========")
-    print(header_line)
-    print("-"*len(header_line))
-
-    for row in advanced_summary:
-        line_parts=[]
-        repo_str=row["owner_repo"][:col_repo_width]
-        line_parts.append(f"{repo_str:{col_repo_width}s}")
-        line_parts.append(f"{row['releases_count']:>7d}")
-        line_parts.append(f"{row['release_assets_count']:>9d}")
-        line_parts.append(f"{row['labels_count']:>6d}")
-        line_parts.append(f"{row['milestones_count']:>7d}")
-        line_parts.append(f"{row['projects_count']:>8d}")
-        line_parts.append(f"{row['commits_count']:>7d}")
-        line_parts.append(f"{row['branches_count']:>8d}")
-        line_parts.append(f"{row['actions_runs_count']:>7d}")
-        line_parts.append(f"{row['code_scanning_count']:>9d}")
-        line_parts.append(f"{row['review_requests_count']:>10d}")
-        print("  ".join(line_parts))
-
-    print("=================================================")
 
 if __name__=="__main__":
     main()

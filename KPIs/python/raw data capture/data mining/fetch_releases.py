@@ -5,11 +5,13 @@ import time
 import requests
 from datetime import datetime
 
+from etags import get_endpoint_state, update_endpoint_state
+
 def get_last_page(resp):
     link_header = resp.headers.get("Link")
     if not link_header:
         return None
-    parts = link_header.split(',')
+    parts=link_header.split(',')
     import re
     for p in parts:
         if 'rel="last"' in p:
@@ -18,62 +20,78 @@ def get_last_page(resp):
                 return int(m.group(1))
     return None
 
-def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
+def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20, endpoint="releases"):
     from requests.exceptions import ConnectionError
     mini_retry_attempts=3
-    for attempt in range(1,max_retries+1):
+    for attempt in range(1, max_retries + 1):
         local_attempt=1
         while local_attempt<=mini_retry_attempts:
             try:
-                resp=session.get(url, params=params)
+                resp = session.get(url, params=params)
                 handle_rate_limit_func(resp)
                 if resp.status_code==200:
                     return (resp,True)
+                elif resp.status_code==304:
+                    logging.info("[deadbird/%s-etag] 304 => no new releases => skip" % endpoint)
+                    return (resp,False)
                 elif resp.status_code in (403,429,500,502,503,504):
-                    logging.warning("[deadbird/releases] HTTP %d => attempt %d/%d => retry => %s",
-                                    resp.status_code,attempt,max_retries,url)
+                    logging.warning("[deadbird/%s-etag] HTTP %d => attempt %d/%d => retry => %s",
+                                    endpoint, resp.status_code, attempt, max_retries, url)
                     time.sleep(5)
                 else:
-                    logging.warning("[deadbird/releases] HTTP %d => attempt %d => break => %s",
-                                    resp.status_code,attempt,url)
+                    logging.warning("[deadbird/%s-etag] HTTP %d => attempt %d => break => %s",
+                                    endpoint, resp.status_code, attempt, url)
                     return (resp,False)
                 break
             except ConnectionError:
-                logging.warning("[deadbird/releases] Connection error => local mini-retry => %s",url)
+                logging.warning("[deadbird/%s-etag] Connection error => local => %s",endpoint,url)
                 time.sleep(3)
                 local_attempt+=1
         if local_attempt>mini_retry_attempts:
-            logging.warning("[deadbird/releases] Exhausted mini-retry => break => %s",url)
+            logging.warning("[deadbird/%s-etag] exhausted => break => %s",endpoint,url)
             return (None,False)
-    logging.warning("[deadbird/releases] Exceeded max_retries => give up => %s",url)
+    logging.warning("[deadbird/%s-etag] Exceeded max => give up => %s",endpoint,url)
     return (None,False)
 
 def list_releases_single_thread(conn, owner, repo, enabled,
                                 session, handle_rate_limit_func,
-                                max_retries):
+                                max_retries,
+                                use_etags=True):
+    """
+    Final version that accepts `use_etags`. If use_etags=False, fallback to old approach.
+    """
     if enabled==0:
-        logging.info("Repo %s/%s => disabled => skip releases",owner,repo)
+        logging.info("[deadbird/releases] %s/%s => disabled => skip",owner,repo)
         return
+    endpoint="releases"
     repo_name=f"{owner}/{repo}"
+
+    if not use_etags:
+        releases_old_approach(conn, owner, repo, session, handle_rate_limit_func, max_retries)
+        return
+
+    etag_val, last_upd = get_endpoint_state(conn,owner,repo,endpoint)
     page=1
     last_page=None
     total_inserted=0
+
     while True:
         url=f"https://api.github.com/repos/{owner}/{repo}/releases"
         params={"page":page,"per_page":20}
-        (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
+        if etag_val:
+            session.headers["If-None-Match"]=etag_val
+
+        (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries,endpoint=endpoint)
+        if "If-None-Match" in session.headers:
+            del session.headers["If-None-Match"]
         if not success or not resp:
             break
+
         data=resp.json()
         if not data:
             break
         if last_page is None:
             last_page=get_last_page(resp)
-
-        # approximate total if we have last_page
-        total_items=0
-        if last_page:
-            total_items=last_page*20
 
         new_count=0
         for rel_obj in data:
@@ -81,27 +99,45 @@ def list_releases_single_thread(conn, owner, repo, enabled,
                 new_count+=1
         total_inserted+=new_count
 
-        if last_page:
-            progress=(page/last_page)*100.0
-            logging.debug("[deadbird/releases] page=%d/%d => %.3f%% => inserted %d new => %s",
-                          page,last_page,progress,new_count,repo_name)
-            if total_items>0:
-                logging.debug("[deadbird/releases] => so far inserted %d total new rows out of approx %d => %s",
-                              total_inserted,total_items,repo_name)
-        else:
-            logging.debug("[deadbird/releases] page=%d => inserted %d => no last_page => %s",
-                          page,new_count,repo_name)
+        new_etag=resp.headers.get("ETag")
+        if new_etag:
+            etag_val=new_etag
 
         if len(data)<20:
             break
         page+=1
 
-    logging.info("[deadbird/releases] Done => total inserted %d => %s",total_inserted,repo_name)
+    # finalize => no 'last_updated' usage for releases, so keep it the same
+    update_endpoint_state(conn,owner,repo,endpoint,etag_val,last_upd)
+    logging.info("[deadbird/releases-etag] Done => total inserted %d => %s",total_inserted,repo_name)
 
-def store_release_and_assets(conn, repo_name, rel_obj):
+def releases_old_approach(conn, owner, repo, session, handle_rate_limit_func, max_retries):
+    logging.info("[deadbird/releases-old] scanning => %s/%s => from page=1",owner,repo)
+    page=1
+    total_inserted=0
+    while True:
+        url=f"https://api.github.com/repos/{owner}/{repo}/releases"
+        params={"page":page,"per_page":20}
+        (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries,endpoint="releases-old")
+        if not success or not resp:
+            break
+        data=resp.json()
+        if not data:
+            break
+        new_count=0
+        for rel_obj in data:
+            if store_release_and_assets(conn,f"{owner}/{repo}",rel_obj):
+                new_count+=1
+        total_inserted+=new_count
+        if len(data)<20:
+            break
+        page+=1
+
+    logging.info("[deadbird/releases-old] total inserted %d => %s/%s",total_inserted,owner,repo)
+
+def store_release_and_assets(conn,repo_name,rel_obj):
     """
-    Return True if we inserted a brand-new release row,
-    False if it existed (we still update).
+    Return True if newly inserted release row
     """
     c=conn.cursor()
     release_id=rel_obj["id"]
@@ -111,7 +147,6 @@ def store_release_and_assets(conn, repo_name, rel_obj):
     """,(repo_name,release_id))
     row=c.fetchone()
     if row:
-        # update => no new row
         update_release_record(c,conn,repo_name,release_id,rel_obj)
         c.close()
         return False
@@ -134,8 +169,8 @@ def insert_release_record(c, conn, repo_name, release_id, rel_obj):
     created_dt=None
     if created_str:
         created_dt=datetime.strptime(created_str,"%Y-%m-%dT%H:%M:%SZ")
-
     raw_str=json.dumps(rel_obj,ensure_ascii=False)
+
     sqlrel="""
     INSERT INTO releases
      (repo_name, release_id, tag_name, name, draft, prerelease,
@@ -143,10 +178,8 @@ def insert_release_record(c, conn, repo_name, release_id, rel_obj):
     VALUES
      (%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """
-    c.execute(sqlrel,(repo_name,release_id,tag_name,name,
-                      draft,prerelease,published_dt,created_dt,raw_str))
+    c.execute(sqlrel,(repo_name,release_id,tag_name,name,draft,prerelease,published_dt,created_dt,raw_str))
     conn.commit()
-    # store assets
     assets=rel_obj.get("assets",[])
     for asset in assets:
         insert_release_asset(c,conn,repo_name,release_id,asset)
@@ -165,16 +198,16 @@ def update_release_record(c, conn, repo_name, release_id, rel_obj):
     created_dt=None
     if created_str:
         created_dt=datetime.strptime(created_str,"%Y-%m-%dT%H:%M:%SZ")
+    raw_str=json.dumps(rel_obj, ensure_ascii=False)
 
-    raw_str=json.dumps(rel_obj,ensure_ascii=False)
     sqlrel="""
     UPDATE releases
     SET tag_name=%s, name=%s, draft=%s, prerelease=%s,
         published_at=%s, created_at=%s, raw_json=%s
     WHERE repo_name=%s AND release_id=%s
     """
-    c.execute(sqlrel,(tag_name,name,draft,prerelease,
-                      published_dt,created_dt,raw_str,repo_name,release_id))
+    c.execute(sqlrel,(tag_name,name,draft,prerelease,published_dt,created_dt,raw_str,
+                      repo_name,release_id))
     conn.commit()
     assets=rel_obj.get("assets",[])
     for asset in assets:
@@ -187,18 +220,16 @@ def insert_release_asset(c,conn,repo_name,release_id,asset_obj):
     content_type=asset_obj.get("content_type","")
     size=asset_obj.get("size",0)
     download_count=asset_obj.get("download_count",0)
-
     created_str=asset_obj.get("created_at")
     created_dt=None
     if created_str:
         created_dt=datetime.strptime(created_str,"%Y-%m-%dT%H:%M:%SZ")
-
     updated_str=asset_obj.get("updated_at")
     updated_dt=None
     if updated_str:
         updated_dt=datetime.strptime(updated_str,"%Y-%m-%dT%H:%M:%SZ")
-
     raw_str=json.dumps(asset_obj,ensure_ascii=False)
+
     sqlast="""
     INSERT INTO release_assets
       (repo_name, release_id, asset_id, name, content_type,
@@ -223,18 +254,16 @@ def upsert_release_asset(c,conn,repo_name,release_id,asset_obj):
         content_type=asset_obj.get("content_type","")
         size=asset_obj.get("size",0)
         download_count=asset_obj.get("download_count",0)
-
         created_str=asset_obj.get("created_at")
         created_dt=None
         if created_str:
             created_dt=datetime.strptime(created_str,"%Y-%m-%dT%H:%M:%SZ")
-
         updated_str=asset_obj.get("updated_at")
         updated_dt=None
         if updated_str:
             updated_dt=datetime.strptime(updated_str,"%Y-%m-%dT%H:%M:%SZ")
+        raw_str=json.dumps(asset_obj,ensure_ascii=False)
 
-        raw_str=json.dumps(asset_obj, ensure_ascii=False)
         sql="""
         UPDATE release_assets
         SET name=%s, content_type=%s, size=%s,

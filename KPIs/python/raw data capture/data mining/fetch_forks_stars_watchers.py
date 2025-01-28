@@ -5,23 +5,25 @@ import time
 import requests
 from datetime import datetime
 
+from etags import get_endpoint_state, update_endpoint_state
+
 def get_last_page(resp):
     link_header = resp.headers.get("Link")
     if not link_header:
         return None
-    parts=link_header.split(',')
+    parts = link_header.split(',')
     import re
     for p in parts:
         if 'rel="last"' in p:
-            m=re.search(r'[?&]page=(\d+)', p)
+            m = re.search(r'[?&]page=(\d+)', p)
             if m:
                 return int(m.group(1))
     return None
 
-def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
+def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20, endpoint=""):
     from requests.exceptions import ConnectionError
-    mini_retry_attempts=3
-    for attempt in range(1,max_retries+1):
+    mini_retry_attempts = 3
+    for attempt in range(1, max_retries + 1):
         local_attempt=1
         while local_attempt<=mini_retry_attempts:
             try:
@@ -29,39 +31,54 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
                 handle_rate_limit_func(resp)
                 if resp.status_code==200:
                     return (resp,True)
+                elif resp.status_code==304:
+                    logging.info("[deadbird/%s-etag] 304 => no changes => skip" % endpoint)
+                    return (resp,False)
                 elif resp.status_code in (403,429,500,502,503,504):
-                    logging.warning("[deadbird/forks_stars_watchers] HTTP %d => attempt %d/%d => retry => %s",
-                                    resp.status_code,attempt,max_retries,url)
+                    logging.warning("[deadbird/%s-etag] HTTP %d => attempt %d/%d => retry => %s",
+                                    endpoint, resp.status_code, attempt, max_retries, url)
                     time.sleep(5)
                 else:
-                    logging.warning("[deadbird/forks_stars_watchers] HTTP %d => break => %s",
-                                    resp.status_code,url)
+                    logging.warning("[deadbird/%s-etag] HTTP %d => break => %s",
+                                    endpoint, resp.status_code, url)
                     return (resp,False)
                 break
             except ConnectionError:
-                logging.warning("[deadbird/forks_stars_watchers] Connection error => local retry => %s",url)
+                logging.warning("[deadbird/%s-etag] Connection error => mini-retry => %s", endpoint, url)
                 time.sleep(3)
                 local_attempt+=1
         if local_attempt>mini_retry_attempts:
-            logging.warning("[deadbird/forks_stars_watchers] Exhausted mini-retry => break => %s",url)
+            logging.warning("[deadbird/%s-etag] Exhausted local => break => %s", endpoint, url)
             return (None,False)
-    logging.warning("[deadbird/forks_stars_watchers] Exceeded max_retries => give up => %s",url)
+    logging.warning("[deadbird/%s-etag] Exceeded max => give up => %s", endpoint, url)
     return (None,False)
 
-# 1) watchers => /repos/{owner}/{repo}/subscribers
 def list_watchers_single_thread(conn, owner, repo, enabled,
-                                session, handle_rate_limit_func, max_retries):
+                                session, handle_rate_limit_func, max_retries,
+                                use_etags=True):
     if enabled==0:
         logging.info("Repo %s/%s => disabled => skip watchers",owner,repo)
         return
+    endpoint="watchers"
     repo_name=f"{owner}/{repo}"
+    if not use_etags:
+        watchers_old_approach(conn, owner, repo, session, handle_rate_limit_func, max_retries)
+        return
+
+    etag_val, last_upd = get_endpoint_state(conn,owner,repo,endpoint)
     page=1
     last_page=None
     total_inserted=0
     while True:
         url=f"https://api.github.com/repos/{owner}/{repo}/subscribers"
         params={"page":page,"per_page":100}
-        (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
+        if etag_val:
+            session.headers["If-None-Match"]=etag_val
+
+        (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries,endpoint=endpoint)
+        if "If-None-Match" in session.headers:
+            del session.headers["If-None-Match"]
+
         if not success or not resp:
             break
         data=resp.json()
@@ -69,30 +86,47 @@ def list_watchers_single_thread(conn, owner, repo, enabled,
             break
         if last_page is None:
             last_page=get_last_page(resp)
-        total_items=0
-        if last_page:
-            total_items=last_page*100
 
         new_count=0
         for w in data:
-            if insert_watcher_record(conn,repo_name,w):
+            if insert_watcher_record(conn, repo_name, w):
                 new_count+=1
         total_inserted+=new_count
 
-        if last_page:
-            progress=(page/last_page)*100
-            logging.debug("[deadbird/watchers] page=%d/%d => %.4f%% => inserted %d => %s",
-                          page,last_page,progress,new_count,repo_name)
-            if total_items>0:
-                logging.debug("[deadbird/watchers] => total so far %d out of approx %d => %s",
-                              total_inserted,total_items,repo_name)
-        else:
-            logging.debug("[deadbird/watchers] page=%d => inserted %d => no last_page => %s",
-                          page,new_count,repo_name)
+        new_etag=resp.headers.get("ETag")
+        if new_etag:
+            etag_val=new_etag
+
         if len(data)<100:
             break
         page+=1
-    logging.info("[deadbird/watchers] Done => total inserted %d => %s",total_inserted,repo_name)
+
+    # watchers => no last_updated usage, store new ETag anyway
+    update_endpoint_state(conn,owner,repo,endpoint,etag_val,last_upd)
+    logging.info("[deadbird/watchers-etag] Done => total inserted %d => %s",total_inserted,repo_name)
+
+def watchers_old_approach(conn, owner, repo, session, handle_rate_limit_func, max_retries):
+    logging.info("[deadbird/watchers-old] scanning from page=1 => unlimited => %s/%s",owner,repo)
+    page=1
+    total_inserted=0
+    while True:
+        url=f"https://api.github.com/repos/{owner}/{repo}/subscribers"
+        params={"page":page,"per_page":100}
+        (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries,endpoint="watchers-old")
+        if not success or not resp:
+            break
+        data=resp.json()
+        if not data:
+            break
+        new_count=0
+        for w in data:
+            if insert_watcher_record(conn,f"{owner}/{repo}",w):
+                new_count+=1
+        total_inserted+=new_count
+        if len(data)<100:
+            break
+        page+=1
+    logging.info("[deadbird/watchers-old] total inserted %d => %s/%s",total_inserted,owner,repo)
 
 def insert_watcher_record(conn, repo_name, user_obj):
     c=conn.cursor()
@@ -119,20 +153,32 @@ def insert_watcher_record(conn, repo_name, user_obj):
         c.close()
         return True
 
-# 2) forks => /repos/{owner}/{repo}/forks => sort=oldest
 def list_forks_single_thread(conn, owner, repo, enabled,
-                             session, handle_rate_limit_func, max_retries):
+                             session, handle_rate_limit_func, max_retries,
+                             use_etags=True):
     if enabled==0:
         logging.info("Repo %s/%s => disabled => skip forks",owner,repo)
         return
+    endpoint="forks"
     repo_name=f"{owner}/{repo}"
+    if not use_etags:
+        forks_old_approach(conn, owner, repo, session, handle_rate_limit_func, max_retries)
+        return
+
+    etag_val, last_upd = get_endpoint_state(conn,owner,repo,endpoint)
     page=1
     last_page=None
     total_inserted=0
     while True:
         url=f"https://api.github.com/repos/{owner}/{repo}/forks"
         params={"page":page,"per_page":100,"sort":"oldest"}
-        (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
+        if etag_val:
+            session.headers["If-None-Match"]=etag_val
+
+        (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries,endpoint=endpoint)
+        if "If-None-Match" in session.headers:
+            del session.headers["If-None-Match"]
+
         if not success or not resp:
             break
         data=resp.json()
@@ -140,9 +186,6 @@ def list_forks_single_thread(conn, owner, repo, enabled,
             break
         if last_page is None:
             last_page=get_last_page(resp)
-        total_items=0
-        if last_page:
-            total_items=last_page*100
 
         new_count=0
         for fk in data:
@@ -150,20 +193,39 @@ def list_forks_single_thread(conn, owner, repo, enabled,
                 new_count+=1
         total_inserted+=new_count
 
-        if last_page:
-            progress=(page/last_page)*100
-            logging.debug("[deadbird/forks] page=%d/%d => %.4f%% => inserted %d => %s",
-                          page,last_page,progress,new_count,repo_name)
-            if total_items>0:
-                logging.debug("[deadbird/forks] => total so far %d out of approx %d => %s",
-                              total_inserted,total_items,repo_name)
-        else:
-            logging.debug("[deadbird/forks] page=%d => inserted %d => no last_page => %s",
-                          page,new_count,repo_name)
+        new_etag=resp.headers.get("ETag")
+        if new_etag:
+            etag_val=new_etag
+
         if len(data)<100:
             break
         page+=1
-    logging.info("[deadbird/forks] Done => total inserted %d => %s",total_inserted,repo_name)
+
+    update_endpoint_state(conn,owner,repo,endpoint,etag_val,last_upd)
+    logging.info("[deadbird/forks-etag] Done => total inserted %d => %s",total_inserted,repo_name)
+
+def forks_old_approach(conn, owner, repo, session, handle_rate_limit_func, max_retries):
+    logging.info("[deadbird/forks-old] scanning from page=1 => unlimited => %s/%s",owner,repo)
+    page=1
+    total_inserted=0
+    while True:
+        url=f"https://api.github.com/repos/{owner}/{repo}/forks"
+        params={"page":page,"per_page":100,"sort":"oldest"}
+        (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries,endpoint="forks-old")
+        if not success or not resp:
+            break
+        data=resp.json()
+        if not data:
+            break
+        new_count=0
+        for fk in data:
+            if insert_fork_record(conn,f"{owner}/{repo}",fk):
+                new_count+=1
+        total_inserted+=new_count
+        if len(data)<100:
+            break
+        page+=1
+    logging.info("[deadbird/forks-old] total inserted %d => %s/%s",total_inserted,owner,repo)
 
 def insert_fork_record(conn, repo_name, fork_obj):
     c=conn.cursor()
@@ -194,13 +256,20 @@ def insert_fork_record(conn, repo_name, fork_obj):
         c.close()
         return True
 
-# 3) stars => /repos/{owner}/{repo}/stargazers => Accept: star+json => skip if starred_at > baseline_date
 def list_stars_single_thread(conn, owner, repo, enabled, baseline_dt,
-                             session, handle_rate_limit_func, max_retries):
+                             session, handle_rate_limit_func, max_retries,
+                             use_etags=True):
     if enabled==0:
         logging.info("Repo %s/%s => disabled => skip stars",owner,repo)
         return
+    endpoint="stars"
     repo_name=f"{owner}/{repo}"
+    if not use_etags:
+        stars_old_approach(conn, owner, repo, baseline_dt, session, handle_rate_limit_func, max_retries)
+        return
+
+    # ETag approach => stargazers => no ?since => rely on ETag + baseline skip
+    etag_val, last_upd = get_endpoint_state(conn,owner,repo,endpoint)
     page=1
     last_page=None
     total_inserted=0
@@ -210,7 +279,15 @@ def list_stars_single_thread(conn, owner, repo, enabled, baseline_dt,
     while True:
         url=f"https://api.github.com/repos/{owner}/{repo}/stargazers"
         params={"page":page,"per_page":100}
-        (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
+        if etag_val:
+            session.headers["If-None-Match"]=etag_val
+
+        (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries,endpoint=endpoint)
+
+        if "If-None-Match" in session.headers:
+            del session.headers["If-None-Match"]
+        session.headers["Accept"]=old_accept
+
         if not success or not resp:
             break
         data=resp.json()
@@ -218,38 +295,65 @@ def list_stars_single_thread(conn, owner, repo, enabled, baseline_dt,
             break
         if last_page is None:
             last_page=get_last_page(resp)
-        total_items=0
-        if last_page:
-            total_items=last_page*100
 
         new_count=0
         for st in data:
             starred_str=st.get("starred_at")
-            if starred_str:
-                st_dt=datetime.strptime(starred_str,"%Y-%m-%dT%H:%M:%SZ")
-                if baseline_dt and st_dt>baseline_dt:
-                    # skip
-                    continue
-                if insert_star_record(conn,repo_name,st,st_dt):
-                    new_count+=1
+            if not starred_str:
+                continue
+            st_dt=datetime.strptime(starred_str,"%Y-%m-%dT%H:%M:%SZ")
+            if baseline_dt and st_dt>baseline_dt:
+                # skip => older logic
+                continue
+            if insert_star_record(conn,repo_name,st,st_dt):
+                new_count+=1
         total_inserted+=new_count
 
-        if last_page:
-            progress=(page/last_page)*100
-            logging.debug("[deadbird/stars] page=%d/%d => %.4f%% => inserted %d => %s",
-                          page,last_page,progress,new_count,repo_name)
-            if total_items>0:
-                logging.debug("[deadbird/stars] => so far %d out of approx %d => %s",
-                              total_inserted,total_items,repo_name)
-        else:
-            logging.debug("[deadbird/stars] page=%d => inserted %d => no last_page => %s",
-                          page,new_count,repo_name)
+        new_etag=resp.headers.get("ETag")
+        if new_etag:
+            etag_val=new_etag
+
+        if len(data)<100:
+            break
+        page+=1
+
+    update_endpoint_state(conn,owner,repo,endpoint,etag_val,last_upd)
+    logging.info("[deadbird/stars-etag] Done => total inserted %d => %s",total_inserted,repo_name)
+
+def stars_old_approach(conn, owner, repo, baseline_dt,
+                       session, handle_rate_limit_func, max_retries):
+    logging.info("[deadbird/stars-old] scanning => %s/%s => unlimited",owner,repo)
+    old_accept=session.headers.get("Accept","")
+    session.headers["Accept"]="application/vnd.github.v3.star+json"
+    page=1
+    total_inserted=0
+    while True:
+        url=f"https://api.github.com/repos/{owner}/{repo}/stargazers"
+        params={"page":page,"per_page":100}
+        (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries,endpoint="stars-old")
+        if not success or not resp:
+            break
+        data=resp.json()
+        if not data:
+            break
+        new_count=0
+        for st in data:
+            starred_str=st.get("starred_at")
+            if not starred_str:
+                continue
+            st_dt=datetime.strptime(starred_str,"%Y-%m-%dT%H:%M:%SZ")
+            if baseline_dt and st_dt>baseline_dt:
+                continue
+            if insert_star_record(conn,f"{owner}/{repo}",st,st_dt):
+                new_count+=1
+        total_inserted+=new_count
         if len(data)<100:
             break
         page+=1
 
     session.headers["Accept"]=old_accept
-    logging.info("[deadbird/stars] Done => total inserted %d => %s",total_inserted,repo_name)
+    logging.info("[deadbird/stars-old] total inserted %d => %s/%s",total_inserted,owner,repo)
+
 
 def insert_star_record(conn, repo_name, star_obj, st_dt):
     c=conn.cursor()

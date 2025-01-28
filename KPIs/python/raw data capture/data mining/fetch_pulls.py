@@ -1,24 +1,27 @@
 # fetch_pulls.py
+
 import logging
 import time
 import requests
 from datetime import datetime
-from repo_baselines import refresh_baseline_info_mid_run
+
+from etags import get_endpoint_state, update_endpoint_state
 
 def get_last_page(resp):
     link_header=resp.headers.get("Link")
     if not link_header:
         return None
     parts=link_header.split(',')
-    for part in parts:
-        if 'rel="last"' in part:
-            import re
-            match=re.search(r'[?&]page=(\d+)',part)
-            if match:
-                return int(match.group(1))
+    import re
+    for p in parts:
+        if 'rel="last"' in p:
+            m = re.search(r'[?&]page=(\d+)', p)
+            if m:
+                return int(m.group(1))
     return None
 
 def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
+    from requests.exceptions import ConnectionError
     mini_retry_attempts=3
     for attempt in range(1,max_retries+1):
         local_attempt=1
@@ -28,95 +31,156 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
                 handle_rate_limit_func(resp)
                 if resp.status_code==200:
                     return (resp,True)
+                elif resp.status_code==304:
+                    logging.info("[deadbird/pulls-etag] 304 => no new data => skip.")
+                    return (resp,False)
                 elif resp.status_code in (403,429,500,502,503,504):
-                    logging.warning("HTTP %d => attempt %d/%d => retry => %s",
+                    logging.warning("[deadbird/pulls-etag] HTTP %d => attempt %d/%d => retry => %s",
                                     resp.status_code,attempt,max_retries,url)
                     time.sleep(5)
                 else:
-                    logging.warning("HTTP %d => attempt %d => break => %s",
+                    logging.warning("[deadbird/pulls-etag] HTTP %d => attempt %d => break => %s",
                                     resp.status_code,attempt,url)
                     return (resp,False)
                 break
-            except requests.exceptions.ConnectionError:
-                logging.warning("Connection error => local mini-retry => %s",url)
+            except ConnectionError:
+                logging.warning("[deadbird/pulls-etag] Connection error => mini => %s",url)
                 time.sleep(3)
                 local_attempt+=1
         if local_attempt>mini_retry_attempts:
-            logging.warning("Exhausted local mini-retry => break => %s",url)
+            logging.warning("[deadbird/pulls-etag] Exhausted local => break => %s",url)
             return (None,False)
-    logging.warning("Exceeded max_retries => give up => %s",url)
+    logging.warning("[deadbird/pulls-etag] Exceeded max => give up => %s",url)
     return (None,False)
-
-def get_max_pull_number(conn, repo_name):
-    c=conn.cursor()
-    c.execute("SELECT MAX(pull_number) FROM pulls WHERE repo_name=%s",(repo_name,))
-    row=c.fetchone()
-    c.close()
-    if row and row[0]:
-        return row[0]
-    return 0
 
 def list_pulls_single_thread(conn, owner, repo, enabled,
                              session, handle_rate_limit_func,
-                             max_retries):
+                             max_retries,
+                             use_etags=True):
     if enabled==0:
-        logging.info("Repo %s/%s => disabled => skip pulls",owner,repo)
+        logging.info("[deadbird/pulls] %s/%s => disabled => skip",owner,repo)
         return
     repo_name=f"{owner}/{repo}"
-    highest_known=get_max_pull_number(conn,repo_name)
+    endpoint="pulls"
+
+    if not use_etags:
+        pulls_old_approach(conn,owner,repo,session,handle_rate_limit_func,max_retries)
+        return
+
+    etag_val, last_upd = get_endpoint_state(conn,owner,repo,endpoint)
     page=1
     last_page=None
+    total_inserted=0
+    max_updated=last_upd
+
+    if max_updated:
+        logging.info("[deadbird/pulls-etag] ?since=%s => incremental updated pulls" % max_updated)
+    else:
+        logging.info("[deadbird/pulls-etag] No last_updated => full fetch => sort=updated asc")
+
     while True:
-        old_val=highest_known
-        old_en=enabled
-        new_base,new_en=refresh_baseline_info_mid_run(conn,owner,repo,None,old_en)
-        if new_en==0:
-            logging.info("Repo %s/%s => toggled disabled => stop pulls mid-run",owner,repo)
+        url=f"https://api.github.com/repos/{owner}/{repo}/issues"
+        params={
+            "state":"all",
+            "sort":"updated",
+            "direction":"asc",
+            "page":page,
+            "per_page":100
+        }
+        if max_updated:
+            params["since"]=max_updated.isoformat()
+
+        if etag_val:
+            session.headers["If-None-Match"]=etag_val
+
+        (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
+        if "If-None-Match" in session.headers:
+            del session.headers["If-None-Match"]
+        if not success or not resp:
             break
 
-        url=f"https://api.github.com/repos/{owner}/{repo}/issues"
-        params={"state":"all","sort":"created","direction":"asc","page":page,"per_page":100}
-        (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
-        if not success:
-            logging.warning("Pulls => page %d => skip => %s",page,repo_name)
-            break
         data=resp.json()
         if not data:
             break
 
         if last_page is None:
             last_page=get_last_page(resp)
-        if last_page:
-            progress=(page/last_page)*100
-            logging.debug(f"[DEBUG] pulls => page={page}/{last_page} => {progress:.3f}%% => {repo_name}")
 
+        new_count=0
+        new_max_dt=max_updated
+        for item in data:
+            if "pull_request" not in item:
+                # skip => it's not a pull
+                continue
+            if insert_pull_record(conn,repo_name,item):
+                new_count+=1
+            upd_str=item.get("updated_at")
+            if upd_str:
+                dt=datetime.strptime(upd_str,"%Y-%m-%dT%H:%M:%SZ")
+                if not new_max_dt or dt>new_max_dt:
+                    new_max_dt=dt
+
+        total_inserted+=new_count
+        new_etag=resp.headers.get("ETag")
+        if new_etag:
+            etag_val=new_etag
+
+        if new_max_dt and (not max_updated or new_max_dt>max_updated):
+            max_updated=new_max_dt
+
+        if len(data)<100:
+            break
+        page+=1
+
+    update_endpoint_state(conn,owner,repo,endpoint,etag_val,max_updated)
+    logging.info("[deadbird/pulls-etag] Done => inserted %d => %s => new last_updated=%s",
+                 total_inserted, repo_name, max_updated)
+
+def pulls_old_approach(conn, owner, repo, session, handle_rate_limit_func, max_retries):
+    logging.info("[deadbird/pulls-old] scanning => %s/%s => unlimited",owner,repo)
+    page=1
+    total_inserted=0
+    while True:
+        url=f"https://api.github.com/repos/{owner}/{repo}/issues"
+        params={"state":"all","sort":"created","direction":"asc","page":page,"per_page":100}
+        (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
+        if not success or not resp:
+            break
+        data=resp.json()
+        if not data:
+            break
         new_count=0
         for item in data:
             if "pull_request" not in item:
                 continue
-            pull_num=item["number"]
-            if pull_num<=highest_known:
-                continue
-            cstr=item.get("created_at")
-            cdt=None
-            if cstr:
-                cdt=datetime.strptime(cstr,"%Y-%m-%dT%H:%M:%SZ")
-            insert_pull_record(conn,repo_name,pull_num,cdt)
-            new_count+=1
-            if pull_num>highest_known:
-                highest_known=pull_num
-        if new_count<100:
+            if insert_pull_record(conn,f"{owner}/{repo}",item):
+                new_count+=1
+        total_inserted+=new_count
+        if len(data)<100:
             break
         page+=1
 
-def insert_pull_record(conn, repo_name, pull_number, created_dt):
+    logging.info("[deadbird/pulls-old] inserted %d => %s/%s",total_inserted,owner,repo)
+
+def insert_pull_record(conn, repo_name, pr_obj):
     c=conn.cursor()
-    sql="""
-    INSERT INTO pulls (repo_name, pull_number, created_at)
-    VALUES (%s,%s,%s)
-    ON DUPLICATE KEY UPDATE
-      created_at=VALUES(created_at)
-    """
-    c.execute(sql,(repo_name,pull_number,created_dt))
-    conn.commit()
-    c.close()
+    pull_num=pr_obj["number"]
+    c.execute("SELECT pull_number FROM pulls WHERE repo_name=%s AND pull_number=%s",
+              (repo_name,pull_num))
+    row=c.fetchone()
+    if row:
+        c.close()
+        return False
+    else:
+        created_str=pr_obj.get("created_at")
+        created_dt=None
+        if created_str:
+            created_dt=datetime.strptime(created_str,"%Y-%m-%dT%H:%M:%SZ")
+        sql="""
+        INSERT INTO pulls (repo_name, pull_number, created_at)
+        VALUES (%s,%s,%s)
+        """
+        c.execute(sql,(repo_name,pull_num,created_dt))
+        conn.commit()
+        c.close()
+        return True

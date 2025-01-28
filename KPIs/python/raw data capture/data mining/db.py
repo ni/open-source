@@ -397,6 +397,19 @@ def create_tables(conn):
       UNIQUE KEY (repo_name, pull_number, request_event_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
+    # 3) NEW => repo_endpoints => store ETag + last_updated for each endpoint
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS repo_endpoints (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      owner VARCHAR(255) NOT NULL,
+      repo VARCHAR(255) NOT NULL,
+      endpoint_name VARCHAR(50) NOT NULL,
+      etag_value VARCHAR(255) DEFAULT NULL,
+      last_updated DATETIME DEFAULT NULL,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY (owner, repo, endpoint_name)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
 
     conn.commit()
     c.close()
