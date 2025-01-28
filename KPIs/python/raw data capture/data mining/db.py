@@ -6,7 +6,6 @@ def connect_db(cfg, create_db_if_missing=True):
     db_conf = cfg["mysql"]
     db_name = db_conf["db"]
 
-    # Connect to server-level to ensure DB is created if missing
     tmp_conn = mysql.connector.connect(
         host=db_conf["host"],
         port=db_conf["port"],
@@ -16,13 +15,12 @@ def connect_db(cfg, create_db_if_missing=True):
     )
     tmp_cursor = tmp_conn.cursor()
     if create_db_if_missing:
-        logging.info("[ossmining] Ensuring database '%s' exists...", db_name)
+        logging.info("[deadbird] Ensuring database '%s' exists...", db_name)
         tmp_cursor.execute(f"CREATE DATABASE IF NOT EXISTS {db_name}")
         tmp_conn.commit()
     tmp_cursor.close()
     tmp_conn.close()
 
-    # Now connect directly to that DB
     conn = mysql.connector.connect(
         host=db_conf["host"],
         port=db_conf["port"],
@@ -33,15 +31,7 @@ def connect_db(cfg, create_db_if_missing=True):
     return conn
 
 def create_tables(conn):
-    """
-    Creates tables from the original Revision A (watchers/forks/stars,
-    issues/pulls, events, comment-level data) AND the advanced endpoints
-    (Releases, Release Assets, Labels, Milestones, Projects, Commits,
-    Branches, Actions, Code Scanning, Specialized Review Requests).
-    """
     c = conn.cursor()
-
-    # ============= Original / Revision A Tables =============
 
     # 1) repo_baselines
     c.execute("""
@@ -217,8 +207,6 @@ def create_tables(conn):
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
 
-    # ============= Advanced Endpoints Tables =============
-
     # releases
     c.execute("""
     CREATE TABLE IF NOT EXISTS releases (
@@ -236,7 +224,6 @@ def create_tables(conn):
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
 
-    # release_assets
     c.execute("""
     CREATE TABLE IF NOT EXISTS release_assets (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -346,7 +333,6 @@ def create_tables(conn):
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
 
-
     # branches
     c.execute("""
     CREATE TABLE IF NOT EXISTS branches (
@@ -413,4 +399,4 @@ def create_tables(conn):
 
     conn.commit()
     c.close()
-    logging.info("[ossmining] All tables created or verified (advanced).")
+    logging.info("[deadbird] All tables created or verified (advanced).")

@@ -30,22 +30,22 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
                 if resp.status_code==200:
                     return (resp,True)
                 elif resp.status_code in (403,429,500,502,503,504):
-                    logging.warning("[ossmining/labels] HTTP %d => attempt %d/%d => retry => %s",
+                    logging.warning("[deadbird/labels] HTTP %d => attempt %d/%d => retry => %s",
                                     resp.status_code,attempt,max_retries,url)
                     time.sleep(5)
                 else:
-                    logging.warning("[ossmining/labels] HTTP %d => attempt %d => break => %s",
+                    logging.warning("[deadbird/labels] HTTP %d => attempt %d => break => %s",
                                     resp.status_code,attempt,url)
                     return (resp,False)
                 break
             except ConnectionError:
-                logging.warning("[ossmining/labels] Connection error => local mini-retry => %s",url)
+                logging.warning("[deadbird/labels] Connection error => local mini-retry => %s",url)
                 time.sleep(3)
                 local_attempt+=1
         if local_attempt>mini_retry_attempts:
-            logging.warning("[ossmining/labels] Exhausted mini-retry => break => %s",url)
+            logging.warning("[deadbird/labels] Exhausted mini-retry => break => %s",url)
             return (None,False)
-    logging.warning("[ossmining/labels] Exceeded max_retries => give up => %s",url)
+    logging.warning("[deadbird/labels] Exceeded max_retries => give up => %s",url)
     return (None,False)
 
 def fetch_labels_single_thread(conn, owner, repo, enabled,
@@ -82,20 +82,20 @@ def fetch_labels_single_thread(conn, owner, repo, enabled,
 
         if last_page:
             progress=(page/last_page)*100.0
-            logging.debug("[ossmining/labels] page=%d/%d => %.3f%% => inserted %d new => %s",
+            logging.debug("[deadbird/labels] page=%d/%d => %.3f%% => inserted %d new => %s",
                           page,last_page,progress,new_count,repo_name)
             if total_items>0:
-                logging.debug("[ossmining/labels] => total so far %d out of approx %d => %s",
+                logging.debug("[deadbird/labels] => total so far %d out of approx %d => %s",
                               total_inserted,total_items,repo_name)
         else:
-            logging.debug("[ossmining/labels] page=%d => inserted %d => no last_page => %s",
+            logging.debug("[deadbird/labels] page=%d => inserted %d => no last_page => %s",
                           page,new_count,repo_name)
 
         if len(data)<50:
             break
         page+=1
 
-    logging.info("[ossmining/labels] Done => total inserted %d => %s",total_inserted,repo_name)
+    logging.info("[deadbird/labels] Done => total inserted %d => %s",total_inserted,repo_name)
 
 def store_label(conn, repo_name, lbl_obj):
     c=conn.cursor()

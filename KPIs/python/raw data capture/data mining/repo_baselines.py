@@ -23,7 +23,10 @@ def set_baseline_date(conn, owner, repo, new_date):
     c.execute("""
     INSERT INTO repo_baselines (owner, repo, baseline_date, enabled, updated_at)
     VALUES (%s,%s,%s,1,NOW())
-    ON DUPLICATE KEY UPDATE baseline_date=VALUES(baseline_date), updated_at=NOW()
+    ON DUPLICATE KEY UPDATE
+      baseline_date=VALUES(baseline_date),
+      enabled=1,
+      updated_at=NOW()
     """,(owner,repo,new_date))
     conn.commit()
     c.close()

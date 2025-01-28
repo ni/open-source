@@ -30,22 +30,22 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
                 if resp.status_code==200:
                     return (resp,True)
                 elif resp.status_code in (403,429,500,502,503,504):
-                    logging.warning("[ossmining/projects] HTTP %d => attempt %d/%d => retry => %s",
+                    logging.warning("[deadbird/projects] HTTP %d => attempt %d/%d => retry => %s",
                                     resp.status_code,attempt,max_retries,url)
                     time.sleep(5)
                 else:
-                    logging.warning("[ossmining/projects] HTTP %d => attempt %d => break => %s",
+                    logging.warning("[deadbird/projects] HTTP %d => attempt %d => break => %s",
                                     resp.status_code,attempt,url)
                     return (resp,False)
                 break
             except ConnectionError:
-                logging.warning("[ossmining/projects] Connection error => local mini-retry => %s",url)
+                logging.warning("[deadbird/projects] Connection error => local mini-retry => %s",url)
                 time.sleep(3)
                 local_attempt+=1
         if local_attempt>mini_retry_attempts:
-            logging.warning("[ossmining/projects] Exhausted mini-retry => break => %s",url)
+            logging.warning("[deadbird/projects] Exhausted mini-retry => break => %s",url)
             return (None,False)
-    logging.warning("[ossmining/projects] Exceeded max_retries => give up => %s",url)
+    logging.warning("[deadbird/projects] Exceeded max_retries => give up => %s",url)
     return (None,False)
 
 def fetch_projects_single_thread(conn, owner, repo, enabled,
@@ -87,20 +87,20 @@ def fetch_projects_single_thread(conn, owner, repo, enabled,
 
         if last_page:
             progress=(page/last_page)*100.0
-            logging.debug("[ossmining/projects] page=%d/%d => %.3f%% => inserted %d => %s",
+            logging.debug("[deadbird/projects] page=%d/%d => %.3f%% => inserted %d => %s",
                           page,last_page,progress,new_count,repo_name)
             if total_items>0:
-                logging.debug("[ossmining/projects] => total so far %d out of approx %d => %s",
+                logging.debug("[deadbird/projects] => total so far %d out of approx %d => %s",
                               total_inserted,total_items,repo_name)
         else:
-            logging.debug("[ossmining/projects] page=%d => inserted %d => no last_page => %s",
+            logging.debug("[deadbird/projects] page=%d => inserted %d => no last_page => %s",
                           page,new_count,repo_name)
 
         if len(data)<30:
             break
         page+=1
 
-    logging.info("[ossmining/projects] Done => total inserted %d => %s",total_inserted,repo_name)
+    logging.info("[deadbird/projects] Done => total inserted %d => %s",total_inserted,repo_name)
 
 def store_project_and_columns(conn, repo_name, pj_obj, session, handle_rate_limit_func, max_retries):
     c=conn.cursor()

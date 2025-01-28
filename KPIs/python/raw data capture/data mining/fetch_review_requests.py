@@ -30,22 +30,22 @@ def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20
                 if resp.status_code==200:
                     return (resp,True)
                 elif resp.status_code in (403,429,500,502,503,504):
-                    logging.warning("[ossmining/reviewreq] HTTP %d => attempt %d/%d => retry => %s",
+                    logging.warning("[deadbird/reviewreq] HTTP %d => attempt %d/%d => retry => %s",
                                     resp.status_code,attempt,max_retries,url)
                     time.sleep(5)
                 else:
-                    logging.warning("[ossmining/reviewreq] HTTP %d => attempt %d => break => %s",
+                    logging.warning("[deadbird/reviewreq] HTTP %d => attempt %d => break => %s",
                                     resp.status_code,attempt,url)
                     return (resp,False)
                 break
             except ConnectionError:
-                logging.warning("[ossmining/reviewreq] Connection error => local mini-retry => %s",url)
+                logging.warning("[deadbird/reviewreq] Connection error => local mini-retry => %s",url)
                 time.sleep(3)
                 local_attempt+=1
         if local_attempt>mini_retry_attempts:
-            logging.warning("[ossmining/reviewreq] Exhausted mini-retry => break => %s",url)
+            logging.warning("[deadbird/reviewreq] Exhausted mini-retry => break => %s",url)
             return (None,False)
-    logging.warning("[ossmining/reviewreq] Exceeded max_retries => give up => %s",url)
+    logging.warning("[deadbird/reviewreq] Exceeded max_retries => give up => %s",url)
     return (None,False)
 
 def list_review_requests_single_thread(conn, owner, repo, enabled,
@@ -94,19 +94,19 @@ def fetch_review_requests_for_pull(conn, repo_name, pull_num, enabled,
 
         if last_page:
             progress=(page/last_page)*100.0
-            logging.debug("[ossmining/reviewreq] PR #%d => page=%d/%d => %.3f%% => inserted %d => %s",
+            logging.debug("[deadbird/reviewreq] PR #%d => page=%d/%d => %.3f%% => inserted %d => %s",
                           pull_num,page,last_page,progress,new_count,repo_name)
             if total_items>0:
-                logging.debug("[ossmining/reviewreq] => total so far %d out of ~%d => %s",
+                logging.debug("[deadbird/reviewreq] => total so far %d out of ~%d => %s",
                               total_inserted,total_items,repo_name)
         else:
-            logging.debug("[ossmining/reviewreq] PR #%d => page=%d => inserted %d => no last_page => %s",
+            logging.debug("[deadbird/reviewreq] PR #%d => page=%d => inserted %d => no last_page => %s",
                           pull_num,page,new_count,repo_name)
 
         if len(data)<50:
             break
         page+=1
-    logging.info("[ossmining/reviewreq] PR #%d => inserted total %d => %s",pull_num,total_inserted,repo_name)
+    logging.info("[deadbird/reviewreq] PR #%d => inserted total %d => %s",pull_num,total_inserted,repo_name)
 
 def store_review_request_event(conn, repo_name, pull_num, rv_obj):
     """
