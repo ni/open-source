@@ -4,6 +4,7 @@ import logging
 import time
 import requests
 from datetime import datetime
+from robust_fetch import robust_get_page
 
 def get_last_page(resp):
     link_header = resp.headers.get("Link")
@@ -17,39 +18,6 @@ def get_last_page(resp):
             if m:
                 return int(m.group(1))
     return None
-
-def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
-    """
-    Basic approach to GET a page with re-tries for 403,429,5xx.
-    """
-    from requests.exceptions import ConnectionError
-    mini_retry_attempts=3
-    for attempt in range(1,max_retries+1):
-        local_attempt=1
-        while local_attempt<=mini_retry_attempts:
-            try:
-                resp=session.get(url, params=params)
-                handle_rate_limit_func(resp)
-                if resp.status_code==200:
-                    return (resp,True)
-                elif resp.status_code in (403,429,500,502,503,504):
-                    logging.warning("[pull_events] HTTP %d => attempt %d/%d => retry => %s",
-                                    resp.status_code, attempt, max_retries, url)
-                    time.sleep(5)
-                else:
-                    logging.warning("[pull_events] HTTP %d => attempt %d => break => %s",
-                                    resp.status_code, attempt, url)
-                    return (resp,False)
-                break
-            except ConnectionError:
-                logging.warning("[pull_events] Connection error => local mini-retry => %s",url)
-                time.sleep(3)
-                local_attempt+=1
-        if local_attempt>mini_retry_attempts:
-            logging.warning("[pull_events] Exhausted mini => break => %s",url)
-            return (None,False)
-    logging.warning("[pull_events] Exceeded max_retries => give up => %s",url)
-    return (None,False)
 
 def fetch_pull_events_for_all_pulls(conn, owner, repo, enabled,
                                     session, handle_rate_limit_func,

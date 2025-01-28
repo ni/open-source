@@ -4,6 +4,7 @@ import logging
 import time
 import requests
 from datetime import datetime
+from robust_fetch import robust_get_page
 
 from etags import get_endpoint_state, update_endpoint_state
 
@@ -19,39 +20,6 @@ def get_last_page(resp):
             if m:
                 return int(m.group(1))
     return None
-
-def robust_get_page(session, url, params, handle_rate_limit_func, max_retries=20):
-    from requests.exceptions import ConnectionError
-    mini_retry_attempts=3
-    for attempt in range(1,max_retries+1):
-        local_attempt=1
-        while local_attempt<=mini_retry_attempts:
-            try:
-                resp=session.get(url, params=params)
-                handle_rate_limit_func(resp)
-                if resp.status_code==200:
-                    return (resp,True)
-                elif resp.status_code==304:
-                    logging.info("[deadbird/issues-etag] 304 => no changes => skip new data.")
-                    return (resp,False)
-                elif resp.status_code in (403,429,500,502,503,504):
-                    logging.warning("[deadbird/issues-etag] HTTP %d => attempt %d/%d => retry => %s",
-                                    resp.status_code,attempt,max_retries,url)
-                    time.sleep(5)
-                else:
-                    logging.warning("[deadbird/issues-etag] HTTP %d => attempt %d => break => %s",
-                                    resp.status_code,attempt,url)
-                    return (resp,False)
-                break
-            except ConnectionError:
-                logging.warning("[deadbird/issues-etag] Connection error => local mini-retry => %s",url)
-                time.sleep(3)
-                local_attempt+=1
-        if local_attempt>mini_retry_attempts:
-            logging.warning("[deadbird/issues-etag] Exhausted mini => break => %s",url)
-            return (None,False)
-    logging.warning("[deadbird/issues-etag] Exceeded max_retries => give up => %s",url)
-    return (None,False)
 
 def list_issues_single_thread(conn, owner, repo, enabled,
                               session, handle_rate_limit_func,
