@@ -202,7 +202,7 @@ def main():
                                  max_retries,
                                  use_etags=(use_etags and not use_old))
 
-        list_stars_single_thread(conn, owner, repo, enabled, baseline_dt,
+        list_stars_single_thread(conn, owner, repo, enabled,
                                  session, handle_rate_limit_func,
                                  max_retries,
                                  use_etags=(use_etags and not use_old))
