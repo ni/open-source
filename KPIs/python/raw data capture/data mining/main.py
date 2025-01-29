@@ -155,7 +155,7 @@ def main():
 
     # advanced endpoints
     from fetch_commits import list_commits_single_thread
-    from fetch_code_scanning import list_code_scanning_alerts_single_thread
+ #   from fetch_code_scanning import list_code_scanning_alerts_single_thread
     from fetch_releases import list_releases_single_thread
     from fetch_labels import fetch_labels_single_thread
     from fetch_milestones import list_milestones_single_thread
@@ -260,10 +260,10 @@ def main():
                                    max_retries,
                                    use_etags=(use_etags and not use_old))
 
-        list_code_scanning_alerts_single_thread(conn, owner, repo, enabled,
-                                                session, handle_rate_limit_func,
-                                                max_retries,
-                                                use_etags=(use_etags and not use_old))
+ #       list_code_scanning_alerts_single_thread(conn, owner, repo, enabled,
+ #                                               session, handle_rate_limit_func,
+ #                                               max_retries,
+ #                                               use_etags=(use_etags and not use_old))
 
         list_releases_single_thread(conn, owner, repo, enabled,
                                     session, handle_rate_limit_func,
