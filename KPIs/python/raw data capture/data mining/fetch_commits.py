@@ -62,7 +62,7 @@ def list_commits_single_thread(conn, owner, repo, enabled, baseline_dt,
         # let's let last_updated override baseline_dt for incremental
         final_since=max_updated if max_updated else baseline_dt
         if final_since:
-            params["since"]=final_since.strftime("%Y-%m-%dT%H:%M:%SZ")
+            params["until"]=final_since.strftime("%Y-%m-%dT%H:%M:%SZ")
 
         if etag_val:
             session.headers["If-None-Match"]=etag_val
