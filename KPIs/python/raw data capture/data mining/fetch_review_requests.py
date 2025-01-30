@@ -4,148 +4,169 @@ import logging
 import time
 import requests
 from datetime import datetime
-from robust_fetch import robust_get_page
 
-def get_last_page(resp):
-    link_header=resp.headers.get("Link")
-    if not link_header:
-        return None
-    parts=link_header.split(',')
-    import re
-    for p in parts:
-        if 'rel="last"' in p:
-            m=re.search(r'[?&]page=(\d+)', p)
-            if m:
-                return int(m.group(1))
-    return None
+from robust_fetch import robust_get_page
 
 def list_review_requests_single_thread(conn, owner, repo, enabled,
                                        session, handle_rate_limit_func,
                                        max_retries):
-    if enabled==0:
-        logging.info("Repo %s/%s => disabled => skip specialized review requests",owner,repo)
+    """
+    For each known pull_number => fetch “review requested” details
+    from your chosen endpoint. We'll show a generic approach:
+    - Possibly use GET /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers
+    - Or parse special events from the pull’s timeline if you prefer
+    """
+    if enabled == 0:
+        logging.info("[deadbird/reviewreq] %s/%s => disabled => skip", owner, repo)
         return
-    repo_name=f"{owner}/{repo}"
-    # for each known pull => we do /pulls/{pull_number}/reviews
+
+    repo_name = f"{owner}/{repo}"
+
+    # 1) find all pulls from DB
     c=conn.cursor()
-    c.execute("SELECT pull_number FROM pulls WHERE repo_name=%s",(repo_name,))
-    pull_rows=c.fetchall()
+    c.execute("""
+      SELECT pull_number
+      FROM pulls
+      WHERE repo_name=%s
+      ORDER BY pull_number ASC
+    """,(repo_name,))
+    pull_rows = c.fetchall()
     c.close()
 
-    for (pull_num,) in pull_rows:
-        fetch_review_requests_for_pull(conn, repo_name, pull_num, enabled,
-                                       session, handle_rate_limit_func, max_retries)
-
-def fetch_review_requests_for_pull(conn, repo_name, pull_num, enabled,
-                                   session, handle_rate_limit_func, max_retries):
-    if enabled==0:
+    if not pull_rows:
+        logging.info("[deadbird/reviewreq] no pulls => skip => %s", repo_name)
         return
+
+    logging.info("[deadbird/reviewreq] => listing pulls => then fetch review requests => %s", repo_name)
+
+    # Suppose we fetch from a hypothetical approach:
+    # for each pull => GET /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers
+    # We'll do a page=1 approach if needed, though typically it might not have pages.
+    total_count=0
+
+    for (pull_num,) in pull_rows:
+        inserted_for_this_pr = fetch_review_requests_for_pull(conn, repo_name, pull_num,
+                                                              enabled,
+                                                              session,
+                                                              handle_rate_limit_func,
+                                                              max_retries)
+        total_count += inserted_for_this_pr
+
+    logging.info("[deadbird/reviewreq] => done => inserted total %d => %s", total_count, repo_name)
+
+
+def fetch_review_requests_for_pull(conn, repo_name, pull_num,
+                                   enabled,
+                                   session, handle_rate_limit_func,
+                                   max_retries):
+    """
+    Actually fetch the "review requested" data for one PR. 
+    For demonstration, we'll do a single GET (no pages) 
+    => GET /repos/{owner}/{repo}/pulls/{pull_num}/requested_reviewers
+    Then we store them. If no data => inserted=0
+    """
     page=1
-    last_page=None
     total_inserted=0
+
+    owner_repo = repo_name.split("/",1)
+    owner = owner_repo[0]
+    repo = owner_repo[1]
+
     while True:
-        url=f"https://api.github.com/repos/{repo_name}/pulls/{pull_num}/reviews"
-        params={"page":page,"per_page":50}
-        (resp,success)=robust_get_page(session,url,params,handle_rate_limit_func,max_retries)
+        url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pull_num}/requested_reviewers"
+        params = {"page":page,"per_page":50}
+        (resp, success) = robust_get_page(session, url, params,
+                                          handle_rate_limit_func, max_retries,
+                                          endpoint="review_requests")
         if not success or not resp:
             break
         data=resp.json()
         if not data:
             break
-        if last_page is None:
-            last_page=get_last_page(resp)
-        total_items=0
-        if last_page:
-            total_items=last_page*50
-        new_count=0
-        for rv in data:
-            if store_review_request_event(conn,repo_name,pull_num,rv):
-                new_count+=1
-        total_inserted+=new_count
 
-        if last_page:
-            progress=(page/last_page)*100.0
-            logging.debug("[deadbird/reviewreq] PR #%d => page=%d/%d => %.3f%% => inserted %d => %s",
-                          pull_num,page,last_page,progress,new_count,repo_name)
-            if total_items>0:
-                logging.debug("[deadbird/reviewreq] => total so far %d out of ~%d => %s",
-                              total_inserted,total_items,repo_name)
-        else:
-            logging.debug("[deadbird/reviewreq] PR #%d => page=%d => inserted %d => no last_page => %s",
-                          pull_num,page,new_count,repo_name)
+        # 'data' might have "users" (requested reviewers) or "teams"
+        users_list = data.get("users",[])
+        teams_list = data.get("teams",[])
 
-        if len(data)<50:
+        # We'll store a "review request" for each user
+        for user_obj in users_list:
+            # each user => store an event row
+            # you might treat "requested_reviewer" as user_obj
+            if store_review_request_event(conn, repo_name, pull_num, {"requested_reviewer":user_obj}):
+                total_inserted+=1
+
+        # likewise for teams
+        for team_obj in teams_list:
+            # store if you want
+            if store_review_request_event(conn, repo_name, pull_num, {"requested_team":team_obj}):
+                total_inserted+=1
+
+        if len(users_list)<50 and len(teams_list)<50:
             break
         page+=1
-    logging.info("[deadbird/reviewreq] PR #%d => inserted total %d => %s",pull_num,total_inserted,repo_name)
+
+    logging.debug("[deadbird/reviewreq] PR #%d => inserted total %d => %s",pull_num,total_inserted,repo_name)
+    return total_inserted
+
 
 def store_review_request_event(conn, repo_name, pull_num, rv_obj):
     """
-    We store them in review_request_events if it indicates “review requested.”
-    Actually, GitHub's /reviews endpoint might just show actual reviews. 
-    If you want 'review_requested' events specifically, we might parse the timeline. 
-    For demonstration, we store them all here as specialized events.
+    Insert or update the table that records these "review requested" items.
+    We'll do a single approach: generate an 'event_id' or use a random approach.
     """
     c=conn.cursor()
-    request_event_id=rv_obj["id"]
+    import json
+
+    # create a pseudo ID (though GitHub might not have a direct event_id for this)
+    # or generate a random big int
+    import random
+    request_event_id = random.getrandbits(48)
+
+    # Check if we already have something for that ID or a combination
+    # We'll do a simple approach for demonstration
     c.execute("""
-      SELECT request_event_id FROM review_request_events
-      WHERE repo_name=%s AND pull_number=%s AND request_event_id=%s
+      SELECT id FROM pull_review_requests
+      WHERE repo_name=%s AND pull_number=%s AND event_id=%s
     """,(repo_name,pull_num,request_event_id))
-    row=c.fetchone()
+    row = c.fetchone()
     if row:
-        update_review_request_event(c,conn,repo_name,pull_num,request_event_id,rv_obj)
         c.close()
         return False
     else:
-        insert_review_request_event(c,conn,repo_name,pull_num,request_event_id,rv_obj)
+        # We'll do a function to finalize insert
+        update_review_request_event(c, conn, repo_name, pull_num, request_event_id, rv_obj)
         c.close()
         return True
 
-def insert_review_request_event(c, conn, repo_name, pull_num, request_event_id, rv_obj):
-    import json
-    # parse who was requested_reviewer, created_at, etc.
-    created_str=rv_obj.get("submitted_at")
-    created_dt=None
-    if created_str:
-        created_dt=datetime.strptime(created_str,"%Y-%m-%dT%H:%M:%SZ")
-
-    requested_reviewer=""
-    requested_team=""
-    # 'user' field might be the reviewer
-    user=rv_obj.get("user",{})
-    if user:
-        requested_reviewer=user.get("login","")
-
-    raw_str=json.dumps(rv_obj, ensure_ascii=False)
-    sql="""
-    INSERT INTO review_request_events
-      (repo_name, pull_number, request_event_id,
-       created_at, requested_reviewer, requested_team, raw_json)
-    VALUES
-      (%s,%s,%s,%s,%s,%s,%s)
-    """
-    c.execute(sql,(repo_name,pull_num,request_event_id,
-                   created_dt,requested_reviewer,requested_team,raw_str))
-    conn.commit()
 
 def update_review_request_event(c, conn, repo_name, pull_num, request_event_id, rv_obj):
-    import json
-    created_str=rv_obj.get("submitted_at")
-    created_dt=None
-    if created_str:
-        created_dt=datetime.strptime(created_str,"%Y-%m-%dT%H:%M:%SZ")
-    user=rv_obj.get("user",{})
-    requested_reviewer=user.get("login","")
-    requested_team=""
-
-    raw_str=json.dumps(rv_obj, ensure_ascii=False)
-    sql="""
-    UPDATE review_request_events
-    SET created_at=%s, requested_reviewer=%s,
-        requested_team=%s, raw_json=%s
-    WHERE repo_name=%s AND pull_number=%s AND request_event_id=%s
     """
-    c.execute(sql,(created_dt,requested_reviewer,requested_team,raw_str,
-                   repo_name,pull_num,request_event_id))
+    Actually do the insert. The fix is here:
+    Avoid 'NoneType' object has no attribute 'get' if 'requested_reviewer' is None.
+    """
+    # We parse the user
+    user = rv_obj.get("requested_reviewer") or {}
+    requested_reviewer = user.get("login","")  # if 'user' is None => we get {}
+
+    # If there's a requested_team as well
+    team_obj = rv_obj.get("requested_team") or {}
+    requested_team = team_obj.get("slug","")
+
+    raw_str = None
+    try:
+        import json
+        raw_str = json.dumps(rv_obj, ensure_ascii=False)
+    except:
+        raw_str = None
+
+    # We'll do a created_at, if we want a timestamp
+    now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+    c.execute("""
+      INSERT INTO pull_review_requests
+        (repo_name, pull_number, event_id, requested_reviewer, requested_team, created_at, raw_json)
+      VALUES
+        (%s,%s,%s,%s,%s,%s,%s)
+    """,(repo_name, pull_num, request_event_id, requested_reviewer, requested_team, now_str, raw_str))
+
     conn.commit()
