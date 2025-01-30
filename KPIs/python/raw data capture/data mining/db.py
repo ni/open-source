@@ -410,7 +410,19 @@ def create_tables(conn):
       UNIQUE KEY (owner, repo, endpoint_name)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
-
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS pull_review_requests (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      repo_name VARCHAR(255) NOT NULL,
+      pull_number INT NOT NULL,
+      event_id BIGINT UNSIGNED NOT NULL,
+      requested_reviewer VARCHAR(255) DEFAULT '',
+      requested_team VARCHAR(255) DEFAULT '',
+      created_at DATETIME,
+      raw_json JSON,
+      UNIQUE KEY (repo_name, pull_number, event_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    """)
     conn.commit()
     c.close()
     logging.info("[deadbird] All tables created or verified (advanced).")
