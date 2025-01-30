@@ -52,7 +52,7 @@ def main():
 #        "tensorflow/tensorflow",
 #        "epics/reconos",
 #        "openfoam/OpenFOAM-dev",
-#        "FreeCAD/freecad",
+        "freecad/freecad",
 #        "fritzing/fritzing-app",
         "qucs/qucs",
         "openscad/openscad",
