@@ -46,17 +46,16 @@ def main():
 
     # BFS Repos
     all_repos= [
-        "dotnet/core",
+#        "ni/labview-icon-editor",
+#        "dotnet/core",
 #        "facebook/react",
 #        "tensorflow/tensorflow",
-#        "EPICS/reconos",
-#        "OpenFOAM/OpenFOAM-dev",
+#        "epics/reconos",
+#        "openfoam/OpenFOAM-dev",
 #        "FreeCAD/freecad",
 #        "fritzing/fritzing-app",
-#        "qucs/qucs",
-#        "OpenSCAD/openscad",
-#        "Node-RED/nodered",
-#        "OpenPLC/OpenPLC-IDE",
+        "qucs/qucs",
+        "openscad/openscad",
 #        "Eclipse/mraa",
     ]
 
@@ -71,7 +70,7 @@ def main():
         od= find_oldest_date_for_repo(r)
         if od is None:
             # no data fallback
-            od= datetime(2100,1,1)
+            od= datetime(2007,1,1)
         od= od+ timedelta(days=GLOBAL_OFFSET)
         oldest_dates[r]= od
 
