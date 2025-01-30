@@ -46,9 +46,9 @@ def main():
 
     # BFS Repos
     all_repos= [
-        "ni/labview-icon-editor",
-        "dotnet/core",
-        "facebook/react",
+#        "ni/labview-icon-editor",
+#        "dotnet/core",
+#        "facebook/react",
 #        "tensorflow/tensorflow",
 #        "epics/reconos",
 #        "openfoam/OpenFOAM-dev",
