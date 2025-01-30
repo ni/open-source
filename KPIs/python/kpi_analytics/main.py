@@ -49,7 +49,7 @@ def main():
         "ni/labview-icon-editor",
         "dotnet/core",
         "facebook/react",
-        "tensorflow/tensorflow",
+#        "tensorflow/tensorflow",
 #        "epics/reconos",
 #        "openfoam/OpenFOAM-dev",
         "freecad/freecad",
