@@ -46,7 +46,7 @@ def main():
 
     # BFS Repos
     all_repos= [
-        "ni/labview-icon-editor",
+        "ni/actor-framework",
         "freecad/freecad",
         "fritzing/fritzing-app",
         "qucs/qucs",
