@@ -66,8 +66,8 @@ TSC members influence the contributor experience by:
 - Each approved issue is assigned a **T-shirt size** (S/M/L), which maps directly to rerecertification credit.
 - TSC input ensures the issue is technically realistic, well-scoped, and contributor-friendly.
 
-### [BDFL](https://en.wikipedia.org/wiki/Benevolent_dictator_for_life) Oversight
-- NI’s Program Manager ([BDFL](https://en.wikipedia.org/wiki/Benevolent_dictator_for_life)) may override TSC consensus in rare cases.
+### BDFL Oversight
+- NI’s Program Manager (BDFL) may override TSC consensus in rare cases.
 - Overrides are logged and justified to maintain transparency.
 
 ---
@@ -116,7 +116,7 @@ Any other public-facing use requires explicit permission.
 **A:** By giving your technical opinion in GitHub comments or in meetings. Insight = vote.
 
 **Q5: Why is my vote advisory only?**  
-**A:** The Program Manager ([BDFL](https://en.wikipedia.org/wiki/Benevolent_dictator_for_life)) ensures final alignment with NI’s roadmap and contributor experience goals. All overrides are documented transparently.
+**A:** The Program Manager (BDFL) ensures final alignment with NI’s roadmap and contributor experience goals. All overrides are documented transparently.
 
 **Q6: How does this tie into recertification?**  
 **A:** Your decisions directly shape which issues earn contributors rerecertification credit. T-shirt sizing defines contribution effort and maps to credit.
