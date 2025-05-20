@@ -1,9 +1,6 @@
-> **⚠️ Note:** This document is a living resource intended to support internal process definition and governance clarity.  
-> It serves as an upstream reference for related documentation and may contain detailed content that is provisional or currently under active iteration.
-
 # CONTRIBUTING.md – NI Open-Source Program
 
-Welcome! This document explains how to contribute to a GitHub repository governed by NI’s Open-Source Program.
+This document explains how to contribute to a GitHub repository governed by NI’s Open-Source Program.
 
 ## 🧭 Ways to Contribute
 
@@ -21,6 +18,7 @@ Welcome! This document explains how to contribute to a GitHub repository governe
 
 ## 🎓 Recertification
 
+- Only repos [actively governed by the program](https://github.com/topics/ni-open-source)
 - Available information 
 - Only for issues approved and sized by SteerCo
 - Metadata must be traceable
@@ -44,5 +42,5 @@ Public credit is opt-in. You choose what’s shared.
 
 ## ❓ Questions?
 
-Use GitHub Discussions or join our Discord to connect.
+Use GitHub Discussions from **[Repos Governed By The Program](https://github.com/topics/ni-open-source)** or [join our Discord](https://discord.gg/q4d3ggrFVA) to connect.
 

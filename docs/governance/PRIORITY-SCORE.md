@@ -1,6 +1,3 @@
-> **⚠️ Note:** This document is a living resource intended to support internal process definition and governance clarity.  
-> It serves as an upstream reference for related documentation and may contain detailed content that is provisional or currently under active iteration.
-
 # PRIORITY-SCORE.md – NI Open-Source Program
 
 This file explains how repositories are prioritized for support.
@@ -33,10 +30,10 @@ NI cannot override interest.
 
 ## 🛠 How to Raise a Score
 
-- Apply to a SteerCo
+- [Apply to a SteerCo](https://www.linkedin.com/feed/update/urn:li:activity:7328255573638950923/)
 - Be accepted
 - Your repo gets +1
 
 ## 📬 Questions?
 
-Ask the Core Team or PM via GitHub or Discord.
+Ask the PM via [Discord](https://discord.gg/q4d3ggrFVA).
