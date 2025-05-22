@@ -14,7 +14,7 @@ The SteerCo exists to provide **volunteer leadership and domain expertise** for 
 - Are recognized publicly for their participation
 
 > ❗ **SteerCo members do not vote on whether a repository is prioritized or launched.**  
-> Their presence and engagement increase eligibility by signaling strong leadership availability, as defined in `PRIORITY-SCORE.md`.
+> Their presence and engagement increase eligibility by signaling strong leadership availability, as defined in [`PRIORITY-SCORE.md`](https://github.com/ni/open-source/blob/main/docs/governance/PRIORITY-SCORE.md).
 
 ---
 
