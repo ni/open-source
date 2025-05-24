@@ -87,3 +87,15 @@ SteerCo membership:
 |------------|----------------------------------------------|
 | 2025-05-22 | Added meeting structure, clarified role boundaries |
 | 2025-04-XX | Initial version                              |
+
+## §8. Minimum Viable SteerCo
+
+To be considered valid for priority scoring, a SteerCo must meet these minimum formation criteria:
+
+- At least **3 active members**
+- At least **2 contributors must not share employer affiliation**
+- At least **1 member must have contributed to testing, CI, or public documentation**
+
+These requirements help ensure the SteerCo represents diverse, independent leadership and practical engagement with the codebase.
+
+The Program Manager may approve exceptions in documented cases of ecosystem constraints (e.g., domain-specific tools).
