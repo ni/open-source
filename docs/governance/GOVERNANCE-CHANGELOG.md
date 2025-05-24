@@ -7,6 +7,18 @@
 > Each entry includes the date, a summary of changes, and rationale where applicable.
 
 ---
+### 📅 2025-05-23 – Defined Minimum Viable SteerCo Criteria
+
+**Summary:**  
+Added formal minimum membership and diversity requirements for SteerCo validation in priority scoring.
+
+**New Requirements:**
+- 3 members minimum
+- 2 employers minimum
+- 1 must contribute to infra, testing, or documentation
+
+**Impacted File:**  
+- `STEERCO-GUIDELINES.md` – added §8: Minimum Viable SteerCo
 
 ## 📅 2025-05-22 – Governance Framework Refresh
 
@@ -67,3 +79,5 @@ Future changes must be:
 
 ## 📁 Changelog Started:
 2025-05-22
+
+
