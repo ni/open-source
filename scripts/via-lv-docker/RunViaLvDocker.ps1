@@ -124,6 +124,7 @@ Write-Information "VI Analyzer exit code: $viaExitCode" -InformationAction Conti
 # Parse VI Analyzer report
 if (Test-Path $parseReportScript) {
     Write-Information "Parsing VI Analyzer report..." -InformationAction Continue
+    chmod +x $parseReportScript
     bash $parseReportScript $viaExitCode
 }
 
