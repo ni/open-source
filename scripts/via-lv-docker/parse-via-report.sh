@@ -1,6 +1,17 @@
 #!/bin/bash
-set -e
+set +e  # Don't exit on errors
 VIA_EXIT_CODE="${1:-0}"
+
+echo "DEBUG: Current directory: $(pwd)"
+echo "DEBUG: Looking for vi-analyzer-report.htm"
+ls -la vi-analyzer-report.htm 2>&1 || echo "DEBUG: File not found in current directory"
+
+if [ ! -f "vi-analyzer-report.htm" ]; then
+    echo "No VI Analyzer report found"
+    echo "DEBUG: Files in current directory:"
+    ls -la
+    exit $VIA_EXIT_CODE
+fi
 
 if [ ! -f "vi-analyzer-report.htm" ]; then
     echo "No VI Analyzer report found"
