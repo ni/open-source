@@ -610,6 +610,51 @@
       }
     }
   },
+  "Invoke-ViaLvDocker": {
+    "description": "Runs VI Analyzer tests using LabVIEW Docker container. ConfigPath: Path to VI Analyzer configuration file (.viancfg) or LabVIEW files (.vi, .ctl, .llb). If empty, generates from changed files. TemplatePath: Path to .viancfg template (required when generating config dynamically). BaseBranch: Branch to compare against for changed files (used when generating config). LabviewVersion: LabVIEW Docker image version tag. DockerImage: Full Docker image name. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
+    "parameters": {
+      "BaseBranch": {
+        "type": "string",
+        "required": false,
+        "default": "origin/develop",
+        "description": "Branch to compare against for changed files (used when generating config)"
+      },
+      "ConfigPath": {
+        "type": "string",
+        "required": false,
+        "default": "",
+        "description": "Path to VI Analyzer configuration file ("
+      },
+      "DockerImage": {
+        "type": "string",
+        "required": false,
+        "default": "nationalinstruments/labview",
+        "description": "Full Docker image name"
+      },
+      "DryRun": {
+        "type": "boolean",
+        "required": false,
+        "description": "If set, prints the command instead of executing it"
+      },
+      "gcliPath": {
+        "type": "string",
+        "required": false,
+        "description": "Optional path prepended to PATH for locating the g CLI"
+      },
+      "LabviewVersion": {
+        "type": "string",
+        "required": false,
+        "default": "2026q1-linux",
+        "description": "LabVIEW Docker image version tag"
+      },
+      "TemplatePath": {
+        "type": "string",
+        "required": false,
+        "default": "",
+        "description": "Path to"
+      }
+    }
+  },
   "Normalize-RelativePath": {
     "description": "Normalizes a RelativePath value against an optional base directory. RelativePath: Path to normalize. BaseDirectory: Directory used to resolve the relative path. Defaults to the current location.",
     "parameters": {

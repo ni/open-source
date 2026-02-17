@@ -1,0 +1,60 @@
+name: 'Run VI Analyzer with LabVIEW Container'
+description: 'Execute LabVIEW VI Analyzer tests using Docker container and parse results'
+
+inputs:
+  config-path:
+    description: 'Path to VI Analyzer configuration file (.viancfg) or LabVIEW files (.vi, .ctl, .llb)'
+    required: false
+    default: ''
+  template-path:
+    description: 'Path to .viancfg template (required to generate config file dynamically)'
+    required: false
+    default: ''
+  base-branch:
+    description: 'Branch to compare against for changed files (used when generating config)'
+    required: false
+    default: 'origin/develop'
+  labview-version:
+    description: 'LabVIEW Docker image version tag'
+    required: false
+    default: '2026q1-linux'
+  docker-image:
+    description: 'Full Docker image name'
+    required: false
+    default: 'nationalinstruments/labview'
+  working_directory:
+    description: 'Working directory where the action will run.'
+    required: false
+  log_level:
+    description: 'Verbosity level (ERROR|WARN|INFO|DEBUG).'
+    default: 'INFO'
+    required: false
+  dry_run:
+    description: 'If true, simulate the action without side effects.'
+    default: false
+    required: false
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Dispatch via-lv-docker
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $args = @{
+          ConfigPath     = '${{ inputs.config_path }}'
+          TemplatePath   = '${{ inputs.template_path }}'
+          BaseBranch     = '${{ inputs.base_branch }}'
+          LabviewVersion = '${{ inputs.labview_version }}'
+          DockerImage    = '${{ inputs.docker_image }}'
+        }
+        $params = @{
+          ActionName = 'via-lv-docker'
+          Args       = $args
+          LogLevel   = '${{ inputs.log_level }}'
+        }
+        if ('${{ inputs.dry_run }}' -eq 'true') { $params['DryRun'] = $true }
+        if ('${{ inputs.working_directory }}') { $params['WorkingDirectory'] = '${{ inputs.working_directory }}' }
+        $script = Join-Path $env:GITHUB_ACTION_PATH '..' 'actions' 'common-dispatch.ps1'
+        & $script @params
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
