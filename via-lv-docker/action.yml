@@ -2,23 +2,23 @@ name: 'Run VI Analyzer with LabVIEW Container'
 description: 'Execute LabVIEW VI Analyzer tests using Docker container and parse results'
 
 inputs:
-  config-path:
+  config_path:
     description: 'Path to VI Analyzer configuration file (.viancfg) or LabVIEW files (.vi, .ctl, .llb)'
     required: false
     default: ''
-  template-path:
+  template_path:
     description: 'Path to .viancfg template (required to generate config file dynamically)'
     required: false
     default: ''
-  base-branch:
+  base_branch:
     description: 'Branch to compare against for changed files (used when generating config)'
     required: false
     default: 'origin/develop'
-  labview-version:
+  labview_version:
     description: 'LabVIEW Docker image version tag'
     required: false
     default: '2026q1-linux'
-  docker-image:
+  docker_image:
     description: 'Full Docker image name'
     required: false
     default: 'nationalinstruments/labview'
