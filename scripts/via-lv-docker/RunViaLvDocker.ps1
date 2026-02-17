@@ -50,6 +50,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# Save the original working directory
+$originalLocation = Get-Location
+
 # Get the path to the bash scripts
 $viaDockerPath = $PSScriptRoot
 $generateScript = Join-Path $viaDockerPath 'generate_viancfg.sh'
@@ -124,8 +127,14 @@ Write-Information "VI Analyzer exit code: $viaExitCode" -InformationAction Conti
 # Parse VI Analyzer report
 if (Test-Path $parseReportScript) {
     Write-Information "Parsing VI Analyzer report..." -InformationAction Continue
-    chmod +x $parseReportScript
-    bash $parseReportScript $viaExitCode
+    Push-Location $originalLocation
+    try {
+        bash $parseReportScript $viaExitCode
+    } finally {
+        Pop-Location
+    }
+} else {
+    Write-Warning "Report parsing script not found: $parseReportScript. Skipping report parsing."
 }
 
 # Exit with VI Analyzer's exit code
