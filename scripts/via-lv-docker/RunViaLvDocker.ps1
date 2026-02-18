@@ -125,11 +125,22 @@ $viaExitCode = $LASTEXITCODE
 Write-Information "VI Analyzer exit code: $viaExitCode" -InformationAction Continue
 
 # Parse VI Analyzer report
+Write-Information "Parsing VI Analyzer report..." -InformationAction Continue
+Write-Information "DEBUG: parseReportScript = $parseReportScript" -InformationAction Continue
+Write-Information "DEBUG: Script exists? $(Test-Path $parseReportScript)" -InformationAction Continue
+Write-Information "DEBUG: Current location before push: $(Get-Location)" -InformationAction Continue
+Write-Information "DEBUG: Original location: $originalLocation" -InformationAction Continue
+
 if (Test-Path $parseReportScript) {
-    Write-Information "Parsing VI Analyzer report..." -InformationAction Continue
     Push-Location $originalLocation
     try {
-        bash $parseReportScript $viaExitCode
+        Write-Information "DEBUG: Current location after push: $(Get-Location)" -InformationAction Continue
+        Write-Information "DEBUG: Report file exists? $(Test-Path 'vi-analyzer-report.htm')" -InformationAction Continue
+        
+        # Try running with full path
+        & bash $parseReportScript $viaExitCode
+        
+        Write-Information "DEBUG: Parse script exit code: $LASTEXITCODE" -InformationAction Continue
     } finally {
         Pop-Location
     }
