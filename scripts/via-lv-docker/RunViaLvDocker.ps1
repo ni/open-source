@@ -137,9 +137,12 @@ if (Test-Path $parseReportScript) {
         Write-Information "DEBUG: Current location after push: $(Get-Location)" -InformationAction Continue
         Write-Information "DEBUG: Report file exists? $(Test-Path 'vi-analyzer-report.htm')" -InformationAction Continue
         
-        $ErrorActionPreference = 'Continue'
-        & bash $parseReportScript $viaExitCode
-        $ErrorActionPreference = 'Stop'
+        try {
+            & bash $parseReportScript $viaExitCode 2>&1 | Write-Information -InformationAction Continue
+        } catch {
+            # Parse script failed, but we don't care - we want VI Analyzer's exit code
+            Write-Warning "Parse script threw an error (ignoring): $_"
+        }
         
         Write-Information "DEBUG: Parse script exit code: $LASTEXITCODE" -InformationAction Continue
     } finally {
