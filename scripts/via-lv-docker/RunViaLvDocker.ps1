@@ -89,6 +89,11 @@ if ($shouldGenerate) {
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to generate VI Analyzer config (exit code: $LASTEXITCODE)"
     }
+
+    if (-not (Test-Path $configToUse)) {
+        Write-Information "No LabVIEW files changed. Skipping VI Analyzer tests." -InformationAction Continue
+        exit 0
+    }
 }
 
 # Validate config exists
