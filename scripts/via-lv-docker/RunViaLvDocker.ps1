@@ -50,9 +50,6 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-# Save the original working directory
-$originalLocation = Get-Location
-
 # Get the path to the bash scripts
 $viaDockerPath = $PSScriptRoot
 $generateScript = Join-Path $viaDockerPath 'generate_viancfg.sh'
@@ -125,32 +122,12 @@ $viaExitCode = $LASTEXITCODE
 Write-Information "VI Analyzer exit code: $viaExitCode" -InformationAction Continue
 
 # Parse VI Analyzer report
-Write-Information "Parsing VI Analyzer report..." -InformationAction Continue
-Write-Information "DEBUG: parseReportScript = $parseReportScript" -InformationAction Continue
-Write-Information "DEBUG: Script exists? $(Test-Path $parseReportScript)" -InformationAction Continue
-Write-Information "DEBUG: Current location before push: $(Get-Location)" -InformationAction Continue
-Write-Information "DEBUG: Original location: $originalLocation" -InformationAction Continue
-
 if (Test-Path $parseReportScript) {
-    Push-Location $originalLocation
-    try {
-        Write-Information "DEBUG: Current location after push: $(Get-Location)" -InformationAction Continue
-        Write-Information "DEBUG: Report file exists? $(Test-Path 'vi-analyzer-report.htm')" -InformationAction Continue
-        
-        try {
-            & bash $parseReportScript $viaExitCode 2>&1 | Write-Information -InformationAction Continue
-        } catch {
-            # Parse script failed, but we don't want to fail the whole action just because of report parsing issues
-            Write-Warning "Parse script threw an error (ignoring): $_"
-        }
-        
-        Write-Information "DEBUG: Parse script exit code: $LASTEXITCODE" -InformationAction Continue
-    } finally {
-        Pop-Location
-    }
+    Write-Information "Parsing VI Analyzer report..." -InformationAction Continue
+    & bash $parseReportScript $viaExitCode 2>&1 | Write-Information -InformationAction Continue
 } else {
     Write-Warning "Report parsing script not found: $parseReportScript. Skipping report parsing."
 }
 
 # Exit with VI Analyzer's exit code
-return $viaExitCode
+exit $viaExitCode
