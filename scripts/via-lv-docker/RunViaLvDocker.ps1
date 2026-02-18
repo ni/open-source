@@ -137,8 +137,9 @@ if (Test-Path $parseReportScript) {
         Write-Information "DEBUG: Current location after push: $(Get-Location)" -InformationAction Continue
         Write-Information "DEBUG: Report file exists? $(Test-Path 'vi-analyzer-report.htm')" -InformationAction Continue
         
-        # Try running with full path
+        $ErrorActionPreference = 'Continue'
         & bash $parseReportScript $viaExitCode
+        $ErrorActionPreference = 'Stop'
         
         Write-Information "DEBUG: Parse script exit code: $LASTEXITCODE" -InformationAction Continue
     } finally {
