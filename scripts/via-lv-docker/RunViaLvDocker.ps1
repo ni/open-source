@@ -140,7 +140,7 @@ if (Test-Path $parseReportScript) {
         try {
             & bash $parseReportScript $viaExitCode 2>&1 | Write-Information -InformationAction Continue
         } catch {
-            # Parse script failed, but we don't care - we want VI Analyzer's exit code
+            # Parse script failed, but we don't want to fail the whole action just because of report parsing issues
             Write-Warning "Parse script threw an error (ignoring): $_"
         }
         
@@ -153,4 +153,4 @@ if (Test-Path $parseReportScript) {
 }
 
 # Exit with VI Analyzer's exit code
-exit $viaExitCode
+return $viaExitCode
