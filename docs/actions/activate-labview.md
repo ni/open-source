@@ -32,7 +32,7 @@ Common parameters are described in [Common parameters](../common-parameters.md).
 
 ```powershell
 pwsh -File actions/Invoke-OSAction.ps1 -ActionName activate-labview -ArgsJson '{
-  "SerialNumber": "ABCD-1234-5678-90EF"
+  "SerialNumber": "XXXXXXXXX"
 }'
 ```
 
@@ -40,7 +40,7 @@ With custom package ID:
 
 ```powershell
 pwsh -File actions/Invoke-OSAction.ps1 -ActionName activate-labview -ArgsJson '{
-  "SerialNumber": "ABCD-1234-5678-90EF",
+  "SerialNumber": "XXXXXXXXX",
   "PackageID": "LabVIEW_COM_PKG 25.0300"
 }'
 ```

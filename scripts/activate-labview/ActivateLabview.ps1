@@ -13,7 +13,7 @@
   LabVIEW package ID to activate.
 
 .EXAMPLE
-  .\ActivateLabview.ps1 -SerialNumber "ABCD-1234-5678-90EF" -PackageID "LabVIEW_COM_PKG 25.0300"
+  .\ActivateLabview.ps1 -SerialNumber "XXXXXXXXX" -PackageID "LabVIEW_COM_PKG 25.0300"
 
 .NOTES
   [REQ-037] Activate LabVIEW license using serial number and package ID
