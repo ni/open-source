@@ -26,6 +26,7 @@
     'Invoke-RunPesterTests'
     'Invoke-RunUnitTests'
     'Invoke-SetDevelopmentMode'
+    'Invoke-SetupNipm'
   )
 
   PrivateData = @{

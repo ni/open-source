@@ -610,6 +610,22 @@
       }
     }
   },
+  "Invoke-SetupNipm": {
+    "description": "Installs and configures NI Package Manager (NIPM). NIPMUrl: URL to download the NI Package Manager installer. DryRun: If set, prints the command instead of executing it.",
+    "parameters": {
+      "DryRun": {
+        "type": "boolean",
+        "required": false,
+        "description": "If set, prints the command instead of executing it"
+      },
+      "NIPMUrl": {
+        "type": "string",
+        "required": false,
+        "default": "https://download.ni.com/support/nipkg/products/ni-package-manager/installers/NIPackageManager25.8.0.exe",
+        "description": "URL to download the NI Package Manager installer"
+      }
+    }
+  },
   "Normalize-RelativePath": {
     "description": "Normalizes a RelativePath value against an optional base directory. RelativePath: Path to normalize. BaseDirectory: Directory used to resolve the relative path. Defaults to the current location.",
     "parameters": {

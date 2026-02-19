@@ -1,0 +1,40 @@
+name: 'Setup NI Package Manager'
+description: 'Install and configure NI Package Manager (NIPM) for LabVIEW package management'
+inputs:
+  nipm_url:
+    description: 'URL to download the NI Package Manager installer.'
+    required: false
+    default: 'https://download.ni.com/support/nipkg/products/ni-package-manager/installers/NIPackageManager25.8.0.exe'
+  working_directory:
+    description: 'Working directory where the action will run.'
+    required: false
+  log_level:
+    description: 'Verbosity level (ERROR|WARN|INFO|DEBUG).'
+    default: 'INFO'
+    required: false
+  dry_run:
+    description: 'If true, simulate the action without side effects.'
+    default: false
+    required: false
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Dispatch setup-nipm
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $args = @{}
+        if ('${{ inputs.nipm_url }}') { $args['NIPMUrl'] = '${{ inputs.nipm_url }}' }
+        
+        $params = @{
+          ActionName = 'setup-nipm'
+          Args       = $args
+          LogLevel   = '${{ inputs.log_level }}'
+        }
+        if ('${{ inputs.dry_run }}' -eq 'true') { $params['DryRun'] = $true }
+        if ('${{ inputs.working_directory }}') { $params['WorkingDirectory'] = '${{ inputs.working_directory }}' }
+        
+        $script = Join-Path $env:GITHUB_ACTION_PATH '..' 'actions' 'common-dispatch.ps1'
+        & $script @params
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
