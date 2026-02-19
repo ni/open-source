@@ -254,6 +254,18 @@ Configures the repository for development mode. RelativePath: Normalized path to
 pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-SetDevelopmentMode -ArgsJson '{}'
 ```
 
+#### Invoke-SetupLabview
+Downloads and installs LabVIEW Community Edition from an ISO image. LabVIEWIsoUrl: URL to download the LabVIEW ISO installer. TimeoutSeconds: Maximum time in seconds to wait for installation to complete. DryRun: If set, prints the command instead of executing it.
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| DryRun | boolean | false |  | If set, prints the command instead of executing it |
+| LabVIEWIsoUrl | string | false | https://download.ni.com/support/softlib/labview/labview_development_system/2025_Q3/ni-labview-2025-community-x86_25.3.3_offline.iso | URL to download the LabVIEW ISO installer |
+| TimeoutSeconds | number | false | 2700 | Maximum time in seconds to wait for installation to complete |
+
+```powershell
+pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-SetupLabview -ArgsJson '{}'
+```
+
 #### Normalize-RelativePath
 Normalizes a RelativePath value against an optional base directory. RelativePath: Path to normalize. BaseDirectory: Directory used to resolve the relative path. Defaults to the current location.
 | Parameter | Type | Required | Default | Description |
