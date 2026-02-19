@@ -1,4 +1,25 @@
 {
+  "Invoke-ActivateLabview": {
+    "description": "Activates LabVIEW license using NI License Manager utility. SerialNumber: LabVIEW serial number for activation. PackageID: LabVIEW package ID to activate. DryRun: If set, prints the command instead of executing it.",
+    "parameters": {
+      "DryRun": {
+        "type": "boolean",
+        "required": false,
+        "description": "If set, prints the command instead of executing it"
+      },
+      "PackageID": {
+        "type": "string",
+        "required": false,
+        "default": "LabVIEW_COM_PKG 25.0300",
+        "description": "LabVIEW package ID to activate"
+      },
+      "SerialNumber": {
+        "type": "string",
+        "required": true,
+        "description": "LabVIEW serial number for activation"
+      }
+    }
+  },
   "Invoke-AddTokenToLabVIEW": {
     "description": "Adds an authentication token to a LabVIEW installation. MinimumSupportedLVVersion: Minimum LabVIEW version that the project supports. SupportedBitness: Target LabVIEW bitness (32- or 64-bit). RelativePath: Normalized path to the project root relative to the working directory. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
     "parameters": {

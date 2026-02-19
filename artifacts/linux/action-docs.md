@@ -4,6 +4,18 @@
 
 ### Dispatcher Functions
 
+#### Invoke-ActivateLabview
+Activates LabVIEW license using NI License Manager utility. SerialNumber: LabVIEW serial number for activation. PackageID: LabVIEW package ID to activate. DryRun: If set, prints the command instead of executing it.
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| DryRun | boolean | false |  | If set, prints the command instead of executing it |
+| PackageID | string | false | LabVIEW_COM_PKG 25.0300 | LabVIEW package ID to activate |
+| SerialNumber | string | true |  | LabVIEW serial number for activation |
+
+```powershell
+pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-ActivateLabview -ArgsJson '{}'
+```
+
 #### Invoke-AddTokenToLabVIEW
 Adds an authentication token to a LabVIEW installation. MinimumSupportedLVVersion: Minimum LabVIEW version that the project supports. SupportedBitness: Target LabVIEW bitness (32- or 64-bit). RelativePath: Normalized path to the project root relative to the working directory. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.
 | Parameter | Type | Required | Default | Description |
@@ -276,6 +288,15 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 ```
 
 ### Wrapper Actions
+
+#### activate-labview
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| serial_number | string | true |  | LabVIEW serial number for activation. |
+| package_id | string | false | LabVIEW_COM_PKG 25.0300 | LabVIEW package ID to activate. |
+| working_directory | string | false |  | Working directory where the action will run. |
+| log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
+| dry_run | string | false | false | If true, simulate the action without side effects. |
 
 #### add-token-to-labview
 | Name | Type | Required | Default | Description |

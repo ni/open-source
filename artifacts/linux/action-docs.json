@@ -1,6 +1,27 @@
 {
   "action": [],
   "dispatcher": {
+    "Invoke-ActivateLabview": {
+      "description": "Activates LabVIEW license using NI License Manager utility. SerialNumber: LabVIEW serial number for activation. PackageID: LabVIEW package ID to activate. DryRun: If set, prints the command instead of executing it.",
+      "parameters": {
+        "DryRun": {
+          "type": "boolean",
+          "required": false,
+          "description": "If set, prints the command instead of executing it"
+        },
+        "PackageID": {
+          "type": "string",
+          "required": false,
+          "default": "LabVIEW_COM_PKG 25.0300",
+          "description": "LabVIEW package ID to activate"
+        },
+        "SerialNumber": {
+          "type": "string",
+          "required": true,
+          "description": "LabVIEW serial number for activation"
+        }
+      }
+    },
     "Invoke-AddTokenToLabVIEW": {
       "description": "Adds an authentication token to a LabVIEW installation. MinimumSupportedLVVersion: Minimum LabVIEW version that the project supports. SupportedBitness: Target LabVIEW bitness (32- or 64-bit). RelativePath: Normalized path to the project root relative to the working directory. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
       "parameters": {
@@ -639,6 +660,43 @@
     }
   },
   "wrappers": {
+    "activate-labview": [
+      {
+        "name": "serial_number",
+        "description": "LabVIEW serial number for activation.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "package_id",
+        "description": "LabVIEW package ID to activate.",
+        "required": false,
+        "default": "LabVIEW_COM_PKG 25.0300",
+        "type": "string"
+      },
+      {
+        "name": "working_directory",
+        "description": "Working directory where the action will run.",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "log_level",
+        "description": "Verbosity level (ERROR|WARN|INFO|DEBUG).",
+        "required": false,
+        "default": "INFO",
+        "type": "string"
+      },
+      {
+        "name": "dry_run",
+        "description": "If true, simulate the action without side effects.",
+        "required": false,
+        "default": false,
+        "type": "string"
+      }
+    ],
     "add-token-to-labview": [
       {
         "name": "minimum_supported_lv_version",

@@ -36,6 +36,30 @@ function Invoke-OpenSourceActionScript {
     }
 }
 
+# Activates LabVIEW license using NI License Manager utility.
+# SerialNumber: LabVIEW serial number for activation.
+# PackageID: LabVIEW package ID to activate.
+# DryRun: If set, prints the command instead of executing it.
+function Invoke-ActivateLabview {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [string] $SerialNumber,
+        [Parameter()] [string] $PackageID = "LabVIEW_COM_PKG 25.0300",
+        [switch] $DryRun
+    )
+    Write-Information "Activating LabVIEW package $PackageID" -InformationAction Continue
+    
+    $result = Invoke-OpenSourceActionScript `
+        -ScriptSegments @('activate-labview', 'ActivateLabview.ps1') `
+        -Arguments @{
+            SerialNumber = $SerialNumber
+            PackageID = $PackageID
+        } `
+        -DryRun:$DryRun
+    
+    return $result
+}
+
 # Adds an authentication token to a LabVIEW installation.
 # MinimumSupportedLVVersion: Minimum LabVIEW version that the project supports.
 # SupportedBitness: Target LabVIEW bitness (32- or 64-bit).

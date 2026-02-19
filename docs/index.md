@@ -20,6 +20,7 @@ Open Source LabVIEW Actions unifies LabVIEW [CI/CD](glossary.md#ci-cd) scripts b
 
 | Action | Purpose |
 | --- | --- |
+| [activate-labview](actions/activate-labview.md) | Activate LabVIEW license using NI License Manager utility. |
 | [add-token-to-labview](actions/add-token-to-labview.md) | Add a custom library path token to the LabVIEW INI file so LabVIEW can locate project libraries. |
 | [apply-vipc](actions/apply-vipc.md) | Apply a VI Package Configuration (.vipc) file to a specific LabVIEW installation using g-cli. |
 | [build](actions/build.md) | Automate building the LabVIEW Icon Editor project, including cleaning, building libraries, and packaging. |
