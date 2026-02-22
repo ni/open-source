@@ -294,6 +294,34 @@
       }
     }
   },
+  "Invoke-ConfigureLabview": {
+    "description": "Configures LabVIEW settings by updating LabVIEW.ini file. LabVIEWVersion: LabVIEW version (e.g., \"2025\", \"2024\"). IniSettings: INI settings to add (multiline string or array). LabVIEWWaitSeconds: Seconds to wait for LabVIEW to generate ini file if it does not exist. DryRun: If set, prints the command instead of executing it.",
+    "parameters": {
+      "DryRun": {
+        "type": "boolean",
+        "required": false,
+        "description": "If set, prints the command instead of executing it"
+      },
+      "IniSettings": {
+        "type": "string",
+        "required": false,
+        "default": "@",
+        "description": "INI settings to add (multiline string or array)"
+      },
+      "LabVIEWVersion": {
+        "type": "string",
+        "required": false,
+        "default": "2025",
+        "description": "LabVIEW version (e"
+      },
+      "LabVIEWWaitSeconds": {
+        "type": "number",
+        "required": false,
+        "default": "50",
+        "description": "Seconds to wait for LabVIEW to generate ini file if it does not exist"
+      }
+    }
+  },
   "Invoke-GenerateReleaseNotes": {
     "description": "Generates a release notes file from the project's metadata. OutputPath: Path where the release notes should be written. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
     "parameters": {

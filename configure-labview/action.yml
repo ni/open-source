@@ -1,0 +1,53 @@
+name: 'Configure LabVIEW'
+description: 'Configure LabVIEW settings by updating LabVIEW.ini file'
+inputs:
+  labview_version:
+    description: 'LabVIEW version.'
+    required: false
+    default: '2025'
+  ini_settings:
+    description: 'INI settings to add (one per line or comma-separated).'
+    required: false
+    default: |
+      server.tcp.enabled=TRUE
+      server.tcp.access=+127.0.0.1;+localhost;+*
+      server.viscripting.ShowScriptingOperationsInEditor=TRUE
+  labview_wait_seconds:
+    description: 'Seconds to wait for LabVIEW to generate ini file if it does not exist.'
+    required: false
+    default: '50'
+  working_directory:
+    description: 'Working directory where the action will run.'
+    required: false
+  log_level:
+    description: 'Verbosity level (ERROR|WARN|INFO|DEBUG).'
+    default: 'INFO'
+    required: false
+  dry_run:
+    description: 'If true, simulate the action without side effects.'
+    default: false
+    required: false
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Dispatch configure-labview
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $args = @{}
+        if ('${{ inputs.labview_version }}') { $args['LabVIEWVersion'] = '${{ inputs.labview_version }}' }
+        if ('${{ inputs.ini_settings }}') { $args['IniSettings'] = '${{ inputs.ini_settings }}' }
+        if ('${{ inputs.labview_wait_seconds }}') { $args['LabVIEWWaitSeconds'] = [int]'${{ inputs.labview_wait_seconds }}' }
+        
+        $params = @{
+          ActionName = 'configure-labview'
+          Args       = $args
+          LogLevel   = '${{ inputs.log_level }}'
+        }
+        if ('${{ inputs.dry_run }}' -eq 'true') { $params['DryRun'] = $true }
+        if ('${{ inputs.working_directory }}') { $params['WorkingDirectory'] = '${{ inputs.working_directory }}' }
+        
+        $script = Join-Path $env:GITHUB_ACTION_PATH '..' 'actions' 'common-dispatch.ps1'
+        & $script @params
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

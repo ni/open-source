@@ -249,6 +249,37 @@ function Invoke-CloseLabVIEW {
     return Invoke-OpenSourceActionScript -ScriptSegments @('close-labview','Close_LabVIEW.ps1') -Arguments $args -DryRun:$DryRun -gcliPath $gcliPath
 }
 
+# Configures LabVIEW settings by updating LabVIEW.ini file.
+# LabVIEWVersion: LabVIEW version (e.g., "2025", "2024").
+# IniSettings: INI settings to add (multiline string or array).
+# LabVIEWWaitSeconds: Seconds to wait for LabVIEW to generate ini file if it does not exist.
+# DryRun: If set, prints the command instead of executing it.
+function Invoke-ConfigureLabview {
+    [CmdletBinding()]
+    param(
+        [Parameter()] [string] $LabVIEWVersion = "2025",
+        [Parameter()] [string] $IniSettings = @"
+server.tcp.enabled=TRUE
+server.tcp.access=+127.0.0.1;+localhost;+*
+server.viscripting.ShowScriptingOperationsInEditor=TRUE
+"@,
+        [Parameter()] [int] $LabVIEWWaitSeconds = 50,
+        [switch] $DryRun
+    )
+    Write-Information "Configuring LabVIEW $LabVIEWVersion settings" -InformationAction Continue
+    
+    $result = Invoke-OpenSourceActionScript `
+        -ScriptSegments @('configure-labview', 'ConfigureLabview.ps1') `
+        -Arguments @{
+            LabVIEWVersion = $LabVIEWVersion
+            IniSettings = $IniSettings
+            LabVIEWWaitSeconds = $LabVIEWWaitSeconds
+        } `
+        -DryRun:$DryRun
+    
+    return $result
+}
+
 # Generates a release notes file from the project's metadata.
 # OutputPath: Path where the release notes should be written.
 # DryRun: If set, prints the command instead of executing it.

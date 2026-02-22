@@ -111,6 +111,19 @@ Closes any running instance of LabVIEW. MinimumSupportedLVVersion: Minimum LabVI
 pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-CloseLabVIEW -ArgsJson '{}'
 ```
 
+#### Invoke-ConfigureLabview
+Configures LabVIEW settings by updating LabVIEW.ini file. LabVIEWVersion: LabVIEW version (e.g., "2025", "2024"). IniSettings: INI settings to add (multiline string or array). LabVIEWWaitSeconds: Seconds to wait for LabVIEW to generate ini file if it does not exist. DryRun: If set, prints the command instead of executing it.
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| DryRun | boolean | false |  | If set, prints the command instead of executing it |
+| IniSettings | string | false | @ | INI settings to add (multiline string or array) |
+| LabVIEWVersion | string | false | 2025 | LabVIEW version (e |
+| LabVIEWWaitSeconds | number | false | 50 | Seconds to wait for LabVIEW to generate ini file if it does not exist |
+
+```powershell
+pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-ConfigureLabview -ArgsJson '{}'
+```
+
 #### Invoke-GenerateReleaseNotes
 Generates a release notes file from the project's metadata. OutputPath: Path where the release notes should be written. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.
 | Parameter | Type | Required | Default | Description |
@@ -362,6 +375,19 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 | minimum_supported_lv_version | string | true |  | Minimum LabVIEW version supported. |
 | supported_bitness | string | true |  | "32" or "64" bitness of LabVIEW. |
 | gcli_path | string | false |  | Optional path to the g-cli executable. |
+| working_directory | string | false |  | Working directory where the action will run. |
+| log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
+| dry_run | string | false | false | If true, simulate the action without side effects. |
+
+#### configure-labview
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| labview_version | string | false | 2025 | LabVIEW version. |
+| ini_settings | string | false | server.tcp.enabled=TRUE
+server.tcp.access=+127.0.0.1;+localhost;+*
+server.viscripting.ShowScriptingOperationsInEditor=TRUE
+ | INI settings to add (one per line or comma-separated). |
+| labview_wait_seconds | string | false | 50 | Seconds to wait for LabVIEW to generate ini file if it does not exist. |
 | working_directory | string | false |  | Working directory where the action will run. |
 | log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
 | dry_run | string | false | false | If true, simulate the action without side effects. |

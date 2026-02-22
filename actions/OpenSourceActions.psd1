@@ -16,6 +16,7 @@
     'Invoke-BuildLvlibp'
     'Invoke-BuildViPackage'
     'Invoke-CloseLabVIEW'
+    'Invoke-ConfigureLabview'
     'Invoke-GenerateReleaseNotes'
     'Invoke-MissingInProject'
     'Invoke-ModifyVIPBDisplayInfo'
