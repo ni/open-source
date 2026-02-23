@@ -463,6 +463,8 @@ function Invoke-RunUnitTests {
     param(
         [Parameter(Mandatory)] [string] $MinimumSupportedLVVersion,
         [Parameter(Mandatory)] [string] $SupportedBitness,
+        [Parameter()] [string] $ProjectPath,
+        [Parameter()] [switch] $OpenProjectBeforeRun,
         [Parameter()] [switch] $DryRun,
         [Parameter()] [string] $gcliPath
     )
@@ -470,6 +472,16 @@ function Invoke-RunUnitTests {
     $args = @{
         MinimumSupportedLVVersion = $MinimumSupportedLVVersion
         SupportedBitness          = $SupportedBitness
+        ProjectPath               = $ProjectPath
+        OpenProjectBeforeRun      = $OpenProjectBeforeRun
+    }
+    
+    if ($ProjectPath) {
+        $arguments['ProjectPath'] = $ProjectPath
+    }
+    
+    if ($OpenProjectBeforeRun) {
+        $arguments['OpenProjectBeforeRun'] = $true
     }
     return Invoke-OpenSourceActionScript -ScriptSegments @('run-unit-tests','RunUnitTests.ps1') -Arguments $args -DryRun:$DryRun -gcliPath $gcliPath
 }

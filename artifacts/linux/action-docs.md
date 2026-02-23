@@ -235,6 +235,8 @@ Runs LabVIEW unit tests. MinimumSupportedLVVersion: Minimum LabVIEW version that
 | --- | --- | --- | --- | --- |
 | DryRun | boolean | false |  | If set, prints the command instead of executing it |
 | MinimumSupportedLVVersion | string | true |  | Minimum LabVIEW version that the project supports |
+| OpenProjectBeforeRun | boolean | false |  |  |
+| ProjectPath | string | false |  |  |
 | SupportedBitness | string | true |  | Target LabVIEW bitness (32- or 64-bit) |
 | gcliPath | string | false |  | Optional path prepended to PATH for locating the g CLI |
 
@@ -463,6 +465,8 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 | --- | --- | --- | --- | --- |
 | minimum_supported_lv_version | string | true |  | LabVIEW version for the test run. |
 | supported_bitness | string | true |  | "32" or "64" bitness of LabVIEW. |
+| project_path | string | false |  | Path to the LabVIEW project file. If not provided, searches upward from script location. |
+| open_project_before_run | string | false | false | If true, runs OpenProj.vi via LabVIEWCLI before executing tests. |
 | gcli_path | string | false |  | Optional path to the g-cli executable. |
 | working_directory | string | false |  | Working directory where the action will run. |
 | log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |

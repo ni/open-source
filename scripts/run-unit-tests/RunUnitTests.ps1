@@ -16,6 +16,13 @@
 .PARAMETER SupportedBitness
     Bitness for LabVIEW (e.g., "64").
 
+.PARAMETER ProjectPath
+    (Optional) Path to the LabVIEW project file (*.lvproj). If not provided,
+    the script will search upward from its own location to find exactly one.
+
+.PARAMETER OpenProjectBeforeRun
+    (Optional) If present, runs OpenProj.vi via LabVIEWCLI before executing tests.
+
 .NOTES
     PowerShell 7.5+ assumed for cross-platform support.
     This script *requires* that g-cli and LabVIEW be compatible with the OS.
@@ -29,7 +36,14 @@ param(
     [Parameter(Mandatory=$true)]
     [ValidateSet("32","64")]
     [string]
-    $SupportedBitness
+    $SupportedBitness,
+
+    [Parameter(Mandatory=$false)]
+    [string]
+    $ProjectPath,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$OpenProjectBeforeRun
 )
 
 # --------------------------------------------------------------------
@@ -73,7 +87,18 @@ function Get-SingleLvproj {
     }
 }
 
-$AbsoluteProjectPath = Get-SingleLvproj -StartFolder $PSScriptRoot
+if ($ProjectPath) {
+    # Use the provided project path
+    $AbsoluteProjectPath = Resolve-Path $ProjectPath
+    Write-Host "Using provided LabVIEW project file: $AbsoluteProjectPath"
+} else {
+    # Search for project file
+    $AbsoluteProjectPath = Get-SingleLvproj -StartFolder $PSScriptRoot
+    if (-not $AbsoluteProjectPath) {
+        exit 3
+    }
+    Write-Host "Using LabVIEW project file: $AbsoluteProjectPath"
+}
 
 if (-not $AbsoluteProjectPath) {
     # We failed to find exactly one .lvproj in any ancestor up to the level before root
@@ -108,6 +133,24 @@ function Setup {
 # ------------------------  MAIN SEQUENCE  ----------------------
 function MainSequence {
     Write-Host "`n=== MainSequence ==="
+    
+    if ($OpenProjectBeforeRun) {
+        $PreRunVI = Join-Path -Path $PSScriptRoot -ChildPath "OpenProj.vi"
+        Write-Host "Flag 'OpenProjectBeforeRun' detected." -ForegroundColor Cyan
+        
+        if (Test-Path $PreRunVI) {
+            Write-Host "Executing LabVIEWCLI to run OpenProj.vi..."
+            & LabVIEWCLI -OperationName RunVI `
+                         -VIPath $PreRunVI
+            
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warning "LabVIEWCLI failed to run OpenProj.vi (Exit code: $LASTEXITCODE). Proceeding to tests anyway..."
+            }
+        } else {
+            Write-Warning "Could not find OpenProj.vi at $PreRunVI. Skipping pre-run step."
+        }
+    }
+
     Write-Host "Running unit tests for LabVIEW $MinimumSupportedLVVersion ($SupportedBitness-bit)"
     Write-Host "Project Path: $AbsoluteProjectPath"
     Write-Host "Report will be saved at: $ReportPath"

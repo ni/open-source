@@ -585,6 +585,16 @@
           "required": true,
           "description": "Minimum LabVIEW version that the project supports"
         },
+        "OpenProjectBeforeRun": {
+          "type": "boolean",
+          "required": false,
+          "description": ""
+        },
+        "ProjectPath": {
+          "type": "string",
+          "required": false,
+          "description": ""
+        },
         "SupportedBitness": {
           "type": "string",
           "required": true,
@@ -1555,6 +1565,20 @@
         "description": "\"32\" or \"64\" bitness of LabVIEW.",
         "required": true,
         "default": "",
+        "type": "string"
+      },
+      {
+        "name": "project_path",
+        "description": "Path to the LabVIEW project file. If not provided, searches upward from script location.",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "open_project_before_run",
+        "description": "If true, runs OpenProj.vi via LabVIEWCLI before executing tests.",
+        "required": false,
+        "default": "false",
         "type": "string"
       },
       {

@@ -583,6 +583,16 @@
         "required": true,
         "description": "Minimum LabVIEW version that the project supports"
       },
+      "OpenProjectBeforeRun": {
+        "type": "boolean",
+        "required": false,
+        "description": ""
+      },
+      "ProjectPath": {
+        "type": "string",
+        "required": false,
+        "description": ""
+      },
       "SupportedBitness": {
         "type": "string",
         "required": true,
