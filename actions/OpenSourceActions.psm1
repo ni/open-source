@@ -489,3 +489,30 @@ function Invoke-SetDevelopmentMode {
     $args = @{ RelativePath = $RelativePath }
     return Invoke-OpenSourceActionScript -ScriptSegments @('set-development-mode','Set_Development_Mode.ps1') -Arguments $args -DryRun:$DryRun -gcliPath $gcliPath
 }
+
+# Installs VI Package Manager (VIPM) and LUnit for G-CLI package.
+# LVVersion: LabVIEW version (e.g., "2025", "2024").
+# LVBitness: LabVIEW bitness ("32" or "64").
+# VipmInstallerUrl: URL to download the VIPM installer.
+# DryRun: If set, prints the command instead of executing it.
+function Invoke-SetupLunit {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [string] $LVVersion,
+        [Parameter(Mandatory)] [ValidateSet("32", "64")] [string] $LVBitness,
+        [Parameter()] [string] $VipmInstallerUrl = "https://packages.jki.net/vipm/preview/vipm-setup-latest-preview.exe",
+        [switch] $DryRun
+    )
+    Write-Information "Setting up LUnit for LabVIEW $LVVersion ($LVBitness-bit)" -InformationAction Continue
+    
+    $result = Invoke-OpenSourceActionScript `
+        -ScriptSegments @('setup-lunit', 'SetupLunit.ps1') `
+        -Arguments @{
+            LVVersion = $LVVersion
+            LVBitness = $LVBitness
+            VipmInstallerUrl = $VipmInstallerUrl
+        } `
+        -DryRun:$DryRun
+    
+    return $result
+}

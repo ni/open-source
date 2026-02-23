@@ -254,6 +254,19 @@ Configures the repository for development mode. RelativePath: Normalized path to
 pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-SetDevelopmentMode -ArgsJson '{}'
 ```
 
+#### Invoke-SetupLunit
+Installs VI Package Manager (VIPM) and LUnit for G-CLI package. LVVersion: LabVIEW version (e.g., "2025", "2024"). LVBitness: LabVIEW bitness ("32" or "64"). VipmInstallerUrl: URL to download the VIPM installer. DryRun: If set, prints the command instead of executing it.
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| DryRun | boolean | false |  | If set, prints the command instead of executing it |
+| LVBitness | string | true |  | LabVIEW bitness ("32" or "64") |
+| LVVersion | string | true |  | LabVIEW version (e |
+| VipmInstallerUrl | string | false | https://packages.jki.net/vipm/preview/vipm-setup-latest-preview.exe | URL to download the VIPM installer |
+
+```powershell
+pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-SetupLunit -ArgsJson '{}'
+```
+
 #### Normalize-RelativePath
 Normalizes a RelativePath value against an optional base directory. RelativePath: Path to normalize. BaseDirectory: Directory used to resolve the relative path. Defaults to the current location.
 | Parameter | Type | Required | Default | Description |
@@ -473,6 +486,16 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 | --- | --- | --- | --- | --- |
 | relative_path | string | true |  | Relative path containing the repository. |
 | gcli_path | string | false |  | Optional path to the g-cli executable. |
+| working_directory | string | false |  | Working directory where the action will run. |
+| log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
+| dry_run | string | false | false | If true, simulate the action without side effects. |
+
+#### setup-lunit
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| lv_version | string | true |  | LabVIEW version (e.g., "2025", "2024"). |
+| lv_bitness | string | true |  | LabVIEW bitness ("32" or "64"). |
+| vipm_installer_url | string | false | https://packages.jki.net/vipm/preview/vipm-setup-latest-preview.exe | URL to download the VIPM installer. |
 | working_directory | string | false |  | Working directory where the action will run. |
 | log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
 | dry_run | string | false | false | If true, simulate the action without side effects. |

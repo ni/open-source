@@ -18,6 +18,7 @@ List of available GitHub Actions.
 - [run-pester-tests](./run-pester-tests.md): Run PowerShell Pester tests in a repository.
 - [run-unit-tests](./run-unit-tests.md): Run LabVIEW unit tests via the LabVIEW Unit Test Framework CLI and report pass/fail/error using standard exit codes.
 - [set-development-mode](./set-development-mode.md): Configure the repository for development mode by removing packed libraries, adding tokens, preparing sources, and closing LabVIEW.
+- [setup-lunit](./setup-lunit.md): Installs VI Package Manager (VIPM) and the LUnit for G-CLI package for LabVIEW automation testing.
 - [setup-mkdocs](./setup-mkdocs.md): Install a pinned MkDocs with caching.
 
 ## See also
