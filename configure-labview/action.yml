@@ -15,7 +15,7 @@ inputs:
   labview_wait_seconds:
     description: 'Seconds to wait for LabVIEW to generate ini file if it does not exist.'
     required: false
-    default: '50'
+    default: '60'
   working_directory:
     description: 'Working directory where the action will run.'
     required: false
