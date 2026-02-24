@@ -140,11 +140,15 @@ function MainSequence {
         
         if (Test-Path $PreRunVI) {
             Write-Host "Executing LabVIEWCLI to run OpenProj.vi..."
-            & LabVIEWCLI -OperationName RunVI `
-                         -VIPath $PreRunVI
-            
-            if ($LASTEXITCODE -ne 0) {
-                Write-Warning "LabVIEWCLI failed to run OpenProj.vi (Exit code: $LASTEXITCODE). Proceeding to tests anyway..."
+            $labviewCLI = "C:\Program Files (x86)\National Instruments\Shared\LabVIEW CLI\LabVIEWCLI.exe"
+            if (Test-Path $labviewCLI) {
+                & $labviewCLI -OperationName RunVI -VIPath $PreRunVI
+                
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Warning "LabVIEW CLI failed to run OpenProj.vi (Exit code: $LASTEXITCODE). Proceeding to tests anyway..."
+                }
+            } else {
+                Write-Warning "LabVIEW CLI not found at $labviewCLI. Skipping pre-run step."
             }
         } else {
             Write-Warning "Could not find OpenProj.vi at $PreRunVI. Skipping pre-run step."
