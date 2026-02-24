@@ -155,12 +155,14 @@ function MainSequence {
         }
     }
 
+    $gCliPath = "C:\Program Files\G-CLI\bin\g-cli.exe"
+
     Write-Host "Running unit tests for LabVIEW $MinimumSupportedLVVersion ($SupportedBitness-bit)"
     Write-Host "Project Path: $AbsoluteProjectPath"
     Write-Host "Report will be saved at: $ReportPath"
 
     Write-Host "`nExecuting g-cli command..."
-    & g-cli --lv-ver $MinimumSupportedLVVersion --arch $SupportedBitness lunit -- -r "$ReportPath" "$AbsoluteProjectPath"
+    & $gCliPath --lv-ver $MinimumSupportedLVVersion --arch $SupportedBitness lunit -- -r "$ReportPath" "$AbsoluteProjectPath"
 
     $script:OriginalExitCode = $LASTEXITCODE
     if ($script:OriginalExitCode -ne 0) {
