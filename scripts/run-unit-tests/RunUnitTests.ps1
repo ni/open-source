@@ -145,7 +145,7 @@ function Setup {
             Write-Host "NI Service Locator is already running." -ForegroundColor Green
         }
     }
-    
+
     if (Test-Path $ReportPath) {
         try {
             Remove-Item $ReportPath -Force -ErrorAction Stop
@@ -187,14 +187,35 @@ function MainSequence {
 
     $gCliPath = "C:\Program Files\G-CLI\bin\g-cli.exe"
 
+    #TODO: remove this check later
+    Write-Host "`nVerifying g-cli..."
+    & $gCliPath --version
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "g-cli --version failed with exit code $LASTEXITCODE"
+    }
+
     Write-Host "Running unit tests for LabVIEW $MinimumSupportedLVVersion ($SupportedBitness-bit)"
     Write-Host "Project Path: $AbsoluteProjectPath"
     Write-Host "Report will be saved at: $ReportPath"
 
+    # TODO: Remove the check later
+    if (-not (Test-Path $AbsoluteProjectPath)) {
+        Write-Error "Project file does not exist: $AbsoluteProjectPath"
+        $script:TestsHadFailures = $true
+        $script:OriginalExitCode = 2
+        return
+    }
+
     Write-Host "`nExecuting g-cli command..."
-    & $gCliPath --lv-ver $MinimumSupportedLVVersion --arch $SupportedBitness lunit -- -r "$ReportPath" "$AbsoluteProjectPath"
+    $output = & $gCliPath --lv-ver $MinimumSupportedLVVersion --arch $SupportedBitness lunit -- -r "$ReportPath" "$AbsoluteProjectPath"
 
     $script:OriginalExitCode = $LASTEXITCODE
+
+    # Display output TODO: Remove this later
+    if ($output) {
+        Write-Host "`ng-cli output:"
+        $output | ForEach-Object { Write-Host $_ }
+    }
     if ($script:OriginalExitCode -ne 0) {
         Write-Error "g-cli test execution failed (exit code $script:OriginalExitCode)."
     }
