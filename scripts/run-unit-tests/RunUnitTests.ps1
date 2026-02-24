@@ -116,6 +116,36 @@ $ReportPath = Join-Path -Path $PSScriptRoot -ChildPath "UnitTestReport.xml"
 # --------------------------  SETUP  --------------------------
 function Setup {
     Write-Host "=== Setup ==="
+    $ServiceName = "nisvcloc"
+    $Service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+
+    if ($null -eq $Service) {
+        Write-Warning "NI Service Locator service ('$ServiceName') not found. g-cli may fail to connect to LabVIEW."
+    }
+    else {
+        Write-Host "Checking NI Service Locator status..."
+
+        if ($Service.Status -ne 'Running') {
+            Write-Host "NI Service Locator is $($Service.Status). Starting service..." -ForegroundColor Yellow
+            try {
+                Start-Service -Name $ServiceName -ErrorAction Stop
+
+                $retryCount = 0
+                while ((Get-Service $ServiceName).Status -ne 'Running' -and $retryCount -lt 10) {
+                    Start-Sleep -Seconds 1
+                    $retryCount++
+                }
+                Write-Host "Successfully started NI Service Locator." -ForegroundColor Green
+            }
+            catch {
+                Write-Error "Failed to start NI Service Locator: $($_.Exception.Message)" -ForegroundColor Red
+            }
+        }
+        else {
+            Write-Host "NI Service Locator is already running." -ForegroundColor Green
+        }
+    }
+    
     if (Test-Path $ReportPath) {
         try {
             Remove-Item $ReportPath -Force -ErrorAction Stop
