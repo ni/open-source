@@ -109,7 +109,11 @@ try {
     }
     
     Write-Verbose "Package list refreshed successfully"
-    
+
+    Write-Information "Waiting 30 seconds for VIPM to complete background refresh..." -InformationAction Continue
+    Start-Sleep -Seconds 30
+    Write-Verbose "Wait complete, proceeding with installation"
+        
     # Install LUnit for G-CLI
     Write-Information "Installing LUnit for G-CLI for LabVIEW $LVVersion ($LVBitness-bit)..." -InformationAction Continue
     Write-Verbose "Running: vipm.exe install sas_workshops_lib_lunit_for_g_cli --labview-version $LVVersion --labview-bitness $LVBitness"
@@ -122,6 +126,10 @@ try {
     Write-Verbose "LUnit installation exit code: $installExitCode"
     
     if ($installExitCode -eq 0) {
+        Write-Information "Waiting 180 seconds to complete mass compile..." -InformationAction Continue
+        Start-Sleep -Seconds 180
+        Write-Verbose "Wait complete, proceeding with installation"
+        
         Write-Information "LUnit for G-CLI installed successfully!" -InformationAction Continue
         exit 0
     } else {
