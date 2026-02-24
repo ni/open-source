@@ -174,6 +174,10 @@ function MainSequence {
             if (Test-Path $labviewCLI) {
                 & $labviewCLI -OperationName RunVI -VIPath $PreRunVI
                 
+                Write-Information "Waiting 30 seconds for Project window to open..." -InformationAction Continue
+                Start-Sleep -Seconds 30
+                Write-Verbose "Wait complete, proceeding..."
+
                 if ($LASTEXITCODE -ne 0) {
                     Write-Warning "LabVIEW CLI failed to run OpenProj.vi (Exit code: $LASTEXITCODE). Proceeding to tests anyway..."
                 }
@@ -187,24 +191,9 @@ function MainSequence {
 
     $gCliPath = "C:\Program Files\G-CLI\bin\g-cli.exe"
 
-    #TODO: remove this check later
-    Write-Host "`nVerifying g-cli..."
-    & $gCliPath --version
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warning "g-cli --version failed with exit code $LASTEXITCODE"
-    }
-
     Write-Host "Running unit tests for LabVIEW $MinimumSupportedLVVersion ($SupportedBitness-bit)"
     Write-Host "Project Path: $AbsoluteProjectPath"
     Write-Host "Report will be saved at: $ReportPath"
-
-    # TODO: Remove the check later
-    if (-not (Test-Path $AbsoluteProjectPath)) {
-        Write-Error "Project file does not exist: $AbsoluteProjectPath"
-        $script:TestsHadFailures = $true
-        $script:OriginalExitCode = 2
-        return
-    }
 
     Write-Host "`nExecuting g-cli command..."
     $output = & $gCliPath --lv-ver $MinimumSupportedLVVersion --arch $SupportedBitness lunit -- -r "$ReportPath" "$AbsoluteProjectPath"
