@@ -566,7 +566,7 @@
     }
   },
   "Invoke-RunUnitTests": {
-    "description": "Runs LabVIEW unit tests. MinimumSupportedLVVersion: Minimum LabVIEW version that the project supports. SupportedBitness: Target LabVIEW bitness (32- or 64-bit). DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
+    "description": "Runs LabVIEW unit tests. MinimumSupportedLVVersion: Minimum LabVIEW version that the project supports. SupportedBitness: Target LabVIEW bitness (32- or 64-bit). ProjectPath: (Optional) Path to the LabVIEW project file. OpenProjectBeforeRun: (Optional) If set, runs OpenProj.vi before tests. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
     "parameters": {
       "DryRun": {
         "type": "boolean",
@@ -586,12 +586,12 @@
       "OpenProjectBeforeRun": {
         "type": "boolean",
         "required": false,
-        "description": ""
+        "description": "(Optional) If set, runs OpenProj"
       },
       "ProjectPath": {
         "type": "string",
         "required": false,
-        "description": ""
+        "description": "(Optional) Path to the LabVIEW project file"
       },
       "SupportedBitness": {
         "type": "string",
