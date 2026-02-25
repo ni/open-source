@@ -172,11 +172,11 @@ function MainSequence {
             Write-Host "Executing LabVIEWCLI to run OpenProj.vi..."
             $labviewCLI = "C:\Program Files (x86)\National Instruments\Shared\LabVIEW CLI\LabVIEWCLI.exe"
             if (Test-Path $labviewCLI) {
-                & $labviewCLI -OperationName RunVI -VIPath $PreRunVI
+                & $labviewCLI -OperationName RunVI -VIPath $PreRunVI $AbsoluteProjectPath
                 
-                Write-Information "Waiting 30 seconds for Project window to open..." -InformationAction Continue
-                Start-Sleep -Seconds 30
-                Write-Verbose "Wait complete, proceeding..."
+                # Write-Information "Waiting 30 seconds for Project window to open..." -InformationAction Continue
+                # Start-Sleep -Seconds 30
+                # Write-Verbose "Wait complete, proceeding..."
 
                 if ($LASTEXITCODE -ne 0) {
                     Write-Warning "LabVIEW CLI failed to run OpenProj.vi (Exit code: $LASTEXITCODE). Proceeding to tests anyway..."
