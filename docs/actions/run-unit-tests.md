@@ -65,7 +65,7 @@ pwsh -File actions/Invoke-OSAction.ps1 -ActionName run-unit-tests -ArgsFile ./co
 
 ### Pre-Run Project Opening
 
-Enable the `open_project_before_run` flag to run `OpenProj.vi` before tests:
+Enable the `open_project_before_run` flag to run `OpenProj.vi` before tests. Also provide the `project_path`:
 
 ```yaml
 - name: Run Unit Tests with Pre-Run
@@ -74,6 +74,7 @@ Enable the `open_project_before_run` flag to run `OpenProj.vi` before tests:
     minimum_supported_lv_version: '2021'
     supported_bitness: '64'
     open_project_before_run: true
+    project_path: Path/to/your/.lvproj
 ```
 
 **Note**: This requires an `OpenProj.vi` file in the `scripts/run-unit-tests/` directory. The VI should accept the project path and open the project before unit tests run.
