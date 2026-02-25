@@ -138,7 +138,7 @@ function Setup {
                 Write-Host "Successfully started NI Service Locator." -ForegroundColor Green
             }
             catch {
-                Write-Error "Failed to start NI Service Locator: $($_.Exception.Message)" -ForegroundColor Red
+                Write-Warning "Failed to start NI Service Locator: $($_.Exception.Message)" -ForegroundColor Yellow
             }
         }
         else {
@@ -173,10 +173,6 @@ function MainSequence {
             $labviewCLI = "C:\Program Files (x86)\National Instruments\Shared\LabVIEW CLI\LabVIEWCLI.exe"
             if (Test-Path $labviewCLI) {
                 & $labviewCLI -OperationName RunVI -VIPath $PreRunVI $AbsoluteProjectPath
-                
-                # Write-Information "Waiting 30 seconds for Project window to open..." -InformationAction Continue
-                # Start-Sleep -Seconds 30
-                # Write-Verbose "Wait complete, proceeding..."
 
                 if ($LASTEXITCODE -ne 0) {
                     Write-Warning "LabVIEW CLI failed to run OpenProj.vi (Exit code: $LASTEXITCODE). Proceeding to tests anyway..."
@@ -196,17 +192,12 @@ function MainSequence {
     Write-Host "Report will be saved at: $ReportPath"
 
     Write-Host "`nExecuting g-cli command..."
-    $output = & $gCliPath --lv-ver $MinimumSupportedLVVersion --arch $SupportedBitness lunit -- -r "$ReportPath" "$AbsoluteProjectPath"
+    & $gCliPath --lv-ver $MinimumSupportedLVVersion --arch $SupportedBitness lunit -- -r "$ReportPath" "$AbsoluteProjectPath"
 
     $script:OriginalExitCode = $LASTEXITCODE
 
-    # Display output TODO: Remove this later
-    if ($output) {
-        Write-Host "`ng-cli output:"
-        $output | ForEach-Object { Write-Host $_ }
-    }
     if ($script:OriginalExitCode -ne 0) {
-        Write-Error "g-cli test execution failed (exit code $script:OriginalExitCode)."
+        Write-Warning "g-cli test execution failed (exit code $script:OriginalExitCode)."
     }
 
     # If g-cli failed and no report was produced, we can't parse anything
