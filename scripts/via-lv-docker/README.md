@@ -57,7 +57,7 @@ jobs:
           fetch-depth: 0  # Required for git diff
 
       - name: Run VI Analyzer
-        uses: your-org/labview-via-action@v1
+        uses: ni/open-source/via-lv-docker@v1
         with:
           base-branch: origin/${{ github.event.pull_request.base.ref }}
 
@@ -87,7 +87,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run VI Analyzer
-        uses: your-org/labview-via-action@v1
+        uses: ni/open-source/via-lv-docker@v1
         with:
           config-path: '.github/via-config.viancfg'
 
@@ -123,7 +123,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run VI Analyzer
-        uses: your-org/labview-via-action@v1
+        uses: ni/open-source/via-lv-docker@v1
         with:
           # Use static config for manual triggers, dynamic for PRs
           config-path: ${{ github.event_name == 'workflow_dispatch' && '.github/via-config.viancfg' || '' }}
@@ -143,7 +143,7 @@ Test with a specific LabVIEW version:
 
 ```yaml
 - name: Run VI Analyzer
-  uses: your-org/labview-via-action@v1
+  uses: ni/open-source/labview-via-action@v1
   with:
     labview-version: '2025q3-linux'
     config-path: '.github/via-config.viancfg'
