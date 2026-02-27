@@ -254,6 +254,22 @@ Configures the repository for development mode. RelativePath: Normalized path to
 pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-SetDevelopmentMode -ArgsJson '{}'
 ```
 
+#### Invoke-ViaLvDocker
+Runs VI Analyzer tests using LabVIEW Docker container. ConfigPath: Path to VI Analyzer configuration file (.viancfg) or LabVIEW files (.vi, .ctl, .llb). If empty, generates from changed files. TemplatePath: Path to .viancfg template (required when generating config dynamically). BaseBranch: Branch to compare against for changed files (used when generating config). LabviewVersion: LabVIEW Docker image version tag. DockerImage: Full Docker image name. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| BaseBranch | string | false | origin/develop | Branch to compare against for changed files (used when generating config) |
+| ConfigPath | string | false |  | Path to VI Analyzer configuration file ( |
+| DockerImage | string | false | nationalinstruments/labview | Full Docker image name |
+| DryRun | boolean | false |  | If set, prints the command instead of executing it |
+| LabviewVersion | string | false | 2026q1-linux | LabVIEW Docker image version tag |
+| TemplatePath | string | false |  | Path to |
+| gcliPath | string | false |  | Optional path prepended to PATH for locating the g CLI |
+
+```powershell
+pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-ViaLvDocker -ArgsJson '{}'
+```
+
 #### Normalize-RelativePath
 Normalizes a RelativePath value against an optional base directory. RelativePath: Path to normalize. BaseDirectory: Directory used to resolve the relative path. Defaults to the current location.
 | Parameter | Type | Required | Default | Description |
@@ -480,3 +496,15 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 #### setup-mkdocs
 | Name | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
+
+#### via-lv-docker
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| config_path | string | false |  | Path to VI Analyzer configuration file (.viancfg) or LabVIEW files (.vi, .ctl, .llb) |
+| template_path | string | false |  | Path to .viancfg template (required to generate config file dynamically) |
+| base_branch | string | false | origin/develop | Branch to compare against for changed files (used when generating config) |
+| labview_version | string | false | 2026q1-linux | LabVIEW Docker image version tag |
+| docker_image | string | false | nationalinstruments/labview | Full Docker image name |
+| working_directory | string | false |  | Working directory where the action will run. |
+| log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
+| dry_run | string | false | false | If true, simulate the action without side effects. |

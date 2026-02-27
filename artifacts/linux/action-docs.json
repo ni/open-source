@@ -612,6 +612,51 @@
         }
       }
     },
+    "Invoke-ViaLvDocker": {
+      "description": "Runs VI Analyzer tests using LabVIEW Docker container. ConfigPath: Path to VI Analyzer configuration file (.viancfg) or LabVIEW files (.vi, .ctl, .llb). If empty, generates from changed files. TemplatePath: Path to .viancfg template (required when generating config dynamically). BaseBranch: Branch to compare against for changed files (used when generating config). LabviewVersion: LabVIEW Docker image version tag. DockerImage: Full Docker image name. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
+      "parameters": {
+        "BaseBranch": {
+          "type": "string",
+          "required": false,
+          "default": "origin/develop",
+          "description": "Branch to compare against for changed files (used when generating config)"
+        },
+        "ConfigPath": {
+          "type": "string",
+          "required": false,
+          "default": "",
+          "description": "Path to VI Analyzer configuration file ("
+        },
+        "DockerImage": {
+          "type": "string",
+          "required": false,
+          "default": "nationalinstruments/labview",
+          "description": "Full Docker image name"
+        },
+        "DryRun": {
+          "type": "boolean",
+          "required": false,
+          "description": "If set, prints the command instead of executing it"
+        },
+        "gcliPath": {
+          "type": "string",
+          "required": false,
+          "description": "Optional path prepended to PATH for locating the g CLI"
+        },
+        "LabviewVersion": {
+          "type": "string",
+          "required": false,
+          "default": "2026q1-linux",
+          "description": "LabVIEW Docker image version tag"
+        },
+        "TemplatePath": {
+          "type": "string",
+          "required": false,
+          "default": "",
+          "description": "Path to"
+        }
+      }
+    },
     "Normalize-RelativePath": {
       "description": "Normalizes a RelativePath value against an optional base directory. RelativePath: Path to normalize. BaseDirectory: Directory used to resolve the relative path. Defaults to the current location.",
       "parameters": {
@@ -1623,6 +1668,64 @@
         "type": "string"
       }
     ],
-    "setup-mkdocs": []
+    "setup-mkdocs": [],
+    "via-lv-docker": [
+      {
+        "name": "config_path",
+        "description": "Path to VI Analyzer configuration file (.viancfg) or LabVIEW files (.vi, .ctl, .llb)",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "template_path",
+        "description": "Path to .viancfg template (required to generate config file dynamically)",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "base_branch",
+        "description": "Branch to compare against for changed files (used when generating config)",
+        "required": false,
+        "default": "origin/develop",
+        "type": "string"
+      },
+      {
+        "name": "labview_version",
+        "description": "LabVIEW Docker image version tag",
+        "required": false,
+        "default": "2026q1-linux",
+        "type": "string"
+      },
+      {
+        "name": "docker_image",
+        "description": "Full Docker image name",
+        "required": false,
+        "default": "nationalinstruments/labview",
+        "type": "string"
+      },
+      {
+        "name": "working_directory",
+        "description": "Working directory where the action will run.",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "log_level",
+        "description": "Verbosity level (ERROR|WARN|INFO|DEBUG).",
+        "required": false,
+        "default": "INFO",
+        "type": "string"
+      },
+      {
+        "name": "dry_run",
+        "description": "If true, simulate the action without side effects.",
+        "required": false,
+        "default": false,
+        "type": "string"
+      }
+    ]
   }
 }
