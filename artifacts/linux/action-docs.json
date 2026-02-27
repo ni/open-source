@@ -612,6 +612,22 @@
         }
       }
     },
+    "Invoke-SetupNipm": {
+      "description": "Installs and configures NI Package Manager (NIPM). NIPMUrl: URL to download the NI Package Manager installer. DryRun: If set, prints the command instead of executing it.",
+      "parameters": {
+        "DryRun": {
+          "type": "boolean",
+          "required": false,
+          "description": "If set, prints the command instead of executing it"
+        },
+        "NIPMUrl": {
+          "type": "string",
+          "required": false,
+          "default": "https://download.ni.com/support/nipkg/products/ni-package-manager/installers/NIPackageManager25.8.0.exe",
+          "description": "URL to download the NI Package Manager installer"
+        }
+      }
+    },
     "Normalize-RelativePath": {
       "description": "Normalizes a RelativePath value against an optional base directory. RelativePath: Path to normalize. BaseDirectory: Directory used to resolve the relative path. Defaults to the current location.",
       "parameters": {
@@ -1623,6 +1639,36 @@
         "type": "string"
       }
     ],
-    "setup-mkdocs": []
+    "setup-mkdocs": [],
+    "setup-nipm": [
+      {
+        "name": "nipm_url",
+        "description": "URL to download the NI Package Manager installer.",
+        "required": false,
+        "default": "https://download.ni.com/support/nipkg/products/ni-package-manager/installers/NIPackageManager25.8.0.exe",
+        "type": "string"
+      },
+      {
+        "name": "working_directory",
+        "description": "Working directory where the action will run.",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "log_level",
+        "description": "Verbosity level (ERROR|WARN|INFO|DEBUG).",
+        "required": false,
+        "default": "INFO",
+        "type": "string"
+      },
+      {
+        "name": "dry_run",
+        "description": "If true, simulate the action without side effects.",
+        "required": false,
+        "default": false,
+        "type": "string"
+      }
+    ]
   }
 }
