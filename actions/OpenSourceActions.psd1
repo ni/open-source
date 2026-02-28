@@ -10,6 +10,7 @@
   CompatiblePSEditions  = @('Core')
 
   FunctionsToExport = @(
+    'Invoke-ActivateLabview'
     'Invoke-AddTokenToLabVIEW'
     'Invoke-ApplyVIPC'
     'Invoke-Build'
