@@ -266,6 +266,17 @@ Downloads and installs LabVIEW Community Edition from an ISO image. LabVIEWIsoUr
 pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-SetupLabview -ArgsJson '{}'
 ```
 
+#### Invoke-SetupNipm
+Installs and configures NI Package Manager (NIPM). NIPMUrl: URL to download the NI Package Manager installer. DryRun: If set, prints the command instead of executing it.
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| DryRun | boolean | false |  | If set, prints the command instead of executing it |
+| NIPMUrl | string | false | https://download.ni.com/support/nipkg/products/ni-package-manager/installers/NIPackageManager25.8.0.exe | URL to download the NI Package Manager installer |
+
+```powershell
+pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-SetupNipm -ArgsJson '{}'
+```
+
 #### Normalize-RelativePath
 Normalizes a RelativePath value against an optional base directory. RelativePath: Path to normalize. BaseDirectory: Directory used to resolve the relative path. Defaults to the current location.
 | Parameter | Type | Required | Default | Description |
@@ -492,3 +503,11 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 #### setup-mkdocs
 | Name | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
+
+#### setup-nipm
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| nipm_url | string | false | https://download.ni.com/support/nipkg/products/ni-package-manager/installers/NIPackageManager25.8.0.exe | URL to download the NI Package Manager installer. |
+| working_directory | string | false |  | Working directory where the action will run. |
+| log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
+| dry_run | string | false | false | If true, simulate the action without side effects. |

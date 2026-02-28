@@ -508,6 +508,22 @@ function Invoke-SetupLabview {
         -Arguments @{
             LabVIEWIsoUrl = $LabVIEWIsoUrl
             TimeoutSeconds = $TimeoutSeconds
+            
+# Installs and configures NI Package Manager (NIPM).
+# NIPMUrl: URL to download the NI Package Manager installer.
+# DryRun: If set, prints the command instead of executing it.
+function Invoke-SetupNipm {
+    [CmdletBinding()]
+    param(
+        [Parameter()] [string] $NIPMUrl = "https://download.ni.com/support/nipkg/products/ni-package-manager/installers/NIPackageManager25.8.0.exe",
+        [switch] $DryRun
+    )
+    Write-Information "Setting up NI Package Manager from $NIPMUrl" -InformationAction Continue
+    
+    $result = Invoke-OpenSourceActionScript `
+        -ScriptSegments @('setup-nipm', 'SetupNipm.ps1') `
+        -Arguments @{
+            NIPMUrl = $NIPMUrl
         } `
         -DryRun:$DryRun
     
