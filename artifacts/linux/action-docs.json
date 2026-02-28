@@ -317,6 +317,34 @@
         }
       }
     },
+    "Invoke-ConfigureLabview": {
+      "description": "Configures LabVIEW settings by updating LabVIEW.ini file. LabVIEWVersion: LabVIEW version (e.g., \"2025\", \"2024\"). IniSettings: INI settings to add (multiline string or array). LabVIEWWaitSeconds: Seconds to wait for LabVIEW to generate ini file if it does not exist. DryRun: If set, prints the command instead of executing it.",
+      "parameters": {
+        "DryRun": {
+          "type": "boolean",
+          "required": false,
+          "description": "If set, prints the command instead of executing it"
+        },
+        "IniSettings": {
+          "type": "string",
+          "required": false,
+          "default": "@",
+          "description": "INI settings to add (multiline string or array)"
+        },
+        "LabVIEWVersion": {
+          "type": "string",
+          "required": false,
+          "default": "2025",
+          "description": "LabVIEW version"
+        },
+        "LabVIEWWaitSeconds": {
+          "type": "number",
+          "required": false,
+          "default": "60",
+          "description": "Seconds to wait for LabVIEW to generate ini file if it does not exist"
+        }
+      }
+    },
     "Invoke-GenerateReleaseNotes": {
       "description": "Generates a release notes file from the project's metadata. OutputPath: Path where the release notes should be written. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
       "parameters": {
@@ -1178,6 +1206,50 @@
         "description": "Optional path to the g-cli executable.",
         "required": false,
         "default": "",
+        "type": "string"
+      },
+      {
+        "name": "working_directory",
+        "description": "Working directory where the action will run.",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "log_level",
+        "description": "Verbosity level (ERROR|WARN|INFO|DEBUG).",
+        "required": false,
+        "default": "INFO",
+        "type": "string"
+      },
+      {
+        "name": "dry_run",
+        "description": "If true, simulate the action without side effects.",
+        "required": false,
+        "default": false,
+        "type": "string"
+      }
+    ],
+    "configure-labview": [
+      {
+        "name": "labview_version",
+        "description": "LabVIEW version.",
+        "required": false,
+        "default": "2025",
+        "type": "string"
+      },
+      {
+        "name": "ini_settings",
+        "description": "INI settings to add (one per line or comma-separated).",
+        "required": false,
+        "default": "server.tcp.enabled=TRUE\nserver.tcp.access=+127.0.0.1;+localhost;+*\nserver.viscripting.ShowScriptingOperationsInEditor=TRUE\n",
+        "type": "string"
+      },
+      {
+        "name": "labview_wait_seconds",
+        "description": "Seconds to wait for LabVIEW to generate ini file if it does not exist.",
+        "required": false,
+        "default": "50",
         "type": "string"
       },
       {
