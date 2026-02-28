@@ -490,6 +490,25 @@ function Invoke-SetDevelopmentMode {
     return Invoke-OpenSourceActionScript -ScriptSegments @('set-development-mode','Set_Development_Mode.ps1') -Arguments $args -DryRun:$DryRun -gcliPath $gcliPath
 }
 
+# Downloads and installs LabVIEW Community Edition from an ISO image.
+# LabVIEWIsoUrl: URL to download the LabVIEW ISO installer.
+# TimeoutSeconds: Maximum time in seconds to wait for installation to complete.
+# DryRun: If set, prints the command instead of executing it.
+function Invoke-SetupLabview {
+    [CmdletBinding()]
+    param(
+        [Parameter()] [string] $LabVIEWIsoUrl = "https://download.ni.com/support/softlib/labview/labview_development_system/2025_Q3/ni-labview-2025-community-x86_25.3.3_offline.iso",
+        [Parameter()] [int] $TimeoutSeconds = 2700,
+        [switch] $DryRun
+    )
+    Write-Information "Setting up LabVIEW from $LabVIEWIsoUrl (timeout: $TimeoutSeconds seconds)" -InformationAction Continue
+    
+    $result = Invoke-OpenSourceActionScript `
+        -ScriptSegments @('setup-labview', 'SetupLabview.ps1') `
+        -Arguments @{
+            LabVIEWIsoUrl = $LabVIEWIsoUrl
+            TimeoutSeconds = $TimeoutSeconds
+            
 # Installs and configures NI Package Manager (NIPM).
 # NIPMUrl: URL to download the NI Package Manager installer.
 # DryRun: If set, prints the command instead of executing it.

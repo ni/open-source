@@ -612,6 +612,28 @@
         }
       }
     },
+    "Invoke-SetupLabview": {
+      "description": "Downloads and installs LabVIEW Community Edition from an ISO image. LabVIEWIsoUrl: URL to download the LabVIEW ISO installer. TimeoutSeconds: Maximum time in seconds to wait for installation to complete. DryRun: If set, prints the command instead of executing it.",
+      "parameters": {
+        "DryRun": {
+          "type": "boolean",
+          "required": false,
+          "description": "If set, prints the command instead of executing it"
+        },
+        "LabVIEWIsoUrl": {
+          "type": "string",
+          "required": false,
+          "default": "https://download.ni.com/support/softlib/labview/labview_development_system/2025_Q3/ni-labview-2025-community-x86_25.3.3_offline.iso",
+          "description": "URL to download the LabVIEW ISO installer"
+        },
+        "TimeoutSeconds": {
+          "type": "number",
+          "required": false,
+          "default": "2700",
+          "description": "Maximum time in seconds to wait for installation to complete"
+        }
+      }
+    },
     "Invoke-SetupNipm": {
       "description": "Installs and configures NI Package Manager (NIPM). NIPMUrl: URL to download the NI Package Manager installer. DryRun: If set, prints the command instead of executing it.",
       "parameters": {
