@@ -631,6 +631,44 @@
       }
     }
   },
+  "Invoke-SetupLabview": {
+    "description": "Downloads and installs LabVIEW Community Edition from an ISO image. LabVIEWIsoUrl: URL to download the LabVIEW ISO installer. TimeoutSeconds: Maximum time in seconds to wait for installation to complete. DryRun: If set, prints the command instead of executing it.",
+    "parameters": {
+      "DryRun": {
+        "type": "boolean",
+        "required": false,
+        "description": "If set, prints the command instead of executing it"
+      },
+      "LabVIEWIsoUrl": {
+        "type": "string",
+        "required": false,
+        "default": "https://download.ni.com/support/softlib/labview/labview_development_system/2025_Q3/ni-labview-2025-community-x86_25.3.3_offline.iso",
+        "description": "URL to download the LabVIEW ISO installer"
+      },
+      "TimeoutSeconds": {
+        "type": "number",
+        "required": false,
+        "default": "2700",
+        "description": "Maximum time in seconds to wait for installation to complete"
+      }
+    }
+  },
+  "Invoke-SetupNipm": {
+    "description": "Installs and configures NI Package Manager (NIPM). NIPMUrl: URL to download the NI Package Manager installer. DryRun: If set, prints the command instead of executing it.",
+    "parameters": {
+      "DryRun": {
+        "type": "boolean",
+        "required": false,
+        "description": "If set, prints the command instead of executing it"
+      },
+      "NIPMUrl": {
+        "type": "string",
+        "required": false,
+        "default": "https://download.ni.com/support/nipkg/products/ni-package-manager/installers/NIPackageManager25.8.0.exe",
+        "description": "URL to download the NI Package Manager installer"
+      }
+    }
+  },
   "Normalize-RelativePath": {
     "description": "Normalizes a RelativePath value against an optional base directory. RelativePath: Path to normalize. BaseDirectory: Directory used to resolve the relative path. Defaults to the current location.",
     "parameters": {
