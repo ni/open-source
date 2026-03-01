@@ -575,6 +575,11 @@ function Invoke-SetupLabview {
         -Arguments @{
             LabVIEWIsoUrl = $LabVIEWIsoUrl
             TimeoutSeconds = $TimeoutSeconds
+        } `
+        -DryRun:$DryRun
+    
+    return $result
+}
 
 # Installs VI Package Manager (VIPM) and LUnit for G-CLI package.
 # LVVersion: LabVIEW version (e.g., "2025", "2024").

@@ -51,7 +51,7 @@ pwsh -File actions/Invoke-OSAction.ps1 -ActionName activate-labview -ArgsJson '{
 
 ```yaml
 - name: Activate LabVIEW
-  uses: owner/repo/activate-labview@v1
+  uses: ni/open-source/activate-labview@v1
   with:
     serial_number: ${{ secrets.LABVIEW_SERIAL_NUMBER }}
 ```
@@ -60,7 +60,7 @@ With custom package ID for LabVIEW 2025:
 
 ```yaml
 - name: Activate LabVIEW 2025
-  uses: owner/repo/activate-labview@v1
+  uses: ni/open-source/activate-labview@v1
   with:
     serial_number: ${{ secrets.LABVIEW_SERIAL_NUMBER }}
     package_id: 'LabVIEW_COM_PKG 25.0300'
@@ -94,7 +94,7 @@ With custom package ID for LabVIEW 2025:
 
 ```yaml
 - name: Activate LabVIEW
-  uses: owner/repo/activate-labview@v1
+  uses: ni/open-source/activate-labview@v1
   with:
     serial_number: ${{ secrets.LABVIEW_SERIAL_NUMBER }}
 ```
