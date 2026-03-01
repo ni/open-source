@@ -289,6 +289,13 @@
       ]
     },
     {
+      "id": "REQ-039",
+      "description": "Install VI Package Manager (VIPM) and LUnit for G-CLI package for LabVIEW automation testing.",
+      "tests": [
+        "SetupLunit.Workflow.Tests"
+      ]
+    },
+    {
       "id": "REQIE-001",
       "description": "After checking out the LabVIEW icon editor repository, PreSequence: The sequencer shall enumerate and record the build matrix used by the workflow (LabVIEW versions and bitness). Acceptance: a 'matrix.json' file exists listing each tuple {\"lv-version\": \"2021\"|\"2023\", \"bitness\": \"32\"|\"64\"} with at least [ [\"2021\",\"32\"], [\"2021\",\"64\"], [\"2023\",\"64\"] ]. g-cli is expected at 'C:\\Program Files\\G-CLI\\bin\\g-cli.exe'.",
       "skip_dry_run": true,

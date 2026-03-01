@@ -29,6 +29,7 @@
     'Invoke-RunUnitTests'
     'Invoke-SetDevelopmentMode'
     'Invoke-SetupLabview'
+    'Invoke-SetupLunit'
     'Invoke-SetupNipm'
   )
 

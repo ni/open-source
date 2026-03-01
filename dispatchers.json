@@ -681,6 +681,32 @@
       }
     }
   },
+  "Invoke-SetupLunit": {
+    "description": "Installs VI Package Manager (VIPM) and LUnit for G-CLI package. LVVersion: LabVIEW version (e.g., \"2025\", \"2024\"). LVBitness: LabVIEW bitness (\"32\" or \"64\"). VipmInstallerUrl: URL to download the VIPM installer. DryRun: If set, prints the command instead of executing it.",
+    "parameters": {
+      "DryRun": {
+        "type": "boolean",
+        "required": false,
+        "description": "If set, prints the command instead of executing it"
+      },
+      "LVBitness": {
+        "type": "string",
+        "required": true,
+        "description": "LabVIEW bitness (\"32\" or \"64\")"
+      },
+      "LVVersion": {
+        "type": "string",
+        "required": true,
+        "description": "LabVIEW version (e"
+      },
+      "VipmInstallerUrl": {
+        "type": "string",
+        "required": false,
+        "default": "https://packages.jki.net/vipm/preview/vipm-setup-latest-preview.exe",
+        "description": "URL to download the VIPM installer"
+      }
+    }
+  },
   "Invoke-SetupNipm": {
     "description": "Installs and configures NI Package Manager (NIPM). NIPMUrl: URL to download the NI Package Manager installer. DryRun: If set, prints the command instead of executing it.",
     "parameters": {
