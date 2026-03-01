@@ -511,6 +511,8 @@ function Invoke-RunPesterTests {
 # Runs LabVIEW unit tests.
 # MinimumSupportedLVVersion: Minimum LabVIEW version that the project supports.
 # SupportedBitness: Target LabVIEW bitness (32- or 64-bit).
+# ProjectPath: (Optional) Path to the LabVIEW project file.
+# OpenProjectBeforeRun: (Optional) If set, runs OpenProj.vi before tests.
 # DryRun: If set, prints the command instead of executing it.
 # gcliPath: Optional path prepended to PATH for locating the g CLI.
 function Invoke-RunUnitTests {
@@ -518,6 +520,8 @@ function Invoke-RunUnitTests {
     param(
         [Parameter(Mandatory)] [string] $MinimumSupportedLVVersion,
         [Parameter(Mandatory)] [string] $SupportedBitness,
+        [Parameter()] [string] $ProjectPath,
+        [Parameter()] [switch] $OpenProjectBeforeRun,
         [Parameter()] [switch] $DryRun,
         [Parameter()] [string] $gcliPath
     )
@@ -525,6 +529,14 @@ function Invoke-RunUnitTests {
     $args = @{
         MinimumSupportedLVVersion = $MinimumSupportedLVVersion
         SupportedBitness          = $SupportedBitness
+    }
+    
+    if ($ProjectPath) {
+        $args['ProjectPath'] = $ProjectPath
+    }
+    
+    if ($OpenProjectBeforeRun) {
+        $args['OpenProjectBeforeRun'] = $true
     }
     return Invoke-OpenSourceActionScript -ScriptSegments @('run-unit-tests','RunUnitTests.ps1') -Arguments $args -DryRun:$DryRun -gcliPath $gcliPath
 }
