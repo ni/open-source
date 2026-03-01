@@ -261,6 +261,34 @@
       ]
     },
     {
+      "id": "REQ-035",
+      "description": "Setup NI Package Manager (NIPM) and configure it for CI/CD environments by installing the package manager and disabling package caching.",
+      "tests": [
+        "SetupNipm.Workflow.Tests"
+      ]
+    },
+    {
+      "id": "REQ-036",
+      "description": "Download and install LabVIEW Community Edition from an ISO image, handling installation timeouts and cleanup.",
+      "tests": [
+        "SetupLabview.Workflow.Tests"
+      ]
+    },
+    {
+      "id": "REQ-037",
+      "description": "Activate LabVIEW license using serial number and package ID via NI License Manager utility.",
+      "tests": [
+        "ActivateLabview.Workflow.Tests"
+      ]
+    },
+    {
+      "id": "REQ-038",
+      "description": "Configure LabVIEW settings by updating LabVIEW.ini to enable TCP/IP server and VI scripting operations.",
+      "tests": [
+        "ConfigureLabview.Workflow.Tests"
+      ]
+    },
+    {
       "id": "REQ-039",
       "description": "Install VI Package Manager (VIPM) and LUnit for G-CLI package for LabVIEW automation testing.",
       "tests": [
