@@ -45,14 +45,14 @@ pwsh -File actions/Invoke-OSAction.ps1 -ActionName setup-nipm -ArgsJson '{
 
 ```yaml
 - name: Setup NI Package Manager
-  uses: owner/repo/setup-nipm@v1
+  uses: ni/open-source/setup-nipm@v1
 ```
 
 With custom version:
 
 ```yaml
 - name: Setup NI Package Manager
-  uses: owner/repo/setup-nipm@v1
+  uses: ni/open-source/setup-nipm@v1
   with:
     nipm_url: 'https://download.ni.com/support/nipkg/products/ni-package-manager/installers/NIPackageManager24.5.0.exe'
 ```
