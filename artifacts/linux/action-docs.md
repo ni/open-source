@@ -4,18 +4,6 @@
 
 ### Dispatcher Functions
 
-#### Invoke-ActivateLabview
-Activates LabVIEW license using NI License Manager utility. SerialNumber: LabVIEW serial number for activation. PackageID: LabVIEW package ID to activate. DryRun: If set, prints the command instead of executing it.
-| Parameter | Type | Required | Default | Description |
-| --- | --- | --- | --- | --- |
-| DryRun | boolean | false |  | If set, prints the command instead of executing it |
-| PackageID | string | false | LabVIEW_COM_PKG 25.0300 | LabVIEW package ID to activate |
-| SerialNumber | string | true |  | LabVIEW serial number for activation |
-
-```powershell
-pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-ActivateLabview -ArgsJson '{}'
-```
-
 #### Invoke-AddTokenToLabVIEW
 Adds an authentication token to a LabVIEW installation. MinimumSupportedLVVersion: Minimum LabVIEW version that the project supports. SupportedBitness: Target LabVIEW bitness (32- or 64-bit). RelativePath: Normalized path to the project root relative to the working directory. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.
 | Parameter | Type | Required | Default | Description |
@@ -255,13 +243,13 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-RunPesterTests -ArgsJson '
 ```
 
 #### Invoke-RunUnitTests
-Runs LabVIEW unit tests. MinimumSupportedLVVersion: Minimum LabVIEW version that the project supports. SupportedBitness: Target LabVIEW bitness (32- or 64-bit). DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.
+Runs LabVIEW unit tests. MinimumSupportedLVVersion: Minimum LabVIEW version that the project supports. SupportedBitness: Target LabVIEW bitness (32- or 64-bit). ProjectPath: (Optional) Path to the LabVIEW project file. OpenProjectBeforeRun: (Optional) If set, runs OpenProj.vi before tests. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.
 | Parameter | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | DryRun | boolean | false |  | If set, prints the command instead of executing it |
 | MinimumSupportedLVVersion | string | true |  | Minimum LabVIEW version that the project supports |
-| OpenProjectBeforeRun | boolean | false |  |  |
-| ProjectPath | string | false |  |  |
+| OpenProjectBeforeRun | boolean | false |  | (Optional) If set, runs OpenProj |
+| ProjectPath | string | false |  | (Optional) Path to the LabVIEW project file |
 | SupportedBitness | string | true |  | Target LabVIEW bitness (32- or 64-bit) |
 | gcliPath | string | false |  | Optional path prepended to PATH for locating the g CLI |
 
@@ -282,11 +270,13 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-SetDevelopmentMode -ArgsJs
 ```
 
 #### Invoke-SetupLabview
-Downloads and installs LabVIEW Community Edition from an ISO image. LabVIEWIsoUrl: URL to download the LabVIEW ISO installer. TimeoutSeconds: Maximum time in seconds to wait for installation to complete. DryRun: If set, prints the command instead of executing it.
+Downloads, installs, and activates LabVIEW Community Edition from an ISO image. LabVIEWIsoUrl: URL to download the LabVIEW ISO installer. TimeoutSeconds: Maximum time in seconds to wait for installation to complete. SerialNumber: LabVIEW serial number for activation (required). PackageID: LabVIEW package ID to activate. DryRun: If set, prints the command instead of executing it.
 | Parameter | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | DryRun | boolean | false |  | If set, prints the command instead of executing it |
 | LabVIEWIsoUrl | string | false | https://download.ni.com/support/softlib/labview/labview_development_system/2025_Q3/ni-labview-2025-community-x86_25.3.3_offline.iso | URL to download the LabVIEW ISO installer |
+| PackageID | string | false | LabVIEW_COM_PKG 25.0300 | LabVIEW package ID to activate |
+| SerialNumber | string | true |  | LabVIEW serial number for activation (required) |
 | TimeoutSeconds | number | false | 2700 | Maximum time in seconds to wait for installation to complete |
 
 ```powershell
@@ -446,7 +436,7 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 server.tcp.access=+127.0.0.1;+localhost;+*
 server.viscripting.ShowScriptingOperationsInEditor=TRUE
  | INI settings to add (one per line or comma-separated). |
-| labview_wait_seconds | string | false | 50 | Seconds to wait for LabVIEW to generate ini file if it does not exist. |
+| labview_wait_seconds | string | false | 60 | Seconds to wait for LabVIEW to generate ini file if it does not exist. |
 | working_directory | string | false |  | Working directory where the action will run. |
 | log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
 | dry_run | string | false | false | If true, simulate the action without side effects. |
@@ -560,6 +550,17 @@ server.viscripting.ShowScriptingOperationsInEditor=TRUE
 | --- | --- | --- | --- | --- |
 | relative_path | string | true |  | Relative path containing the repository. |
 | gcli_path | string | false |  | Optional path to the g-cli executable. |
+| working_directory | string | false |  | Working directory where the action will run. |
+| log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
+| dry_run | string | false | false | If true, simulate the action without side effects. |
+
+#### setup-labview
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| labview_iso_url | string | false | https://download.ni.com/support/softlib/labview/labview_development_system/2025_Q3/ni-labview-2025-community-x86_25.3.3_offline.iso | URL to download the LabVIEW ISO installer. |
+| timeout_seconds | string | false | 2700 | Maximum time in seconds to wait for installation to complete. |
+| serial_number | string | true |  | LabVIEW serial number for activation. |
+| package_id | string | false | LabVIEW_COM_PKG 25.0300 | LabVIEW package ID to activate. |
 | working_directory | string | false |  | Working directory where the action will run. |
 | log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
 | dry_run | string | false | false | If true, simulate the action without side effects. |

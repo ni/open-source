@@ -1,25 +1,4 @@
 {
-  "Invoke-ActivateLabview": {
-    "description": "Activates LabVIEW license using NI License Manager utility. SerialNumber: LabVIEW serial number for activation. PackageID: LabVIEW package ID to activate. DryRun: If set, prints the command instead of executing it.",
-    "parameters": {
-      "DryRun": {
-        "type": "boolean",
-        "required": false,
-        "description": "If set, prints the command instead of executing it"
-      },
-      "PackageID": {
-        "type": "string",
-        "required": false,
-        "default": "LabVIEW_COM_PKG 25.0300",
-        "description": "LabVIEW package ID to activate"
-      },
-      "SerialNumber": {
-        "type": "string",
-        "required": true,
-        "description": "LabVIEW serial number for activation"
-      }
-    }
-  },
   "Invoke-AddTokenToLabVIEW": {
     "description": "Adds an authentication token to a LabVIEW installation. MinimumSupportedLVVersion: Minimum LabVIEW version that the project supports. SupportedBitness: Target LabVIEW bitness (32- or 64-bit). RelativePath: Normalized path to the project root relative to the working directory. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
     "parameters": {
@@ -670,7 +649,7 @@
     }
   },
   "Invoke-SetupLabview": {
-    "description": "Downloads and installs LabVIEW Community Edition from an ISO image. LabVIEWIsoUrl: URL to download the LabVIEW ISO installer. TimeoutSeconds: Maximum time in seconds to wait for installation to complete. DryRun: If set, prints the command instead of executing it.",
+    "description": "Downloads, installs, and activates LabVIEW Community Edition from an ISO image. LabVIEWIsoUrl: URL to download the LabVIEW ISO installer. TimeoutSeconds: Maximum time in seconds to wait for installation to complete. SerialNumber: LabVIEW serial number for activation (required). PackageID: LabVIEW package ID to activate. DryRun: If set, prints the command instead of executing it.",
     "parameters": {
       "DryRun": {
         "type": "boolean",
@@ -682,6 +661,17 @@
         "required": false,
         "default": "https://download.ni.com/support/softlib/labview/labview_development_system/2025_Q3/ni-labview-2025-community-x86_25.3.3_offline.iso",
         "description": "URL to download the LabVIEW ISO installer"
+      },
+      "PackageID": {
+        "type": "string",
+        "required": false,
+        "default": "LabVIEW_COM_PKG 25.0300",
+        "description": "LabVIEW package ID to activate"
+      },
+      "SerialNumber": {
+        "type": "string",
+        "required": true,
+        "description": "LabVIEW serial number for activation (required)"
       },
       "TimeoutSeconds": {
         "type": "number",

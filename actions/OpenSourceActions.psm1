@@ -36,30 +36,6 @@ function Invoke-OpenSourceActionScript {
     }
 }
 
-# Activates LabVIEW license using NI License Manager utility.
-# SerialNumber: LabVIEW serial number for activation.
-# PackageID: LabVIEW package ID to activate.
-# DryRun: If set, prints the command instead of executing it.
-function Invoke-ActivateLabview {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)] [string] $SerialNumber,
-        [Parameter()] [string] $PackageID = "LabVIEW_COM_PKG 25.0300",
-        [switch] $DryRun
-    )
-    Write-Information "Activating LabVIEW package $PackageID" -InformationAction Continue
-    
-    $result = Invoke-OpenSourceActionScript `
-        -ScriptSegments @('activate-labview', 'ActivateLabview.ps1') `
-        -Arguments @{
-            SerialNumber = $SerialNumber
-            PackageID = $PackageID
-        } `
-        -DryRun:$DryRun
-    
-    return $result
-}
-
 # Adds an authentication token to a LabVIEW installation.
 # MinimumSupportedLVVersion: Minimum LabVIEW version that the project supports.
 # SupportedBitness: Target LabVIEW bitness (32- or 64-bit).
@@ -557,24 +533,30 @@ function Invoke-SetDevelopmentMode {
     return Invoke-OpenSourceActionScript -ScriptSegments @('set-development-mode','Set_Development_Mode.ps1') -Arguments $args -DryRun:$DryRun -gcliPath $gcliPath
 }
 
-# Downloads and installs LabVIEW Community Edition from an ISO image.
+# Downloads, installs, and activates LabVIEW Community Edition from an ISO image.
 # LabVIEWIsoUrl: URL to download the LabVIEW ISO installer.
 # TimeoutSeconds: Maximum time in seconds to wait for installation to complete.
+# SerialNumber: LabVIEW serial number for activation (required).
+# PackageID: LabVIEW package ID to activate.
 # DryRun: If set, prints the command instead of executing it.
 function Invoke-SetupLabview {
     [CmdletBinding()]
     param(
         [Parameter()] [string] $LabVIEWIsoUrl = "https://download.ni.com/support/softlib/labview/labview_development_system/2025_Q3/ni-labview-2025-community-x86_25.3.3_offline.iso",
         [Parameter()] [int] $TimeoutSeconds = 2700,
+        [Parameter(Mandatory)] [string] $SerialNumber,
+        [Parameter()] [string] $PackageID = "LabVIEW_COM_PKG 25.0300",
         [switch] $DryRun
     )
-    Write-Information "Setting up LabVIEW from $LabVIEWIsoUrl (timeout: $TimeoutSeconds seconds)" -InformationAction Continue
+    Write-Information "Setting up and activating LabVIEW from $LabVIEWIsoUrl" -InformationAction Continue
     
     $result = Invoke-OpenSourceActionScript `
         -ScriptSegments @('setup-labview', 'SetupLabview.ps1') `
         -Arguments @{
             LabVIEWIsoUrl = $LabVIEWIsoUrl
             TimeoutSeconds = $TimeoutSeconds
+            SerialNumber = $SerialNumber
+            PackageID = $PackageID
         } `
         -DryRun:$DryRun
     

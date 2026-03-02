@@ -157,11 +157,6 @@ jobs:
         with:
           timeout_seconds: 3600
       
-      - name: Activate LabVIEW
-        uses: ni/open-source/activate-labview@v1
-        with:
-          serial_number: ${{ secrets.LABVIEW_SERIAL_NUMBER }}
-      
       - name: Configure LabVIEW
         uses: ni/open-source/configure-labview@v1
         with:
@@ -181,5 +176,4 @@ jobs:
 ## See also
 
 - [Setup LabVIEW](setup-labview.md)
-- [Activate LabVIEW](activate-labview.md)
 - [LabVIEW Configuration File Documentation](https://www.ni.com/docs/en-US/bundle/labview/page/lvhowto/configuring_the_labview_environment.html)

@@ -20,7 +20,6 @@ Open Source LabVIEW Actions unifies LabVIEW [CI/CD](glossary.md#ci-cd) scripts b
 
 | Action | Purpose |
 | --- | --- |
-| [activate-labview](actions/activate-labview.md) | Activate LabVIEW license using NI License Manager utility. |
 | [add-token-to-labview](actions/add-token-to-labview.md) | Add a custom library path token to the LabVIEW INI file so LabVIEW can locate project libraries. |
 | [apply-vipc](actions/apply-vipc.md) | Apply a VI Package Configuration (.vipc) file to a specific LabVIEW installation using g-cli. |
 | [build](actions/build.md) | Automate building the LabVIEW Icon Editor project, including cleaning, building libraries, and packaging. |
@@ -37,7 +36,7 @@ Open Source LabVIEW Actions unifies LabVIEW [CI/CD](glossary.md#ci-cd) scripts b
 | [run-pester-tests](actions/run-pester-tests.md) | Run PowerShell Pester tests in a repository. |
 | [run-unit-tests](actions/run-unit-tests.md) | Run LabVIEW unit tests via the LabVIEW Unit Test Framework CLI and report pass/fail/error using standard exit codes. |
 | [set-development-mode](actions/set-development-mode.md) | Configure the repository for development mode by removing packed libraries, adding tokens, preparing sources, and closing LabVIEW. |
-| [setup-labview](actions/setup-labview.md) | Downloads and installs LabVIEW Community Edition from an ISO image for CI/CD environments. |
+| [setup-labview](actions/setup-labview.md) | Downloads, installs and activates LabVIEW Community Edition from an ISO image for CI/CD environments. |
 | [setup-mkdocs](actions/setup-mkdocs.md) | Install a pinned MkDocs with caching. |
 
 ## Workflow Examples

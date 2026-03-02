@@ -1,5 +1,5 @@
 name: 'Setup LabVIEW'
-description: 'Download and install LabVIEW Community Edition from ISO image'
+description: 'Download, install, and activate LabVIEW Community Edition'
 inputs:
   labview_iso_url:
     description: 'URL to download the LabVIEW ISO installer.'
@@ -9,6 +9,13 @@ inputs:
     description: 'Maximum time in seconds to wait for installation to complete.'
     required: false
     default: '2700'
+  serial_number:
+    description: 'LabVIEW serial number for activation.'
+    required: true
+  package_id:
+    description: 'LabVIEW package ID to activate.'
+    required: false
+    default: 'LabVIEW_COM_PKG 25.0300'
   working_directory:
     description: 'Working directory where the action will run.'
     required: false
@@ -28,9 +35,12 @@ runs:
       shell: pwsh
       run: |
         $ErrorActionPreference = 'Stop'
-        $args = @{}
+        $args = @{
+          SerialNumber = '${{ inputs.serial_number }}'
+        }
         if ('${{ inputs.labview_iso_url }}') { $args['LabVIEWIsoUrl'] = '${{ inputs.labview_iso_url }}' }
         if ('${{ inputs.timeout_seconds }}') { $args['TimeoutSeconds'] = [int]'${{ inputs.timeout_seconds }}' }
+        if ('${{ inputs.package_id }}') { $args['PackageID'] = '${{ inputs.package_id }}' }
         
         $params = @{
           ActionName = 'setup-labview'

@@ -2,7 +2,6 @@
 
 List of available GitHub Actions.
 
-- [activate-labview](./activate-labview.md): Activates a LabVIEW license using the NI License Manager utility.
 - [add-token-to-labview](./add-token-to-labview.md): Add a custom library path token to the LabVIEW INI file so LabVIEW can locate project libraries.
 - [apply-vipc](./apply-vipc.md): Apply a VI Package Configuration (.vipc) file to a specific LabVIEW installation using g-cli.
 - [build-lvlibp](./build-lvlibp.md): Build a LabVIEW project’s build specification into a Packed Project Library (.lvlibp)
@@ -20,7 +19,7 @@ List of available GitHub Actions.
 - [run-pester-tests](./run-pester-tests.md): Run PowerShell Pester tests in a repository.
 - [run-unit-tests](./run-unit-tests.md): Run LabVIEW unit tests via the LabVIEW Unit Test Framework CLI and report pass/fail/error using standard exit codes.
 - [set-development-mode](./set-development-mode.md): Configure the repository for development mode by removing packed libraries, adding tokens, preparing sources, and closing LabVIEW.
-- [setup-labview](./setup-labview.md): Downloads and installs LabVIEW Community Edition from an ISO image for CI/CD environments. 
+- [setup-labview](./setup-labview.md): Downloads and installs LabVIEW Community Edition from an ISO image for CI/CD environments.
 - [setup-lunit](./setup-lunit.md): Installs VI Package Manager (VIPM) and the LUnit for G-CLI package for LabVIEW automation testing.
 - [setup-mkdocs](./setup-mkdocs.md): Install a pinned MkDocs with caching.
 
