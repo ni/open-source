@@ -50,7 +50,7 @@ pwsh -File actions/Invoke-OSAction.ps1 -ActionName setup-lunit -ArgsJson '{
 
 ```yaml
 - name: Setup LUnit for G-CLI
-  uses: owner/repo/setup-lunit@v1
+  uses: ni/open-source/setup-lunit@v1
   with:
     lv_version: '2025'
     lv_bitness: '64'
