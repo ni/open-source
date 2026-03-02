@@ -48,14 +48,14 @@ pwsh -File actions/Invoke-OSAction.ps1 -ActionName setup-labview -ArgsJson '{
 
 ```yaml
 - name: Setup LabVIEW
-  uses: owner/repo/setup-labview@v1
+  uses: ni/open-source/setup-labview@v1
 ```
 
 With custom version and timeout:
 
 ```yaml
 - name: Setup LabVIEW 2024
-  uses: owner/repo/setup-labview@v1
+  uses: ni/open-source/setup-labview@v1
   with:
     labview_iso_url: 'https://download.ni.com/support/softlib/labview/labview_development_system/2025_Q3/ni-labview-2025-community-x86_25.3.3_offline.iso'
     timeout_seconds: 3600
