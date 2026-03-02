@@ -60,14 +60,14 @@ pwsh -File actions/Invoke-OSAction.ps1 -ActionName configure-labview -ArgsJson '
 
 ```yaml
 - name: Configure LabVIEW
-  uses: owner/repo/configure-labview@v1
+  uses: ni/open-source/configure-labview@v1
 ```
 
 With custom settings:
 
 ```yaml
 - name: Configure LabVIEW for Remote Access
-  uses: owner/repo/configure-labview@v1
+  uses: ni/open-source/configure-labview@v1
   with:
     labview_version: '2025'
     ini_settings: |
@@ -82,7 +82,7 @@ For LabVIEW 2024:
 
 ```yaml
 - name: Configure LabVIEW 2024
-  uses: owner/repo/configure-labview@v1
+  uses: ni/open-source/configure-labview@v1
   with:
     labview_version: '2024'
 ```
@@ -150,20 +150,20 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Setup NIPM
-        uses: owner/repo/setup-nipm@v1
+        uses: ni/open-source/setup-nipm@v1
       
       - name: Setup LabVIEW
-        uses: owner/repo/setup-labview@v1
+        uses: ni/open-source/setup-labview@v1
         with:
           timeout_seconds: 3600
       
       - name: Activate LabVIEW
-        uses: owner/repo/activate-labview@v1
+        uses: ni/open-source/activate-labview@v1
         with:
           serial_number: ${{ secrets.LABVIEW_SERIAL_NUMBER }}
       
       - name: Configure LabVIEW
-        uses: owner/repo/configure-labview@v1
+        uses: ni/open-source/configure-labview@v1
         with:
           ini_settings: |
             server.tcp.enabled=TRUE
