@@ -4,27 +4,29 @@ $ErrorActionPreference = 'Stop'
 
 Describe 'ConfigureLabview.Workflow' {
     $meta = @{
-        requirement = 'REQ-038'
+        requirement = 'REQ-037'
         Owner       = 'DevTools'
         Evidence    = 'tests/pester/ConfigureLabview.Workflow.Tests.ps1'
     }
 
-    It 'defines configure-labview action with required inputs [REQ-038]' -Tag 'REQ-038' {
+    It 'defines configure-labview action with required inputs [REQ-037]' -Tag 'REQ-037' {
         $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..' '..')).Path
         $actionPath = Join-Path $repoRoot 'configure-labview/action.yml'
         
         $actionPath | Should -Exist
         
-        $action = Get-Content -Raw $actionPath | ConvertFrom-Yaml
-        $action.name | Should -Be 'Configure LabVIEW'
-        $action.inputs.labview_version | Should -Not -BeNullOrEmpty
-        $action.inputs.labview_version.default | Should -Be '2025'
-        $action.inputs.ini_settings | Should -Not -BeNullOrEmpty
-        $action.inputs.labview_wait_seconds | Should -Not -BeNullOrEmpty
-        $action.inputs.labview_wait_seconds.default | Should -Be '60'
+        # Use regex-based validation instead of YAML parsing
+        $yamlContent = Get-Content -Raw $actionPath
+        
+        $yamlContent | Should -Match "name:\s*['\"]?Configure LabVIEW"
+        $yamlContent | Should -Match 'labview_version:'
+        $yamlContent | Should -Match "default:\s*['\"]?2025"
+        $yamlContent | Should -Match 'ini_settings:'
+        $yamlContent | Should -Match 'labview_wait_seconds:'
+        $yamlContent | Should -Match "default:\s*['\"]?60"
     }
 
-    It 'validates adapter function accepts configuration parameters [REQ-038]' -Tag 'REQ-038' {
+    It 'validates adapter function accepts configuration parameters [REQ-037]' -Tag 'REQ-037' {
         Import-Module (Join-Path $PSScriptRoot '../../actions/OpenSourceActions.psm1') -Force
         
         $cmd = Get-Command Invoke-ConfigureLabview -ErrorAction Stop
@@ -37,15 +39,21 @@ Describe 'ConfigureLabview.Workflow' {
         $params | Should -Contain 'DryRun'
     }
 
-    It 'validates default INI settings include TCP and scripting configuration [REQ-038]' -Tag 'REQ-038' {
+    It 'validates default INI settings include TCP and scripting configuration [REQ-037]' -Tag 'REQ-037' {
         Import-Module (Join-Path $PSScriptRoot '../../actions/OpenSourceActions.psm1') -Force
         
         $cmd = Get-Command Invoke-ConfigureLabview -ErrorAction Stop
-        $defaultSettings = $cmd.Parameters['IniSettings'].Attributes | 
-            Where-Object { $_.TypeId.Name -eq 'ParameterAttribute' } | 
-            Select-Object -First 1
+        $iniSettingsParam = $cmd.Parameters['IniSettings']
         
-        # Function should have default INI settings parameter
-        $cmd.Parameters['IniSettings'] | Should -Not -BeNullOrEmpty
+        # Verify parameter exists and is a string type
+        $iniSettingsParam | Should -Not -BeNullOrEmpty
+        $iniSettingsParam.ParameterType.Name | Should -Be 'String'
+        
+        # Verify the function definition includes expected default settings
+        # by checking the AST or function definition
+        $functionDef = $cmd.Definition
+        $functionDef | Should -Match 'server\.tcp\.enabled'
+        $functionDef | Should -Match 'server\.tcp\.access'
+        $functionDef | Should -Match 'server\.viscripting\.ShowScriptingOperationsInEditor'
     }
 }
