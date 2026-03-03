@@ -18,12 +18,12 @@ Describe 'ConfigureLabview.Workflow' {
         # Use regex-based validation instead of YAML parsing
         $yamlContent = Get-Content -Raw $actionPath
         
-        $yamlContent | Should -Match "name:\s*['\"]?Configure LabVIEW"
+        $yamlContent | Should -Match "name:\s*['\x22]?Configure LabVIEW"
         $yamlContent | Should -Match 'labview_version:'
-        $yamlContent | Should -Match "default:\s*['\"]?2025"
+        $yamlContent | Should -Match "default:\s*['\x22]?2025"
         $yamlContent | Should -Match 'ini_settings:'
         $yamlContent | Should -Match 'labview_wait_seconds:'
-        $yamlContent | Should -Match "default:\s*['\"]?60"
+        $yamlContent | Should -Match "default:\s*['\x22]?60"
     }
 
     It 'validates adapter function accepts configuration parameters [REQ-037]' -Tag 'REQ-037' {
