@@ -17,11 +17,11 @@ Describe 'SetupLabview.Workflow' {
         
         $yamlContent = Get-Content -Raw $actionPath
         
-        $yamlContent | Should -Match "name:\s*['\"]?Setup LabVIEW"
+        $yamlContent | Should -Match "name:\s*['\x22]?Setup LabVIEW"
         $yamlContent | Should -Match 'labview_iso_url:'
-        $yamlContent | Should -Match 'default:\s*["\']https://download\.ni\.com.*labview.*\.iso'
+        $yamlContent | Should -Match 'default:\s*["\x27]https://download\.ni\.com.*labview.*\.iso'
         $yamlContent | Should -Match 'timeout_seconds:'
-        $yamlContent | Should -Match "default:\s*['\"]?2700"
+        $yamlContent | Should -Match "default:\s*['\x22]?2700"
     }
 
     It 'validates adapter function accepts LabVIEWIsoUrl, TimeoutSeconds, SerialNumber, and PackageID parameters [REQ-036]' -Tag 'REQ-036' {
