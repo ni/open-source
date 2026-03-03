@@ -1,12 +1,12 @@
 <#
 .SYNOPSIS
-    Run LabVIEW unit tests using g-cli and output a color-coded table of results.
+    Run LabVIEW unit tests using LUnit CLI and output a color-coded table of results.
 
 .DESCRIPTION
     Demonstrates a Setup/MainSequence/Cleanup flow with:
       - Table-based test results
       - Color-coded pass/fail
-      - Non-zero exit if g-cli fails or if any test fails
+      - Non-zero exit if LUnit CLI fails or if any test fails
       - Automatic search for exactly one *.lvproj file by moving up the folder hierarchy 
         until just before the drive root.
 
@@ -14,7 +14,7 @@
     LabVIEW minimum supported version (e.g., "2021").
 
 .PARAMETER SupportedBitness
-    Bitness for LabVIEW (e.g., "64").
+    Bitness for LabVIEW (e.g., "32", "64").
 
 .PARAMETER ProjectPath
     (Optional) Path to the LabVIEW project file (*.lvproj). If not provided,
@@ -25,7 +25,7 @@
 
 .NOTES
     PowerShell 7.5+ assumed for cross-platform support.
-    This script *requires* that g-cli and LabVIEW be compatible with the OS.
+    This script requires that LUnit CLI and LabVIEW be compatible with the OS.
 #>
 
 param(
@@ -185,25 +185,32 @@ function MainSequence {
         }
     }
 
-    $gCliPath = "C:\Program Files\G-CLI\bin\g-cli.exe"
+    $labviewCLI = "C:\Program Files (x86)\National Instruments\Shared\LabVIEW CLI\LabVIEWCLI.exe"
+    
+    if (-not (Test-Path $labviewCLI)) {
+        Write-Error "LabVIEW CLI not found at $labviewCLI"
+        $script:OriginalExitCode = 1
+        $script:TestsHadFailures = $true
+        return
+``    }
 
     Write-Host "Running unit tests for LabVIEW $MinimumSupportedLVVersion ($SupportedBitness-bit)"
     Write-Host "Project Path: $AbsoluteProjectPath"
     Write-Host "Report will be saved at: $ReportPath"
 
-    Write-Host "`nExecuting g-cli command..."
-    & $gCliPath --lv-ver $MinimumSupportedLVVersion --arch $SupportedBitness lunit -- -r "$ReportPath" "$AbsoluteProjectPath"
+    Write-Host "`nExecuting LabVIEW CLI with LUnit operation..."
+    & $labviewCLI -OperationName LUnit -ProjectPath $AbsoluteProjectPath -ReportPath $ReportPath
 
     $script:OriginalExitCode = $LASTEXITCODE
 
     if ($script:OriginalExitCode -ne 0) {
-        Write-Warning "g-cli test execution failed (exit code $script:OriginalExitCode)."
+        Write-Warning "LabVIEW CLI LUnit execution failed (exit code $script:OriginalExitCode)."
     }
 
-    # If g-cli failed and no report was produced, we can't parse anything
+    # If LUnit failed and no report was produced, we can't parse anything
     if ($script:OriginalExitCode -ne 0 -and -not (Test-Path $ReportPath)) {
         $script:TestsHadFailures = $true
-        Write-Warning "No test report found, and g-cli returned an error."
+        Write-Warning "No test report found, and LabVIEW CLI returned an error."
         return
     }
 
