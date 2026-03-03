@@ -283,7 +283,7 @@
     },
     {
       "id": "REQ-038",
-      "description": "Install VI Package Manager (VIPM) and LUnit for G-CLI package for LabVIEW automation testing.",
+      "description": "Install VI Package Manager (VIPM) and LUnit CLI package for LabVIEW automation testing.",
       "tests": [
         "SetupLunit.Workflow.Tests"
       ]

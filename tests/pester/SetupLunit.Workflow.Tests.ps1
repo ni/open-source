@@ -16,7 +16,7 @@ Describe 'SetupLunit.Workflow' {
         $actionPath | Should -Exist
         
         $action = Get-Content -Raw $actionPath | ConvertFrom-Yaml
-        $action.name | Should -Be 'Setup LUnit for G-CLI'
+        $action.name | Should -Be 'Setup LUnit CLI'
         $action.inputs.lv_version | Should -Not -BeNullOrEmpty
         $action.inputs.lv_version.required | Should -Be $true
         $action.inputs.lv_bitness | Should -Not -BeNullOrEmpty

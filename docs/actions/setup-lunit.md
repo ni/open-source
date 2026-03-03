@@ -2,14 +2,14 @@
 
 ## Purpose
 
-Installs VI Package Manager (VIPM) and the LUnit for G-CLI package for LabVIEW automation testing. This action is typically used in CI/CD pipelines to set up unit testing infrastructure for LabVIEW projects using the G-CLI command-line interface.
+Installs VI Package Manager (VIPM) and the LUnit CLI package for LabVIEW automation testing. This action is typically used in CI/CD pipelines to set up unit testing infrastructure for LabVIEW projects using the LabVIEWCLI command.
 
 The action automatically:
 
 - Detects if VIPM is already installed and skips installation if found
 - Downloads and installs VIPM if not present
 - Refreshes the VIPM package repository
-- Installs the LUnit for G-CLI package for the specified LabVIEW version and bitness
+- Installs the LUnit CLI package for the specified LabVIEW version and bitness
 
 ## Parameters
 
@@ -49,7 +49,7 @@ pwsh -File actions/Invoke-OSAction.ps1 -ActionName setup-lunit -ArgsJson '{
 ### GitHub Action
 
 ```yaml
-- name: Setup LUnit for G-CLI
+- name: Setup LUnit CLI
   uses: ni/open-source/setup-lunit@v1
   with:
     lv_version: '2025'
@@ -68,7 +68,7 @@ pwsh -File actions/Invoke-OSAction.ps1 -ActionName setup-lunit -ArgsJson '{
 - **VIPM detection**: If VIPM is already installed at `C:\Program Files\JKI\VI Package Manager\support\vipm.exe`, installation is skipped
 - **Silent installation**: VIPM is installed with `/quiet` and `/norestart` flags
 - **Package refresh**: The VIPM package repository is automatically refreshed before installing LUnit
-- **LUnit package**: Installs `sas_workshops_lib_lunit_for_g_cli` from the JKI package repository
+- **LUnit package**: Installs `astemes_lib_lunit_cli` from the JKI package repository
 - **Version-specific**: LUnit is installed for the specific LabVIEW version and bitness combination
 - **G-CLI requirement**: This action is designed for use with G-CLI-based testing workflows
 
@@ -90,7 +90,7 @@ C:\Program Files\JKI\VI Package Manager\support\vipm.exe
 - **Package installation fails**: Ensure the LabVIEW version and bitness match an installed LabVIEW instance
 - **Network issues**: Package download requires internet access to JKI package servers
 - **Permission denied**: Ensure the runner has write access to `C:\Program Files\JKI\`
-- **LUnit not available**: Verify the package name `sas_workshops_lib_lunit_for_g_cli` is correct and available in the VIPM repository
+- **LUnit not available**: Verify the package name `astemes_lib_lunit_cli` is correct and available in the VIPM repository
 
 ## See also
 
@@ -98,4 +98,4 @@ C:\Program Files\JKI\VI Package Manager\support\vipm.exe
 - [Configure LabVIEW](configure-labview.md)
 - [Run Unit Tests](run-unit-tests.md)
 - [VI Package Manager Documentation](https://www.vipm.io/documentation/)
-- [LUnit for G-CLI Package](https://www.vipm.io/package/sas_workshops_lib_lunit_for_g_cli/)
+- [LUnit CLI Package](https://www.vipm.io/package/astemes_lib_lunit_cli/)

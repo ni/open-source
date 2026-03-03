@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-  Install VI Package Manager (VIPM) and LUnit for G-CLI package.
+  Install VI Package Manager (VIPM) and LUnit CLI package.
 
 .DESCRIPTION
   Downloads and installs VIPM if not already installed, refreshes the package list,
-  and installs the LUnit for G-CLI package for the specified LabVIEW version and bitness.
+  and installs the LUnit CLI package for the specified LabVIEW version and bitness.
 
 .PARAMETER LVVersion
   LabVIEW version (e.g., "2025", "2024").
@@ -19,7 +19,7 @@
   .\SetupLunit.ps1 -LVVersion "2025" -LVBitness "64"
 
 .NOTES
-  [REQ-039] Install VIPM and LUnit for G-CLI package
+  [REQ-039] Install VIPM and LUnit CLI package
 #>
 
 [CmdletBinding()]
@@ -40,7 +40,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 try {
-    Write-Verbose "Starting LUnit for G-CLI setup process..."
+    Write-Verbose "Starting LUnit CLI setup process..."
     Write-Information "Setting up LUnit for LabVIEW $LVVersion ($LVBitness-bit)" -InformationAction Continue
     
     $VipmExe = "C:\Program Files\JKI\VI Package Manager\support\vipm.exe"
@@ -114,11 +114,11 @@ try {
     Start-Sleep -Seconds 30
     Write-Verbose "Wait complete, proceeding with installation"
         
-    # Install LUnit for G-CLI
-    Write-Information "Installing LUnit for G-CLI for LabVIEW $LVVersion ($LVBitness-bit)..." -InformationAction Continue
-    Write-Verbose "Running: vipm.exe install sas_workshops_lib_lunit_for_g_cli --labview-version $LVVersion --labview-bitness $LVBitness"
+    # Install LUnit CLI
+    Write-Information "Installing LUnit CLI for LabVIEW $LVVersion ($LVBitness-bit)..." -InformationAction Continue
+    Write-Verbose "Running: vipm.exe install astemes_lib_lunit_cli --labview-version $LVVersion --labview-bitness $LVBitness"
     
-    & $VipmExe install sas_workshops_lib_lunit_for_g_cli `
+    & $VipmExe install astemes_lib_lunit_cli `
               --labview-version $LVVersion `
               --labview-bitness $LVBitness
     
@@ -130,10 +130,10 @@ try {
         Start-Sleep -Seconds 180
         Write-Verbose "Wait complete, proceeding with installation"
         
-        Write-Information "LUnit for G-CLI installed successfully!" -InformationAction Continue
+        Write-Information "LUnit CLI installed successfully!" -InformationAction Continue
         exit 0
     } else {
-        throw "Failed to install LUnit for G-CLI (exit code: $installExitCode)"
+        throw "Failed to install LUnit CLI (exit code: $installExitCode)"
     }
 }
 catch {
