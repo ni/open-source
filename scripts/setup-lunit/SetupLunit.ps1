@@ -42,6 +42,15 @@ $ProgressPreference = 'SilentlyContinue'
 try {
     Write-Verbose "Starting LUnit CLI setup process..."
     Write-Information "Setting up LUnit for LabVIEW $LVVersion ($LVBitness-bit)" -InformationAction Continue
+
+    $isElevated = Test-IsElevated
+    if ($isElevated) {
+        Write-Information "PowerShell session is running with administrator privileges" -InformationAction Continue
+        Write-Verbose "Current user: $([Security.Principal.WindowsIdentity]::GetCurrent().Name)"
+    } else {
+        Write-Warning "PowerShell session is NOT running with administrator privileges"
+        Write-Warning "VIPM may fail to install LUnit CLI to LabVIEW CLI directory"
+    }
     
     $VipmExe = "C:\Program Files\JKI\VI Package Manager\support\vipm.exe"
     
@@ -102,14 +111,10 @@ try {
     Write-Information "Refreshing VIPM package list..." -InformationAction Continue
     Write-Verbose "Running: vipm.exe package-list-refresh"
     
-    $refreshProcess = Start-Process -FilePath $VipmExe `
-                                    -ArgumentList 'package-list-refresh' `
-                                    -Wait `
-                                    -PassThru `
-                                    -NoNewWindow
+    & $VipmExe package-list-refresh
     
-    if ($refreshProcess.ExitCode -ne 0) {
-        throw "Failed to refresh VIPM package list (exit code: $($refreshProcess.ExitCode))"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to refresh VIPM package list (exit code: $LASTEXITCODE)"
     }
     
     Write-Verbose "Package list refreshed successfully"
@@ -122,15 +127,28 @@ try {
     Write-Information "Installing LUnit CLI for LabVIEW $LVVersion ($LVBitness-bit)..." -InformationAction Continue
     Write-Verbose "Running: vipm.exe install astemes_lib_lunit_cli --labview-version $LVVersion --labview-bitness $LVBitness"
     
-    $installProcess = Start-Process -FilePath $VipmExe `
-                                    -ArgumentList 'install', 'astemes_lib_lunit_cli', `
-                                                  '--labview-version', $LVVersion, `
-                                                  '--labview-bitness', $LVBitness `
-                                    -Wait `
-                                    -PassThru `
-                                    -NoNewWindow
+
+    $labviewCliDir = "C:\Program Files (x86)\National Instruments\Shared\LabVIEW CLI"
+    if (Test-Path $labviewCliDir) {
+        Write-Verbose "Testing write permissions to $labviewCliDir"
+        $testFile = Join-Path $labviewCliDir "test_write_permissions.tmp"
+        try {
+            [System.IO.File]::WriteAllText($testFile, "test")
+            Remove-Item $testFile -Force -ErrorAction SilentlyContinue
+            Write-Information "Write permissions to LabVIEW CLI directory verified" -InformationAction Continue
+        } catch {
+            Write-Warning "Cannot write to LabVIEW CLI directory: $($_.Exception.Message)"
+            Write-Warning "LUnit CLI installation may fail silently"
+        }
+    } else {
+        Write-Verbose "LabVIEW CLI directory does not exist yet at $labviewCliDir"
+    }
+
+    & $VipmExe install astemes_lib_lunit_cli `
+              --labview-version $LVVersion `
+              --labview-bitness $LVBitness
     
-    $installExitCode = $installProcess.ExitCode
+    $installExitCode = $LASTEXITCODE
     Write-Verbose "LUnit installation exit code: $installExitCode"
     
     if ($installExitCode -eq 0) {
@@ -146,5 +164,9 @@ try {
 }
 catch {
     Write-Error "SetupLunit failed: $_"
+
+    Write-Warning "Troubleshooting information:"
+    Write-Warning "- Current user: $([Security.Principal.WindowsIdentity]::GetCurrent().Name)"
+    Write-Warning "- Is elevated: $(Test-IsElevated)"
     exit 1
 }
