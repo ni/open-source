@@ -184,7 +184,9 @@ try {
     Write-Information "Refreshing VIPM package list..." -InformationAction Continue
     Write-Verbose "Running: vipm.exe package-list-refresh"
     
-    & $VipmExe package-list-refresh
+    Write-Host "--- VIPM Package List Refresh Output ---"
+    & $VipmExe package-list-refresh *>&1 | ForEach-Object { Write-Host $_ }
+    Write-Host "--- End VIPM Output ---"
     
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to refresh VIPM package list (exit code: $LASTEXITCODE)"
@@ -196,20 +198,22 @@ try {
     Start-Sleep -Seconds 30
     Write-Verbose "Wait complete, proceeding with installation"
 
-    Write-Information "Step 1: Installing LUnit CLI (System) component..." -InformationAction Continue
-    & $VipmExe install astemes_lib_lunit_cli_system --labview-version $LVVersion --labview-bitness $LVBitness
-    Start-Sleep -Seconds 25
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to install LUnit CLI System component (exit code: $LASTEXITCODE)"
-    }
+    # Write-Information "Step 1: Installing LUnit CLI (System) component..." -InformationAction Continue
+    # & $VipmExe install astemes_lib_lunit_cli_system --labview-version $LVVersion --labview-bitness $LVBitness
+    # Start-Sleep -Seconds 25
+    # if ($LASTEXITCODE -ne 0) {
+    #     throw "Failed to install LUnit CLI System component (exit code: $LASTEXITCODE)"
+    # }
         
     # Install LUnit CLI
     Write-Information "Installing LUnit CLI for LabVIEW $LVVersion ($LVBitness-bit)..." -InformationAction Continue
     Write-Verbose "Running: vipm.exe install astemes_lib_lunit_cli --labview-version $LVVersion --labview-bitness $LVBitness"
 
+    Write-Host "--- VIPM Installation Output ---"
     & $VipmExe install astemes_lib_lunit_cli `
               --labview-version $LVVersion `
-              --labview-bitness $LVBitness
+              --labview-bitness $LVBitness *>&1 | ForEach-Object { Write-Host $_ }
+    Write-Host "--- End VIPM Output ---"
     
     $installExitCode = $LASTEXITCODE
     Write-Verbose "LUnit installation exit code: $installExitCode"
