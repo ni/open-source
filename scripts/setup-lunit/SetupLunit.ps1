@@ -102,10 +102,14 @@ try {
     Write-Information "Refreshing VIPM package list..." -InformationAction Continue
     Write-Verbose "Running: vipm.exe package-list-refresh"
     
-    & $VipmExe package-list-refresh
+    $refreshProcess = Start-Process -FilePath $VipmExe `
+                                    -ArgumentList 'package-list-refresh' `
+                                    -Wait `
+                                    -PassThru `
+                                    -NoNewWindow
     
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to refresh VIPM package list (exit code: $LASTEXITCODE)"
+    if ($refreshProcess.ExitCode -ne 0) {
+        throw "Failed to refresh VIPM package list (exit code: $($refreshProcess.ExitCode))"
     }
     
     Write-Verbose "Package list refreshed successfully"
@@ -118,11 +122,15 @@ try {
     Write-Information "Installing LUnit CLI for LabVIEW $LVVersion ($LVBitness-bit)..." -InformationAction Continue
     Write-Verbose "Running: vipm.exe install astemes_lib_lunit_cli --labview-version $LVVersion --labview-bitness $LVBitness"
     
-    & $VipmExe install astemes_lib_lunit_cli `
-              --labview-version $LVVersion `
-              --labview-bitness $LVBitness
+    $installProcess = Start-Process -FilePath $VipmExe `
+                                    -ArgumentList 'install', 'astemes_lib_lunit_cli', `
+                                                  '--labview-version', $LVVersion, `
+                                                  '--labview-bitness', $LVBitness `
+                                    -Wait `
+                                    -PassThru `
+                                    -NoNewWindow
     
-    $installExitCode = $LASTEXITCODE
+    $installExitCode = $installProcess.ExitCode
     Write-Verbose "LUnit installation exit code: $installExitCode"
     
     if ($installExitCode -eq 0) {
