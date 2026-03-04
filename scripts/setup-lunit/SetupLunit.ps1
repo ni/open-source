@@ -195,6 +195,13 @@ try {
     Write-Information "Waiting 30 seconds for VIPM to complete background refresh..." -InformationAction Continue
     Start-Sleep -Seconds 30
     Write-Verbose "Wait complete, proceeding with installation"
+
+    Write-Information "Step 1: Installing LUnit CLI (System) component..." -InformationAction Continue
+    & $VipmExe install astemes_lib_lunit_cli_system --labview-version $LVVersion --labview-bitness $LVBitness
+    Start-Sleep -Seconds 25
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to install LUnit CLI System component (exit code: $LASTEXITCODE)"
+    }
         
     # Install LUnit CLI
     Write-Information "Installing LUnit CLI for LabVIEW $LVVersion ($LVBitness-bit)..." -InformationAction Continue
