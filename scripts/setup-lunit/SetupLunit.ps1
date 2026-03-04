@@ -111,6 +111,49 @@ try {
         
         Write-Verbose "VIPM executable verified at $VipmExe"
     }
+
+    # Grant write permissions to LabVIEW CLI directory
+    $labviewCliDir = "C:\Program Files (x86)\National Instruments\Shared\LabVIEW CLI"
+    
+    if ($isElevated) {
+        # Create directory if it doesn't exist
+        if (-not (Test-Path $labviewCliDir)) {
+            Write-Information "Creating LabVIEW CLI directory at $labviewCliDir" -InformationAction Continue
+            New-Item -Path $labviewCliDir -ItemType Directory -Force | Out-Null
+        }
+        
+        # Grant write permissions using icacls
+        Write-Information "Granting write permissions to LabVIEW CLI directory..." -InformationAction Continue
+        Write-Verbose "Running: icacls `"$labviewCliDir`" /grant Everyone:(OI)(CI)F /T"
+        
+        $icaclsOutput = & icacls "$labviewCliDir" /grant "Everyone:(OI)(CI)F" /T 2>&1
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Information "Write permissions granted successfully" -InformationAction Continue
+            Write-Verbose "icacls output: $icaclsOutput"
+        } else {
+            Write-Warning "icacls command failed with exit code: $LASTEXITCODE"
+            Write-Verbose "icacls output: $icaclsOutput"
+        }
+        
+        # Verify write permissions
+        $testFile = Join-Path $labviewCliDir "test_write_permissions.tmp"
+        try {
+            [System.IO.File]::WriteAllText($testFile, "test")
+            Remove-Item $testFile -Force -ErrorAction SilentlyContinue
+            Write-Information "Write permissions to LabVIEW CLI directory verified" -InformationAction Continue
+        } catch {
+            Write-Warning "Cannot write to LabVIEW CLI directory: $($_.Exception.Message)"
+            Write-Warning "LUnit CLI installation may fail silently"
+        }
+    } else {
+        Write-Warning "Cannot grant write permissions without administrator privileges"
+        if (Test-Path $labviewCliDir) {
+            Write-Verbose "LabVIEW CLI directory exists at $labviewCliDir"
+        } else {
+            Write-Warning "LabVIEW CLI directory does not exist at $labviewCliDir"
+        }
+    }
     
     # Refresh package list
     Write-Information "Refreshing VIPM package list..." -InformationAction Continue
@@ -131,23 +174,6 @@ try {
     # Install LUnit CLI
     Write-Information "Installing LUnit CLI for LabVIEW $LVVersion ($LVBitness-bit)..." -InformationAction Continue
     Write-Verbose "Running: vipm.exe install astemes_lib_lunit_cli --labview-version $LVVersion --labview-bitness $LVBitness"
-    
-
-    $labviewCliDir = "C:\Program Files (x86)\National Instruments\Shared\LabVIEW CLI"
-    if (Test-Path $labviewCliDir) {
-        Write-Verbose "Testing write permissions to $labviewCliDir"
-        $testFile = Join-Path $labviewCliDir "test_write_permissions.tmp"
-        try {
-            [System.IO.File]::WriteAllText($testFile, "test")
-            Remove-Item $testFile -Force -ErrorAction SilentlyContinue
-            Write-Information "Write permissions to LabVIEW CLI directory verified" -InformationAction Continue
-        } catch {
-            Write-Warning "Cannot write to LabVIEW CLI directory: $($_.Exception.Message)"
-            Write-Warning "LUnit CLI installation may fail silently"
-        }
-    } else {
-        Write-Verbose "LabVIEW CLI directory does not exist yet at $labviewCliDir"
-    }
 
     & $VipmExe install astemes_lib_lunit_cli `
               --labview-version $LVVersion `
@@ -172,6 +198,6 @@ catch {
 
     Write-Warning "Troubleshooting information:"
     Write-Warning "- Current user: $([Security.Principal.WindowsIdentity]::GetCurrent().Name)"
-    Write-Warning "- Is elevated: $(Test-IsElevated)"
+    Write-Warning "- Is elevated: $isElevated"
     exit 1
 }
