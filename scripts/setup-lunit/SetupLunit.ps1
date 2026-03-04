@@ -112,6 +112,19 @@ try {
         Write-Verbose "VIPM executable verified at $VipmExe"
     }
 
+    Write-Information "Ensuring a fresh VIPM session..." -InformationAction Continue
+    $vipmProcs = @("vipm", "VIPM Service")
+    foreach ($p in $vipmProcs) {
+        $processes = Get-Process -Name $p -ErrorAction SilentlyContinue
+        if ($processes) {
+            Write-Verbose "Stopping $($processes.Count) instance(s) of $p"
+            Stop-Process -Name $p -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    # Give the OS time to release file handles and clean up
+    Start-Sleep -Seconds 5
+
     # Grant write permissions to LabVIEW CLI directory
     $labviewCliDir = "C:\Program Files (x86)\National Instruments\Shared\LabVIEW CLI"
     
