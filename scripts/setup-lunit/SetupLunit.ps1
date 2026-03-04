@@ -43,11 +43,16 @@ try {
     Write-Verbose "Starting LUnit CLI setup process..."
     Write-Information "Setting up LUnit for LabVIEW $LVVersion ($LVBitness-bit)" -InformationAction Continue
 
-    $isElevated = Test-IsElevated
+    $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
+
+    $isElevated = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
     if ($isElevated) {
         Write-Information "PowerShell session is running with administrator privileges" -InformationAction Continue
-        Write-Verbose "Current user: $([Security.Principal.WindowsIdentity]::GetCurrent().Name)"
-    } else {
+        Write-Verbose "Current user: $($currentIdentity.Name)"
+    }
+    else {
         Write-Warning "PowerShell session is NOT running with administrator privileges"
         Write-Warning "VIPM may fail to install LUnit CLI to LabVIEW CLI directory"
     }
