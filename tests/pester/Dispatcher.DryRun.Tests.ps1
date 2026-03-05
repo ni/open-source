@@ -45,6 +45,7 @@ Describe 'Unified Dispatcher — DryRun behavior for all actions' {
        CurrentFilename           = 'old.txt'
        NewFilename               = 'new.txt'
        ReleaseNotesFile          = 'notes.md'
+       SerialNumber              = 'XXXXXXXXX'
        ExtraParam                = 'extra'
        WorkingDirectory          = $script:projectRoot
     }
