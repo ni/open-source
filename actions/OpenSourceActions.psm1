@@ -571,8 +571,8 @@ function Invoke-SetupLabview {
 function Invoke-SetupLunit {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)] [string] $LVVersion,
-        [Parameter(Mandatory)] [ValidateSet("32", "64")] [string] $LVBitness,
+        [Parameter(Mandatory)][Alias('minimum_supported_lv_version')] [string] $LVVersion,
+        [Parameter(Mandatory)][Alias('supported_bitness')]            [string] $LVBitness,
         [Parameter()] [string] $VipmInstallerUrl = "https://packages.jki.net/vipm/preview/vipm-setup-latest-preview.exe",
         [switch] $DryRun
     )
