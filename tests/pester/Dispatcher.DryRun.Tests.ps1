@@ -31,6 +31,7 @@ Describe 'Unified Dispatcher — DryRun behavior for all actions' {
        LabVIEWMinorRevision      = '2021'
        VIPBPath                  = 'dummy.vipb'
        LVVersion                 = '2021'
+       LVBitness                 = '64'
        ProjectFile               = 'Project.lvproj'
        Major                     = 1
        Minor                     = 0
