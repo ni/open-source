@@ -563,7 +563,7 @@ function Invoke-SetupLabview {
     return $result
 }
 
-# Installs VI Package Manager (VIPM) and LUnit for G-CLI package.
+# Installs VI Package Manager (VIPM) and LUnit CLI package.
 # LVVersion: LabVIEW version (e.g., "2025", "2024").
 # LVBitness: LabVIEW bitness ("32" or "64").
 # VipmInstallerUrl: URL to download the VIPM installer.

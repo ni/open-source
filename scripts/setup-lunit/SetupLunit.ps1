@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-  Install VI Package Manager (VIPM) and LUnit for G-CLI package.
+  Install VI Package Manager (VIPM) and LUnit CLI package.
 
 .DESCRIPTION
   Downloads and installs VIPM if not already installed, refreshes the package list,
-  and installs the LUnit for G-CLI package for the specified LabVIEW version and bitness.
+  and installs the LUnit CLI package for the specified LabVIEW version and bitness.
 
 .PARAMETER LVVersion
   LabVIEW version (e.g., "2025", "2024").
@@ -19,7 +19,7 @@
   .\SetupLunit.ps1 -LVVersion "2025" -LVBitness "64"
 
 .NOTES
-  [REQ-039] Install VIPM and LUnit for G-CLI package
+  [REQ-039] Install VIPM and LUnit CLI package
 #>
 
 [CmdletBinding()]
@@ -40,7 +40,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 try {
-    Write-Verbose "Starting LUnit for G-CLI setup process..."
+    Write-Verbose "Starting LUnit CLI setup process..."
     Write-Information "Setting up LUnit for LabVIEW $LVVersion ($LVBitness-bit)" -InformationAction Continue
     
     $VipmExe = "C:\Program Files\JKI\VI Package Manager\support\vipm.exe"
@@ -102,7 +102,9 @@ try {
     Write-Information "Refreshing VIPM package list..." -InformationAction Continue
     Write-Verbose "Running: vipm.exe package-list-refresh"
     
-    & $VipmExe package-list-refresh
+    Write-Host "--- VIPM Package List Refresh Output ---"
+    & $VipmExe package-list-refresh *>&1 | ForEach-Object { Write-Host $_ }
+    Write-Host "--- End VIPM Output ---"
     
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to refresh VIPM package list (exit code: $LASTEXITCODE)"
@@ -114,13 +116,27 @@ try {
     Start-Sleep -Seconds 30
     Write-Verbose "Wait complete, proceeding with installation"
         
-    # Install LUnit for G-CLI
-    Write-Information "Installing LUnit for G-CLI for LabVIEW $LVVersion ($LVBitness-bit)..." -InformationAction Continue
-    Write-Verbose "Running: vipm.exe install sas_workshops_lib_lunit_for_g_cli --labview-version $LVVersion --labview-bitness $LVBitness"
-    
-    & $VipmExe install sas_workshops_lib_lunit_for_g_cli `
+    # Install LUnit CLI
+    Write-Information "Installing LUnit CLI for LabVIEW $LVVersion ($LVBitness-bit)..." -InformationAction Continue
+    Write-Verbose "Running: vipm.exe install astemes_lib_lunit_cli --labview-version $LVVersion --labview-bitness $LVBitness"
+
+    Write-Host "--- VIPM Installation Output ---"
+    & $VipmExe install astemes_lib_lunit_cli `
               --labview-version $LVVersion `
-              --labview-bitness $LVBitness
+              --labview-bitness $LVBitness *>&1 | ForEach-Object { Write-Host $_ }
+
+    Write-Information "Waiting 5 seconds..." -InformationAction Continue
+    Start-Sleep -Seconds 5
+    Write-Verbose "Wait complete, proceeding with installation of system component"
+
+    # Install LUnit CLI system component first
+    Write-Information "Installing LUnit CLI system component..." -InformationAction Continue
+    Write-Verbose "Running: vipm.exe install astemes_lib_lunit_cli_system --labview-version $LVVersion --labview-bitness $LVBitness"
+    
+    & $VipmExe install astemes_lib_lunit_cli_system `
+              --labview-version $LVVersion `
+              --labview-bitness $LVBitness *>&1 | ForEach-Object { Write-Host $_ }
+    Write-Host "--- End VIPM Output ---"
     
     $installExitCode = $LASTEXITCODE
     Write-Verbose "LUnit installation exit code: $installExitCode"
@@ -130,10 +146,10 @@ try {
         Start-Sleep -Seconds 180
         Write-Verbose "Wait complete, proceeding with installation"
         
-        Write-Information "LUnit for G-CLI installed successfully!" -InformationAction Continue
+        Write-Information "LUnit CLI installed successfully!" -InformationAction Continue
         exit 0
     } else {
-        throw "Failed to install LUnit for G-CLI (exit code: $installExitCode)"
+        throw "Failed to install LUnit CLI (exit code: $installExitCode)"
     }
 }
 catch {

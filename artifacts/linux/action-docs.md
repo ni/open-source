@@ -284,7 +284,7 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-SetupLabview -ArgsJson '{}
 ```
 
 #### Invoke-SetupLunit
-Installs VI Package Manager (VIPM) and LUnit for G-CLI package. LVVersion: LabVIEW version (e.g., "2025", "2024"). LVBitness: LabVIEW bitness ("32" or "64"). VipmInstallerUrl: URL to download the VIPM installer. DryRun: If set, prints the command instead of executing it.
+Installs VI Package Manager (VIPM) and LUnit CLI package. LVVersion: LabVIEW version (e.g., "2025", "2024"). LVBitness: LabVIEW bitness ("32" or "64"). VipmInstallerUrl: URL to download the VIPM installer. DryRun: If set, prints the command instead of executing it.
 | Parameter | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | DryRun | boolean | false |  | If set, prints the command instead of executing it |
