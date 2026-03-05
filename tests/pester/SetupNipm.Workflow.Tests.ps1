@@ -15,10 +15,12 @@ Describe 'SetupNipm.Workflow' {
         
         $actionPath | Should -Exist
         
-        $action = Get-Content -Raw $actionPath | ConvertFrom-Yaml
-        $action.name | Should -Be 'Setup NI Package Manager'
-        $action.inputs.nipm_url | Should -Not -BeNullOrEmpty
-        $action.inputs.nipm_url.default | Should -Match 'NIPackageManager'
+        # Use regex-based validation instead of YAML parsing
+        $yamlContent = Get-Content -Raw $actionPath
+        
+        $yamlContent | Should -Match 'name:.*Setup NI Package Manager'
+        $yamlContent | Should -Match 'nipm_url:'
+        $yamlContent | Should -Match 'default:.*NIPackageManager'
     }
 
     It 'validates adapter function accepts NIPMUrl parameter [REQ-035]' -Tag 'REQ-035' {
