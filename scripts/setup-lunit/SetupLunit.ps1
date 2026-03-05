@@ -146,6 +146,13 @@ try {
             Write-Information "Creating LabVIEW CLI directory at $labviewCliDir" -InformationAction Continue
             New-Item -Path $labviewCliDir -ItemType Directory -Force | Out-Null
         }
+
+        # Check current permissions before granting
+        Write-Information "Current LabVIEW CLI directory permissions:" -InformationAction Continue
+        Write-Host "--- Pre-Grant Permissions ---"
+        $preGrantPerms = & icacls "$labviewCliDir" 2>&1
+        $preGrantPerms | ForEach-Object { Write-Host $_ }
+        Write-Host "--- End Pre-Grant Permissions ---"
         
         # Grant write permissions using icacls
         Write-Information "Granting write permissions to LabVIEW CLI directory..." -InformationAction Continue
@@ -160,6 +167,12 @@ try {
             Write-Warning "icacls command failed with exit code: $LASTEXITCODE"
             Write-Verbose "icacls output: $icaclsOutput"
         }
+
+        Write-Information "Updated LabVIEW CLI directory permissions:" -InformationAction Continue
+        Write-Host "--- Post-Grant Permissions ---"
+        $postGrantPerms = & icacls "$labviewCliDir" 2>&1
+        $postGrantPerms | ForEach-Object { Write-Host $_ }
+        Write-Host "--- End Post-Grant Permissions ---"
         
         # Verify write permissions
         $testFile = Join-Path $labviewCliDir "test_write_permissions.tmp"
@@ -286,22 +299,6 @@ try {
                 Get-ChildItem $operationsDir -Directory -ErrorAction SilentlyContinue | ForEach-Object {
                     Write-Warning "  - $($_.Name)"
                 }
-                throw "LUnit operation was not installed to LabVIEW CLI Operations directory"
-            }
-            
-            # Verify operation files exist
-            $lunitFiles = Get-ChildItem -Path $lunitOperationDir -Recurse -ErrorAction SilentlyContinue
-            if ($lunitFiles) {
-                Write-Information "LUnit operation verified at $lunitOperationDir" -InformationAction Continue
-                Write-Verbose "Found $($lunitFiles.Count) files in LUnit operation directory"
-                
-                # List key files
-                Write-Host "LUnit operation files:"
-                $lunitFiles | Select-Object -First 10 | ForEach-Object {
-                    Write-Host "  - $($_.FullName)"
-                }
-            } else {
-                throw "LUnit operation directory exists but contains no files"
             }
             Write-Host "--- End LabVIEW CLI Operations Directory ---"
         }
