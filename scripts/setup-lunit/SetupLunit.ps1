@@ -213,6 +213,18 @@ try {
     & $VipmExe install astemes_lib_lunit_cli `
               --labview-version $LVVersion `
               --labview-bitness $LVBitness *>&1 | ForEach-Object { Write-Host $_ }
+
+    Write-Information "Waiting 5 seconds for VIPM to complete background refresh..." -InformationAction Continue
+    Start-Sleep -Seconds 5
+    Write-Verbose "Wait complete, proceeding with installation"
+
+    # Install LUnit CLI system component first
+    Write-Information "Installing LUnit CLI system component..." -InformationAction Continue
+    Write-Verbose "Running: vipm.exe install astemes_lib_lunit_cli_system --labview-version $LVVersion --labview-bitness $LVBitness"
+    
+    & $VipmExe install astemes_lib_lunit_cli_system `
+              --labview-version $LVVersion `
+              --labview-bitness $LVBitness *>&1 | ForEach-Object { Write-Host $_ }
     Write-Host "--- End VIPM Output ---"
     
     $installExitCode = $LASTEXITCODE
