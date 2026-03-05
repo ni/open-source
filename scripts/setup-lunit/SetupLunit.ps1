@@ -219,6 +219,81 @@ try {
     Write-Verbose "LUnit installation exit code: $installExitCode"
     
     if ($installExitCode -eq 0) {
+        Write-Information "LUnit CLI package installation completed" -InformationAction Continue
+        
+        # Verify VIPM cache and check for dependency packages
+        Write-Information "Checking VIPM cache for package files..." -InformationAction Continue
+        $vipmCacheDir = "C:\ProgramData\JKI\VIPM\cache"
+        
+        if (Test-Path $vipmCacheDir) {
+            Write-Host "--- VIPM Cache Contents ---"
+            $cacheFiles = Get-ChildItem -Path $vipmCacheDir -Filter "astemes_lib_lunit*.vip" -ErrorAction SilentlyContinue
+            
+            if ($cacheFiles) {
+                foreach ($file in $cacheFiles) {
+                    Write-Host "Found: $($file.Name)"
+                    Write-Host "  Full path: $($file.FullName)"
+                    Write-Host "  Size: $([math]::Round($file.Length / 1MB, 2)) MB"
+                    Write-Host "  Last modified: $($file.LastWriteTime)"
+                    
+                    # Check permissions using icacls
+                    Write-Host "  Permissions:"
+                    $permissions = & icacls "$($file.FullName)" 2>&1
+                    $permissions | ForEach-Object { Write-Host "    $_" }
+                }
+            } else {
+                Write-Warning "No astemes_lib_lunit*.vip files found in cache"
+            }
+            
+            # Check specifically for the system component package
+            $systemPackagePath = Join-Path $vipmCacheDir "astemes_lib_lunit_cli_system-1.6.1.23.vip"
+            if (Test-Path $systemPackagePath) {
+                Write-Host "`nSystem component package found: $systemPackagePath"
+            } else {
+                Write-Warning "System component package NOT found: $systemPackagePath"
+                Write-Warning "This indicates the dependency was not downloaded/cached by VIPM"
+            }
+            
+            Write-Host "--- End VIPM Cache Contents ---"
+        } else {
+            Write-Warning "VIPM cache directory not found at $vipmCacheDir"
+        }
+        
+        # Verify LUnit operation was installed to LabVIEW CLI
+        Write-Information "Verifying LUnit CLI installation in LabVIEW CLI directory..." -InformationAction Continue
+        
+        $operationsDir = Join-Path $labviewCliDir "Operations"
+        if (-not (Test-Path $operationsDir)) {
+            Write-Warning "LabVIEW CLI Operations directory not found at $operationsDir"
+        } else {
+            Write-Host "--- LabVIEW CLI Operations Directory ---"
+            $lunitOperationDir = Join-Path $operationsDir "LUnit"
+            if (-not (Test-Path $lunitOperationDir)) {
+                Write-Warning "LUnit operation directory not found at $lunitOperationDir"
+                Write-Warning "Listing contents of Operations directory:"
+                Get-ChildItem $operationsDir -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                    Write-Warning "  - $($_.Name)"
+                }
+                throw "LUnit operation was not installed to LabVIEW CLI Operations directory"
+            }
+            
+            # Verify operation files exist
+            $lunitFiles = Get-ChildItem -Path $lunitOperationDir -Recurse -ErrorAction SilentlyContinue
+            if ($lunitFiles) {
+                Write-Information "LUnit operation verified at $lunitOperationDir" -InformationAction Continue
+                Write-Verbose "Found $($lunitFiles.Count) files in LUnit operation directory"
+                
+                # List key files
+                Write-Host "LUnit operation files:"
+                $lunitFiles | Select-Object -First 10 | ForEach-Object {
+                    Write-Host "  - $($_.FullName)"
+                }
+            } else {
+                throw "LUnit operation directory exists but contains no files"
+            }
+            Write-Host "--- End LabVIEW CLI Operations Directory ---"
+        }
+
         Write-Information "Waiting 180 seconds to complete mass compile..." -InformationAction Continue
         Start-Sleep -Seconds 180
         Write-Verbose "Wait complete, proceeding with installation"
