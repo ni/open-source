@@ -14,6 +14,7 @@
     'Invoke-ApplyVIPC'
     'Invoke-Build'
     'Invoke-BuildLvlibp'
+    'Invoke-BuildLvlibpDocker'
     'Invoke-BuildViPackage'
     'Invoke-CloseLabVIEW'
     'Invoke-GenerateReleaseNotes'
