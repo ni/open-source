@@ -9,7 +9,6 @@ LABVIEW_PATH=""
 PROJECT_PATH=""
 TARGET_NAME=""
 BUILD_SPEC_NAME=""
-VERSION=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -29,10 +28,6 @@ while [[ $# -gt 0 ]]; do
             BUILD_SPEC_NAME="$2"
             shift 2
             ;;
-        --version)
-            VERSION="$2"
-            shift 2
-            ;;
         *)
             echo "Unknown argument: $1"
             exit 1
@@ -41,9 +36,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validate required arguments
-if [[ -z "$LABVIEW_PATH" ]] || [[ -z "$PROJECT_PATH" ]] || [[ -z "$TARGET_NAME" ]] || [[ -z "$VERSION" ]]; then
+if [[ -z "$LABVIEW_PATH" ]] || [[ -z "$PROJECT_PATH" ]] || [[ -z "$TARGET_NAME" ]]; then
     echo "Error: Missing required arguments"
-    echo "Usage: $0 --labview-path <path> --project-path <path> --target-name <name> [--build-spec-name <name>] --version <version>"
+    echo "Usage: $0 --labview-path <path> --project-path <path> --target-name <name> [--build-spec-name <name>]"
     exit 1
 fi
 
@@ -52,7 +47,6 @@ echo "LabVIEW: $LABVIEW_PATH"
 echo "Project: $PROJECT_PATH"
 echo "Target: $TARGET_NAME"
 echo "Build Spec: ${BUILD_SPEC_NAME:-<all>}"
-echo "Version: $VERSION"
 
 # Construct LabVIEWCLI command
 CLI_ARGS=(
@@ -66,7 +60,7 @@ if [[ -n "$BUILD_SPEC_NAME" ]]; then
     CLI_ARGS+=("-BuildSpecName" "$BUILD_SPEC_NAME")
 fi
 
-CLI_ARGS+=("-Version" "$VERSION")
+CLI_ARGS+=("-Headless")
 
 # Execute LabVIEWCLI
 echo "Executing: LabVIEWCLI ${CLI_ARGS[*]}"
