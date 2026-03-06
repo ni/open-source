@@ -1,25 +1,25 @@
 <#
 .SYNOPSIS
-    Builds the LabVIEW Packed Project Library (.lvlibp) using LabVIEW Docker container.
+    Builds the LabVIEW Packed Project Library (.lvlibp) using Linux LabVIEW Docker container.
 
 .DESCRIPTION
-    Executes LabVIEW build specification through g-cli inside a Docker container,
+    Executes LabVIEW build specification through LabVIEWCLI inside a Docker container,
     embedding the provided version information and commit identifier.
 
 .PARAMETER MinimumSupportedLVVersion
-    LabVIEW version used for the build (e.g., "2021", "2023").
+    LabVIEW version year used for the build (e.g., "2021", "2023", "2026").
 
 .PARAMETER SupportedBitness
     Bitness of the LabVIEW environment ("32" or "64").
 
-.PARAMETER TargetName
-    Target that contains the build specification.
-
 .PARAMETER ProjectPath
     Path to the LabVIEW project .lvproj file that contains the build specification.
 
-.PARAMETER BuildSpec
-    Name of the LabVIEW build specification to execute. If empty, execute all build specifications in the target.
+.PARAMETER TargetName
+    Target that contains the build specification.
+
+.PARAMETER BuildSpecName
+    Name of the LabVIEW build specification to execute. If empty, builds all specifications in the target.
 
 .PARAMETER Major
     Major version component for the PPL.
@@ -40,13 +40,13 @@
     Docker image name (e.g., "nationalinstruments/labview").
 
 .PARAMETER ImageTag
-    Docker image tag. Defaults to MinimumSupportedLVVersion if not specified.
+    Docker image tag (e.g., "2026q1-linux").
 
 .EXAMPLE
-    .\BuildLvlibpDocker.ps1 -MinimumSupportedLVVersion "2026" -SupportedBitness "64" -RelativePath "." -BuildSpec "Editor Packed Library" -Major 1 -Minor 0 -Patch 0 -Build 0 -Commit "abc1234" -DockerImage "nationalinstruments/labview"
+    .\BuildLvlibpDockerLinux.ps1 -MinimumSupportedLVVersion "2026" -SupportedBitness "64" -ProjectPath "lv_icon_editor.lvproj" -TargetName "My Computer" -BuildSpecName "Editor Packed Library" -Major 1 -Minor 0 -Patch 0 -Build 0 -Commit "abc1234"
 
 .NOTES
-    [REQ-039] Build LabVIEW Packed Project Library using Docker container
+    [REQ-039] Build LabVIEW Packed Project Library using Linux Docker container
 #>
 
 [CmdletBinding()]
@@ -58,10 +58,13 @@ param(
     [string]$SupportedBitness,
 
     [Parameter(Mandatory = $true)]
-    [string]$RelativePath,
+    [string]$ProjectPath,
 
     [Parameter(Mandatory = $true)]
-    [string]$BuildSpecName,
+    [string]$TargetName,
+
+    [Parameter(Mandatory = $false)]
+    [string]$BuildSpecName = "",
 
     [Parameter(Mandatory = $true)]
     [int]$Major,
@@ -89,7 +92,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 try {
-    Write-Verbose "Building PPL with Docker container"
+    Write-Verbose "Building PPL with Linux Docker container"
     Write-Information "PPL Version: $Major.$Minor.$Patch.$Build" -InformationAction Continue
     Write-Information "Commit: $Commit" -InformationAction Continue
 
@@ -103,6 +106,7 @@ try {
         throw "Failed to pull Docker image (exit code: $LASTEXITCODE)"
     }
 
+    # Get the path to the bash script
     $scriptDir = $PSScriptRoot
     $buildScript = Join-Path $scriptDir 'build-lvlibp.sh'
     
@@ -114,9 +118,11 @@ try {
     $labviewPath = "/usr/local/natinst/LabVIEW-${MinimumSupportedLVVersion}-${SupportedBitness}/labview"
     Write-Verbose "LabVIEWPath: $labviewPath"
     
+    # Container paths are always Linux-style
     $containerProjectPath = "/workspace/$ProjectPath"
     $containerScriptPath = "/tmp/build-lvlibp.sh"
-
+    
+    # Version string
     $versionString = "$Major.$Minor.$Patch.$Build"
 
     # Construct bash command arguments
@@ -175,6 +181,6 @@ try {
     exit 0
 }
 catch {
-    Write-Error "BuildLvlibpDocker failed: $_"
+    Write-Error "BuildLvlibpDockerLinux failed: $_"
     exit 1
 }
