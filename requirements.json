@@ -262,9 +262,9 @@
     },
     {
       "id": "REQ-039",
-      "description": "Build LabVIEW Packed Project Library (.lvlibp) using LabVIEW Docker container with specified version, bitness, and build specification, then rename the artifact with version and commit metadata.",
+      "description": "Build LabVIEW Packed Project Library (.lvlibp) using Linux LabVIEW Docker container with specified version, bitness, and build specification, then rename the artifact with version and commit metadata.",
       "tests": [
-        "BuildLvlibpDocker.Workflow.Tests"
+        "BuildLvlibpDockerLinux.Workflow.Tests"
       ]
     },
     {

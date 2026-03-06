@@ -228,7 +228,7 @@ function Invoke-BuildLvlibp {
     return Invoke-OpenSourceActionScript -ScriptSegments @('build-lvlibp','Build_lvlibp.ps1') -Arguments $args -DryRun:$DryRun -gcliPath $gcliPath
 }
 
-# Builds LabVIEW Packed Project Library (.lvlibp) using Docker container.
+# Builds LabVIEW Packed Project Library (.lvlibp) using Linux Docker container.
 # MinimumSupportedLVVersion: LabVIEW version for the build (e.g., "2021", "2026").
 # SupportedBitness: Bitness of the LabVIEW environment ("32" or "64").
 # ProjectPath: Path to the LabVIEW project .lvproj file.
@@ -243,7 +243,7 @@ function Invoke-BuildLvlibp {
 # ImageTag: Docker image tag (defaults to "2026q1-linux").
 # DryRun: If set, prints the command instead of executing it.
 # gcliPath: Optional path prepended to PATH for locating the g CLI.
-function Invoke-BuildLvlibpDocker {
+function Invoke-BuildLvlibpDockerLinux {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] [string] $MinimumSupportedLVVersion,
@@ -257,14 +257,14 @@ function Invoke-BuildLvlibpDocker {
         [Parameter(Mandatory)] [int] $Build,
         [Parameter(Mandatory)] [string] $Commit,
         [Parameter()] [string] $DockerImage = "nationalinstruments/labview",
-        [Parameter()] [string] $ImageTag = "",
+        [Parameter()] [string] $ImageTag = "2026q1-linux",
         [switch] $DryRun,
         [string] $gcliPath
     )
-    Write-Information "Invoking BuildLvlibpDocker" -InformationAction Continue
+    Write-Information "Invoking BuildLvlibpDockerLinux" -InformationAction Continue
     
     $result = Invoke-OpenSourceActionScript `
-        -ScriptSegments @('build-lvlibp-docker', 'BuildLvlibpDocker.ps1') `
+        -ScriptSegments @('build-lvlibp-docker-linux', 'BuildLvlibpDockerLinux.ps1') `
         -Arguments @{
             MinimumSupportedLVVersion = $MinimumSupportedLVVersion
             SupportedBitness = $SupportedBitness

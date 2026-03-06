@@ -1,0 +1,180 @@
+<#
+.SYNOPSIS
+    Builds the LabVIEW Packed Project Library (.lvlibp) using LabVIEW Docker container.
+
+.DESCRIPTION
+    Executes LabVIEW build specification through g-cli inside a Docker container,
+    embedding the provided version information and commit identifier.
+
+.PARAMETER MinimumSupportedLVVersion
+    LabVIEW version used for the build (e.g., "2021", "2023").
+
+.PARAMETER SupportedBitness
+    Bitness of the LabVIEW environment ("32" or "64").
+
+.PARAMETER TargetName
+    Target that contains the build specification.
+
+.PARAMETER ProjectPath
+    Path to the LabVIEW project .lvproj file that contains the build specification.
+
+.PARAMETER BuildSpec
+    Name of the LabVIEW build specification to execute. If empty, execute all build specifications in the target.
+
+.PARAMETER Major
+    Major version component for the PPL.
+
+.PARAMETER Minor
+    Minor version component for the PPL.
+
+.PARAMETER Patch
+    Patch version component for the PPL.
+
+.PARAMETER Build
+    Build number component for the PPL.
+
+.PARAMETER Commit
+    Commit hash or identifier recorded in the build.
+
+.PARAMETER DockerImage
+    Docker image name (e.g., "nationalinstruments/labview").
+
+.PARAMETER ImageTag
+    Docker image tag. Defaults to MinimumSupportedLVVersion if not specified.
+
+.EXAMPLE
+    .\BuildLvlibpDocker.ps1 -MinimumSupportedLVVersion "2026" -SupportedBitness "64" -RelativePath "." -BuildSpec "Editor Packed Library" -Major 1 -Minor 0 -Patch 0 -Build 0 -Commit "abc1234" -DockerImage "nationalinstruments/labview"
+
+.NOTES
+    [REQ-039] Build LabVIEW Packed Project Library using Docker container
+#>
+
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$MinimumSupportedLVVersion,
+
+    [Parameter(Mandatory = $true)]
+    [string]$SupportedBitness,
+
+    [Parameter(Mandatory = $true)]
+    [string]$RelativePath,
+
+    [Parameter(Mandatory = $true)]
+    [string]$BuildSpecName,
+
+    [Parameter(Mandatory = $true)]
+    [int]$Major,
+
+    [Parameter(Mandatory = $true)]
+    [int]$Minor,
+
+    [Parameter(Mandatory = $true)]
+    [int]$Patch,
+
+    [Parameter(Mandatory = $true)]
+    [int]$Build,
+
+    [Parameter(Mandatory = $true)]
+    [string]$Commit,
+
+    [Parameter(Mandatory = $false)]
+    [string]$DockerImage = "nationalinstruments/labview",
+
+    [Parameter(Mandatory = $false)]
+    [string]$ImageTag = "2026q1-linux"
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+try {
+    Write-Verbose "Building PPL with Docker container"
+    Write-Information "PPL Version: $Major.$Minor.$Patch.$Build" -InformationAction Continue
+    Write-Information "Commit: $Commit" -InformationAction Continue
+
+    $fullImage = "${DockerImage}:${ImageTag}"
+    Write-Information "Docker Image: $fullImage" -InformationAction Continue
+
+    # Pull Docker image
+    Write-Information "Pulling Docker image..." -InformationAction Continue
+    docker pull $fullImage
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to pull Docker image (exit code: $LASTEXITCODE)"
+    }
+
+    $scriptDir = $PSScriptRoot
+    $buildScript = Join-Path $scriptDir 'build-lvlibp.sh'
+    
+    if (-not (Test-Path $buildScript)) {
+        throw "Build script not found: $buildScript"
+    }
+
+    # Construct LabVIEWPath for Linux container
+    $labviewPath = "/usr/local/natinst/LabVIEW-${MinimumSupportedLVVersion}-${SupportedBitness}/labview"
+    Write-Verbose "LabVIEWPath: $labviewPath"
+    
+    $containerProjectPath = "/workspace/$ProjectPath"
+    $containerScriptPath = "/tmp/build-lvlibp.sh"
+
+    $versionString = "$Major.$Minor.$Patch.$Build"
+
+    # Construct bash command arguments
+    $bashArgs = @(
+        "--labview-path", "'$labviewPath'"
+        "--project-path", "'$containerProjectPath'"
+        "--target-name", "'$TargetName'"
+        "--version", "'$versionString'"
+    )
+    
+    if (-not [string]::IsNullOrWhiteSpace($BuildSpecName)) {
+        $bashArgs += "--build-spec-name", "'$BuildSpecName'"
+    }
+
+    $bashCommand = "chmod +x $containerScriptPath && $containerScriptPath $($bashArgs -join ' ')"
+    
+    Write-Information "Executing build script in Docker container..." -InformationAction Continue
+    Write-Verbose "Command: bash -c `"$bashCommand`""
+
+    # Run build in container
+    docker run --rm `
+        -v "${PWD}:/workspace" `
+        -v "${buildScript}:${containerScriptPath}" `
+        $fullImage `
+        bash -c $bashCommand
+
+    $buildExitCode = $LASTEXITCODE
+    Write-Information "Build exit code: $buildExitCode" -InformationAction Continue
+
+    if ($buildExitCode -ne 0) {
+        throw "Build failed with exit code $buildExitCode"
+    }
+
+    # Rename PPL with version and commit metadata
+    Write-Information "Renaming PPL artifact..." -InformationAction Continue
+    $shortCommit = if ($Commit.Length -ge 7) { $Commit.Substring(0, 7) } else { $Commit }
+    $bitnessTag = if ($SupportedBitness -eq '32') { 'x86' } else { 'x64' }
+    $versionTag = "v$Major.$Minor.$Patch.$Build+g$shortCommit"
+    
+    # Search for .lvlibp files in common build output locations
+    $buildOutputs = Get-ChildItem -Path . -Filter "*.lvlibp" -Recurse -ErrorAction SilentlyContinue | 
+        Where-Object { $_.Directory.Name -eq 'builds' }
+    
+    if ($buildOutputs) {
+        foreach ($ppl in $buildOutputs) {
+            $baseName = [System.IO.Path]::GetFileNameWithoutExtension($ppl.Name)
+            $newName = "${baseName}_${bitnessTag}_$versionTag.lvlibp"
+            Rename-Item -Path $ppl.FullName -NewName $newName
+            Write-Information "Renamed LVLIBP to '$newName'" -InformationAction Continue
+        }
+    } else {
+        Write-Warning "No .lvlibp files found in builds directory."
+    }
+
+    Write-Information "Build succeeded" -InformationAction Continue
+    exit 0
+}
+catch {
+    Write-Error "BuildLvlibpDocker failed: $_"
+    exit 1
+}
