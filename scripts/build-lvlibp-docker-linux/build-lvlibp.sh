@@ -9,9 +9,6 @@ LABVIEW_PATH=""
 PROJECT_PATH=""
 TARGET_NAME=""
 BUILD_SPEC_NAME=""
-VERSION=""
-COMMIT=""
-BITNESS=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -31,18 +28,6 @@ while [[ $# -gt 0 ]]; do
             BUILD_SPEC_NAME="$2"
             shift 2
             ;;
-        --version)
-            VERSION="$2"
-            shift 2
-            ;;
-        --commit)
-            COMMIT="$2"
-            shift 2
-            ;;
-        --bitness)
-            BITNESS="$2"
-            shift 2
-            ;;
         *)
             echo "Unknown argument: $1"
             exit 1
@@ -51,9 +36,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validate required arguments
-if [[ -z "$LABVIEW_PATH" ]] || [[ -z "$PROJECT_PATH" ]] || [[ -z "$TARGET_NAME" ]] || [[ -z "$VERSION" ]] || [[ -z "$COMMIT" ]] || [[ -z "$BITNESS" ]]; then
+if [[ -z "$LABVIEW_PATH" ]] || [[ -z "$PROJECT_PATH" ]] || [[ -z "$TARGET_NAME" ]]; then
     echo "Error: Missing required arguments"
-    echo "Usage: $0 --labview-path <path> --project-path <path> --target-name <name> [--build-spec-name <name>] --version <version> --commit <commit> --bitness <bitness>"
+    echo "Usage: $0 --labview-path <path> --project-path <path> --target-name <name> [--build-spec-name <name>]"
     exit 1
 fi
 
@@ -62,9 +47,6 @@ echo "LabVIEW: $LABVIEW_PATH"
 echo "Project: $PROJECT_PATH"
 echo "Target: $TARGET_NAME"
 echo "Build Spec: ${BUILD_SPEC_NAME:-<all>}"
-echo "Version: $VERSION"
-echo "Commit: $COMMIT"
-echo "Bitness: $BITNESS"
 
 # Construct LabVIEWCLI command
 CLI_ARGS=(
@@ -102,36 +84,5 @@ if [[ $EXIT_CODE -ne 0 ]]; then
     exit $EXIT_CODE
 fi
 
-# Rename PPL artifacts with version and commit metadata
-echo "Renaming PPL artifacts..."
-
-# Determine bitness tag
-if [[ "$BITNESS" == "32" ]]; then
-    BITNESS_TAG="x86"
-else
-    BITNESS_TAG="x64"
-fi
-
-# Get short commit (first 7 characters)
-SHORT_COMMIT="${COMMIT:0:7}"
-VERSION_TAG="v${VERSION}+g${SHORT_COMMIT}"
-
-# Find and rename .lvlibp files in builds directory
-FOUND_FILES=false
-if [[ -d "/workspace/builds" ]]; then
-    while IFS= read -r -d '' LVLIBP_FILE; do
-        FOUND_FILES=true
-        BASENAME=$(basename "$LVLIBP_FILE" .lvlibp)
-        DIRNAME=$(dirname "$LVLIBP_FILE")
-        NEW_NAME="${BASENAME}_${BITNESS_TAG}_${VERSION_TAG}.lvlibp"
-        echo "Renaming: $LVLIBP_FILE -> $NEW_NAME"
-        mv "$LVLIBP_FILE" "${DIRNAME}/${NEW_NAME}"
-    done < <(find /workspace/builds -type f -name "*.lvlibp" -print0)
-fi
-
-if [[ "$FOUND_FILES" == "false" ]]; then
-    echo "Warning: No .lvlibp files found in /workspace/builds directory"
-fi
-
-echo "Build and rename completed successfully"
+echo "Build completed successfully"
 exit 0

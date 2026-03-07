@@ -121,18 +121,12 @@ try {
     # Container paths are always Linux-style
     $containerProjectPath = "/workspace/$ProjectPath"
     $containerScriptPath = "/tmp/build-lvlibp.sh"
-    
-    # Version string
-    $versionString = "$Major.$Minor.$Patch.$Build"
 
     # Construct bash command arguments
     $bashArgs = @(
         "--labview-path", "'$labviewPath'"
         "--project-path", "'$containerProjectPath'"
         "--target-name", "'$TargetName'"
-        "--version", "'$versionString'"
-        "--commit", "'$Commit'"
-        "--bitness", "'$SupportedBitness'"
     )
     
     if (-not [string]::IsNullOrWhiteSpace($BuildSpecName)) {
@@ -159,7 +153,7 @@ try {
         throw "Build failed with exit code $buildExitCode"
     }
 
-    Write-Information "Build and rename succeeded" -InformationAction Continue
+    Write-Information "Build succeeded" -InformationAction Continue
     exit 0
 }
 catch {
