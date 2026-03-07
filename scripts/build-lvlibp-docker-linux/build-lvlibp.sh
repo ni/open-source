@@ -87,6 +87,16 @@ LabVIEWCLI "${CLI_ARGS[@]}"
 EXIT_CODE=$?
 echo "Build exit code: $EXIT_CODE"
 
+# Copy LabVIEW logs to workspace for artifact collection
+echo "Copying LabVIEW logs to workspace..."
+mkdir -p /workspace/build-logs
+if ls /tmp/lvtemporary_*.log 1> /dev/null 2>&1; then
+    cp /tmp/lvtemporary_*.log /workspace/build-logs/ 2>/dev/null || true
+    echo "Logs copied to /workspace/build-logs/"
+else
+    echo "No LabVIEW log files found in /tmp/"
+fi
+
 if [[ $EXIT_CODE -ne 0 ]]; then
     echo "Build failed"
     exit $EXIT_CODE
