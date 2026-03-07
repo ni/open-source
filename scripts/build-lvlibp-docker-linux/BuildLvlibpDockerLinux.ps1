@@ -130,6 +130,9 @@ try {
         "--labview-path", "'$labviewPath'"
         "--project-path", "'$containerProjectPath'"
         "--target-name", "'$TargetName'"
+        "--version", "'$versionString'"
+        "--commit", "'$Commit'"
+        "--bitness", "'$SupportedBitness'"
     )
     
     if (-not [string]::IsNullOrWhiteSpace($BuildSpecName)) {
@@ -150,34 +153,13 @@ try {
         *>&1 | ForEach-Object { Write-Information $_ -InformationAction Continue }
 
     $buildExitCode = $LASTEXITCODE
-    Write-Information "Build exit code: $buildExitCode" -InformationAction Continue
+    Write-Information "Build completed with exit code: $buildExitCode" -InformationAction Continue
 
     if ($buildExitCode -ne 0) {
         throw "Build failed with exit code $buildExitCode"
     }
 
-    # Rename PPL with version and commit metadata
-    Write-Information "Renaming PPL artifact..." -InformationAction Continue
-    $shortCommit = if ($Commit.Length -ge 7) { $Commit.Substring(0, 7) } else { $Commit }
-    $bitnessTag = if ($SupportedBitness -eq '32') { 'x86' } else { 'x64' }
-    $versionTag = "v$Major.$Minor.$Patch.$Build+g$shortCommit"
-    
-    # Search for .lvlibp files in common build output locations
-    $buildOutputs = Get-ChildItem -Path . -Filter "*.lvlibp" -Recurse -ErrorAction SilentlyContinue | 
-        Where-Object { $_.Directory.Name -eq 'builds' }
-    
-    if ($buildOutputs) {
-        foreach ($ppl in $buildOutputs) {
-            $baseName = [System.IO.Path]::GetFileNameWithoutExtension($ppl.Name)
-            $newName = "${baseName}_${bitnessTag}_$versionTag.lvlibp"
-            Rename-Item -Path $ppl.FullName -NewName $newName
-            Write-Information "Renamed LVLIBP to '$newName'" -InformationAction Continue
-        }
-    } else {
-        Write-Warning "No .lvlibp files found in builds directory."
-    }
-
-    Write-Information "Build succeeded" -InformationAction Continue
+    Write-Information "Build and rename succeeded" -InformationAction Continue
     exit 0
 }
 catch {
