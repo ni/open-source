@@ -101,7 +101,7 @@ try {
 
     # Pull Docker image
     Write-Information "Pulling Docker image..." -InformationAction Continue
-    docker pull $fullImage
+    docker pull $fullImage *>&1 | ForEach-Object { Write-Information $_ -InformationAction Continue }
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to pull Docker image (exit code: $LASTEXITCODE)"
     }
@@ -147,7 +147,8 @@ try {
         -v "${PWD}:/workspace" `
         -v "${buildScript}:${containerScriptPath}" `
         $fullImage `
-        bash -c $bashCommand
+        bash -c $bashCommand `
+        *>&1 | ForEach-Object { Write-Information $_ -InformationAction Continue }
 
     $buildExitCode = $LASTEXITCODE
     Write-Information "Build exit code: $buildExitCode" -InformationAction Continue
