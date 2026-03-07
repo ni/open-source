@@ -130,7 +130,6 @@ try {
         "--labview-path", "'$labviewPath'"
         "--project-path", "'$containerProjectPath'"
         "--target-name", "'$TargetName'"
-        "--version", "'$versionString'"
     )
     
     if (-not [string]::IsNullOrWhiteSpace($BuildSpecName)) {
