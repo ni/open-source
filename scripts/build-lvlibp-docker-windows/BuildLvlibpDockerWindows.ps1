@@ -128,27 +128,25 @@ try {
     $containerScriptPath = "C:\build-lvlibp.ps1"
 
     # Construct PowerShell command arguments
-    $psArgs = @(
-        "-LabVIEWPath", "'$labviewPath'"
-        "-ProjectPath", "'$containerProjectPath'"
-        "-TargetName", "'$TargetName'"
+    $scriptArgs = @(
+        "-LabVIEWPath", "`"$labviewPath`""
+        "-ProjectPath", "`"$containerProjectPath`""
+        "-TargetName", "`"$TargetName`""
     )
     
     if (-not [string]::IsNullOrWhiteSpace($BuildSpecName)) {
-        $psArgs += "-BuildSpecName", "'$BuildSpecName'"
+        $scriptArgs += "-BuildSpecName", "`"$BuildSpecName`""
     }
 
-    $psCommand = "& '$containerScriptPath' $($psArgs -join ' ')"
-    
     Write-Information "Executing build script in Windows Docker container..." -InformationAction Continue
-    Write-Verbose "Command: powershell -NoProfile -Command `"$psCommand`""
+    Write-Verbose "Script: $containerScriptPath $($scriptArgs -join ' ')"
 
-    # Run build in Windows container
+    # Run build in Windows container using -File with mounted script
     docker run --rm `
         -v "${PWD}:C:\workspace" `
         -v "${buildScript}:${containerScriptPath}" `
         $fullImage `
-        powershell -NoProfile -Command $psCommand `
+        powershell -NoProfile -File $containerScriptPath @scriptArgs `
         *>&1 | ForEach-Object { Write-Information $_ -InformationAction Continue }
 
     $buildExitCode = $LASTEXITCODE
