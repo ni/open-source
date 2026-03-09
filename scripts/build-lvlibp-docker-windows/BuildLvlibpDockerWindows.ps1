@@ -40,7 +40,7 @@
     Docker image name (e.g., "nationalinstruments/labview").
 
 .PARAMETER ImageTag
-    Docker image tag (e.g., "2026-windows").
+    Docker image tag (e.g., "2026q1-windows").
 
 .EXAMPLE
     .\BuildLvlibpDockerWindows.ps1 -MinimumSupportedLVVersion "2026" -SupportedBitness "64" -ProjectPath "lv_icon_editor.lvproj" -TargetName "My Computer" -BuildSpecName "Editor Packed Library" -Major 1 -Minor 0 -Patch 0 -Build 0 -Commit "abc1234"
@@ -85,7 +85,7 @@ param(
     [string]$DockerImage = "nationalinstruments/labview",
 
     [Parameter(Mandatory = $false)]
-    [string]$ImageTag = "2026-windows"
+    [string]$ImageTag = "2026q1-windows"
 )
 
 Set-StrictMode -Version Latest

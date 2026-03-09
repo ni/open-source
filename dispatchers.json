@@ -273,7 +273,7 @@
     }
   },
   "Invoke-BuildLvlibpDockerWindows": {
-    "description": "Builds LabVIEW Packed Project Library (.lvlibp) using Windows Docker container. MinimumSupportedLVVersion: LabVIEW version for the build (e.g., \"2021\", \"2026\"). SupportedBitness: Bitness of the LabVIEW environment (\"32\" or \"64\"). ProjectPath: Path to the LabVIEW project .lvproj file. TargetName: Target that contains the build specification. BuildSpecName: Name of the LabVIEW build specification (optional, builds all if empty). Major: Major version component. Minor: Minor version component. Patch: Patch version component. Build: Build number component. Commit: Commit hash or identifier. DockerImage: Docker image name (default: \"nationalinstruments/labview\"). ImageTag: Docker image tag (defaults to \"2026-windows\"). DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
+    "description": "Builds LabVIEW Packed Project Library (.lvlibp) using Windows Docker container. MinimumSupportedLVVersion: LabVIEW version for the build (e.g., \"2021\", \"2026\"). SupportedBitness: Bitness of the LabVIEW environment (\"32\" or \"64\"). ProjectPath: Path to the LabVIEW project .lvproj file. TargetName: Target that contains the build specification. BuildSpecName: Name of the LabVIEW build specification (optional, builds all if empty). Major: Major version component. Minor: Minor version component. Patch: Patch version component. Build: Build number component. Commit: Commit hash or identifier. DockerImage: Docker image name (default: \"nationalinstruments/labview\"). ImageTag: Docker image tag (defaults to \"2026q1-windows\"). DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
     "parameters": {
       "Build": {
         "type": "number",
@@ -310,8 +310,8 @@
       "ImageTag": {
         "type": "string",
         "required": false,
-        "default": "2026-windows",
-        "description": "Docker image tag (defaults to \"2026-windows\")"
+        "default": "2026q1-windows",
+        "description": "Docker image tag (defaults to \"2026q1-windows\")"
       },
       "Major": {
         "type": "number",
