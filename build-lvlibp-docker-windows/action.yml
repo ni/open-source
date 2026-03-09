@@ -1,0 +1,86 @@
+name: 'Build LVLIBP Docker Windows'
+description: 'Builds LabVIEW Packed Project Library (.lvlibp) using Windows Docker container'
+inputs:
+  minimum_supported_lv_version:
+    description: 'LabVIEW version year for the build (e.g., "2021", "2026").'
+    required: true
+  supported_bitness:
+    description: 'Bitness of the LabVIEW environment ("32" or "64").'
+    required: true
+  project_path:
+    description: 'Path to the LabVIEW project .lvproj file.'
+    required: true
+  target_name:
+    description: 'Target that contains the build specification.'
+    required: true
+  build_spec_name:
+    description: 'Name of the build specification. If empty, builds all specifications in the target.'
+    required: false
+    default: ''
+  major:
+    description: 'Major version component for the PPL.'
+    required: true
+  minor:
+    description: 'Minor version component for the PPL.'
+    required: true
+  patch:
+    description: 'Patch version component for the PPL.'
+    required: true
+  build:
+    description: 'Build number component for the PPL.'
+    required: true
+  commit:
+    description: 'Commit hash or identifier recorded in the build.'
+    required: true
+  docker_image:
+    description: 'Docker image name.'
+    required: false
+    default: 'nationalinstruments/labview'
+  image_tag:
+    description: 'Docker image tag.'
+    required: false
+    default: '2026-windows'
+  working_directory:
+    description: 'Working directory where the action will run.'
+    required: false
+  log_level:
+    description: 'Verbosity level (ERROR|WARN|INFO|DEBUG).'
+    default: 'INFO'
+    required: false
+  dry_run:
+    description: 'If true, simulate the action without side effects.'
+    default: false
+    required: false
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Dispatch build-lvlibp-docker-windows
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $args = @{
+          MinimumSupportedLVVersion = '${{ inputs.minimum_supported_lv_version }}'
+          SupportedBitness  = '${{ inputs.supported_bitness }}'
+          ProjectPath       = '${{ inputs.project_path }}'
+          TargetName        = '${{ inputs.target_name }}'
+          Major             = [int]'${{ inputs.major }}'
+          Minor             = [int]'${{ inputs.minor }}'
+          Patch             = [int]'${{ inputs.patch }}'
+          Build             = [int]'${{ inputs.build }}'
+          Commit            = '${{ inputs.commit }}'
+        }
+        if ('${{ inputs.build_spec_name }}') { $args['BuildSpecName'] = '${{ inputs.build_spec_name }}' }
+        if ('${{ inputs.docker_image }}') { $args['DockerImage'] = '${{ inputs.docker_image }}' }
+        if ('${{ inputs.image_tag }}') { $args['ImageTag'] = '${{ inputs.image_tag }}' }
+        
+        $params = @{
+          ActionName = 'build-lvlibp-docker-windows'
+          ArgsJson   = ($args | ConvertTo-Json -Compress)
+          LogLevel   = '${{ inputs.log_level }}'
+        }
+        if ('${{ inputs.dry_run }}' -eq 'true') { $params['DryRun'] = $true }
+        if ('${{ inputs.working_directory }}') { $params['WorkingDirectory'] = '${{ inputs.working_directory }}' }
+        
+        & '${{ github.action_path }}/../actions/Invoke-OSAction.ps1' @params
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

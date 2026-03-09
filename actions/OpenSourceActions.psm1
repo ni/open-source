@@ -285,6 +285,63 @@ function Invoke-BuildLvlibpDockerLinux {
     return $result
 }
 
+# Builds LabVIEW Packed Project Library (.lvlibp) using Windows Docker container.
+# MinimumSupportedLVVersion: LabVIEW version for the build (e.g., "2021", "2026").
+# SupportedBitness: Bitness of the LabVIEW environment ("32" or "64").
+# ProjectPath: Path to the LabVIEW project .lvproj file.
+# TargetName: Target that contains the build specification.
+# BuildSpecName: Name of the LabVIEW build specification (optional, builds all if empty).
+# Major: Major version component.
+# Minor: Minor version component.
+# Patch: Patch version component.
+# Build: Build number component.
+# Commit: Commit hash or identifier.
+# DockerImage: Docker image name (default: "nationalinstruments/labview").
+# ImageTag: Docker image tag (defaults to "2026-windows").
+# DryRun: If set, prints the command instead of executing it.
+# gcliPath: Optional path prepended to PATH for locating the g CLI.
+function Invoke-BuildLvlibpDockerWindows {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [string] $MinimumSupportedLVVersion,
+        [Parameter(Mandatory)] [string] $SupportedBitness,
+        [Parameter(Mandatory)] [string] $ProjectPath,
+        [Parameter(Mandatory)] [string] $TargetName,
+        [Parameter()] [string] $BuildSpecName = "",
+        [Parameter(Mandatory)] [int] $Major,
+        [Parameter(Mandatory)] [int] $Minor,
+        [Parameter(Mandatory)] [int] $Patch,
+        [Parameter(Mandatory)] [int] $Build,
+        [Parameter(Mandatory)] [string] $Commit,
+        [Parameter()] [string] $DockerImage = "nationalinstruments/labview",
+        [Parameter()] [string] $ImageTag = "2026-windows",
+        [switch] $DryRun,
+        [string] $gcliPath
+    )
+    Write-Information "Invoking BuildLvlibpDockerWindows" -InformationAction Continue
+    
+    $result = Invoke-OpenSourceActionScript `
+        -ScriptSegments @('build-lvlibp-docker-windows', 'BuildLvlibpDockerWindows.ps1') `
+        -Arguments @{
+            MinimumSupportedLVVersion = $MinimumSupportedLVVersion
+            SupportedBitness = $SupportedBitness
+            ProjectPath = $ProjectPath
+            TargetName = $TargetName
+            BuildSpecName = $BuildSpecName
+            Major = $Major
+            Minor = $Minor
+            Patch = $Patch
+            Build = $Build
+            Commit = $Commit
+            DockerImage = $DockerImage
+            ImageTag = $ImageTag
+        } `
+        -DryRun:$DryRun `
+        -gcliPath $gcliPath
+    
+    return $result
+}
+
 # Closes any running instance of LabVIEW.
 # MinimumSupportedLVVersion: Minimum LabVIEW version that the project supports.
 # SupportedBitness: Target LabVIEW bitness (32- or 64-bit).

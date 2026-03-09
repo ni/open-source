@@ -272,6 +272,84 @@
       }
     }
   },
+  "Invoke-BuildLvlibpDockerWindows": {
+    "description": "Builds LabVIEW Packed Project Library (.lvlibp) using Windows Docker container. MinimumSupportedLVVersion: LabVIEW version for the build (e.g., \"2021\", \"2026\"). SupportedBitness: Bitness of the LabVIEW environment (\"32\" or \"64\"). ProjectPath: Path to the LabVIEW project .lvproj file. TargetName: Target that contains the build specification. BuildSpecName: Name of the LabVIEW build specification (optional, builds all if empty). Major: Major version component. Minor: Minor version component. Patch: Patch version component. Build: Build number component. Commit: Commit hash or identifier. DockerImage: Docker image name (default: \"nationalinstruments/labview\"). ImageTag: Docker image tag (defaults to \"2026-windows\"). DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
+    "parameters": {
+      "Build": {
+        "type": "number",
+        "required": true,
+        "description": "Build number component"
+      },
+      "BuildSpecName": {
+        "type": "string",
+        "required": false,
+        "default": "",
+        "description": "Name of the LabVIEW build specification (optional, builds all if empty)"
+      },
+      "Commit": {
+        "type": "string",
+        "required": true,
+        "description": "Commit hash or identifier"
+      },
+      "DockerImage": {
+        "type": "string",
+        "required": false,
+        "default": "nationalinstruments/labview",
+        "description": "Docker image name (default: \"nationalinstruments/labview\")"
+      },
+      "DryRun": {
+        "type": "boolean",
+        "required": false,
+        "description": "If set, prints the command instead of executing it"
+      },
+      "gcliPath": {
+        "type": "string",
+        "required": false,
+        "description": "Optional path prepended to PATH for locating the g CLI"
+      },
+      "ImageTag": {
+        "type": "string",
+        "required": false,
+        "default": "2026-windows",
+        "description": "Docker image tag (defaults to \"2026-windows\")"
+      },
+      "Major": {
+        "type": "number",
+        "required": true,
+        "description": "Major version component"
+      },
+      "MinimumSupportedLVVersion": {
+        "type": "string",
+        "required": true,
+        "description": "LabVIEW version for the build (e"
+      },
+      "Minor": {
+        "type": "number",
+        "required": true,
+        "description": "Minor version component"
+      },
+      "Patch": {
+        "type": "number",
+        "required": true,
+        "description": "Patch version component"
+      },
+      "ProjectPath": {
+        "type": "string",
+        "required": true,
+        "description": "Path to the LabVIEW project"
+      },
+      "SupportedBitness": {
+        "type": "string",
+        "required": true,
+        "description": "Bitness of the LabVIEW environment (\"32\" or \"64\")"
+      },
+      "TargetName": {
+        "type": "string",
+        "required": true,
+        "description": "Target that contains the build specification"
+      }
+    }
+  },
   "Invoke-BuildViPackage": {
     "description": "Builds a VI Package using the provided VIPB file and version metadata. MinimumSupportedLVVersion: Minimum LabVIEW version that the package supports. SupportedBitness: Target LabVIEW bitness (32- or 64-bit). LabVIEWMinorRevision: Minor revision of LabVIEW used to build the package. RelativePath: Normalized path to the project root relative to the working directory. VIPBPath: Path to the VIPB build specification file. Major: Major version component. Minor: Minor version component. Patch: Patch version component. Build: Build number component. Commit: Commit identifier used for the build metadata. DisplayInformationJSON: JSON string containing display information for the package. ReleaseNotesFile: Optional path to a release notes file. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
     "parameters": {
