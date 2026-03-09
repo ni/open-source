@@ -39,7 +39,7 @@ inputs:
   image_tag:
     description: 'Docker image tag.'
     required: false
-    default: '2026-windows'
+    default: '2026q1-windows'
   working_directory:
     description: 'Working directory where the action will run.'
     required: false

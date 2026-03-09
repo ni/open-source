@@ -114,18 +114,25 @@ try {
         throw "Build script not found: $buildScript"
     }
 
+    # Create temporary directory for script mounting
+    $tempDir = Join-Path $env:TEMP "docker-build-$(New-Guid)"
+    New-Item -Path $tempDir -ItemType Directory -Force | Out-Null
+    $tempScript = Join-Path $tempDir 'build-lvlibp.ps1'
+    Copy-Item -Path $buildScript -Destination $tempScript -Force
+    Write-Verbose "Copied build script to: $tempScript"
+
     # Construct LabVIEWPath for Windows container
     $labviewPath = if ($SupportedBitness -eq '32') {
         "C:\Program Files (x86)\National Instruments\LabVIEW $MinimumSupportedLVVersion\LabVIEW.exe"
     } else {
         "C:\Program Files\National Instruments\LabVIEW $MinimumSupportedLVVersion\LabVIEW.exe"
     }
-    
+
     Write-Verbose "LabVIEWPath: $labviewPath"
     
     # Windows container paths
     $containerProjectPath = "C:\workspace\$ProjectPath"
-    $containerScriptPath = "C:\build-lvlibp.ps1"
+    $containerScriptPath = "C:\scripts\build-lvlibp.ps1"
 
     # Construct PowerShell command arguments
     $scriptArgs = @(
@@ -144,7 +151,7 @@ try {
     # Run build in Windows container using -File with mounted script
     docker run --rm `
         -v "${PWD}:C:\workspace" `
-        -v "${buildScript}:${containerScriptPath}" `
+        -v "${tempScript}:${containerScriptPath}" `
         $fullImage `
         powershell -NoProfile -File $containerScriptPath @scriptArgs `
         *>&1 | ForEach-Object { Write-Information $_ -InformationAction Continue }
