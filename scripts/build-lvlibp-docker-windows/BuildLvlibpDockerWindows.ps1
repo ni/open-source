@@ -151,7 +151,7 @@ try {
     # Run build in Windows container using -File with mounted script
     docker run --rm `
         -v "${PWD}:C:\workspace" `
-        -v "${tempScript}:${containerScriptPath}" `
+        -v "${tempDir}:C:\scripts" `
         $fullImage `
         powershell -NoProfile -File $containerScriptPath @scriptArgs `
         *>&1 | ForEach-Object { Write-Information $_ -InformationAction Continue }
