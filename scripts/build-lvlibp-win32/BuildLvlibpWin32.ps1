@@ -86,6 +86,7 @@ try {
 
     # Construct LabVIEWPath for Windows
     $labviewPath = "C:\Program Files (x86)\National Instruments\LabVIEW $MinimumSupportedLVVersion\LabVIEW.exe"
+    $labviewCLI = "C:\Program Files (x86)\National Instruments\Shared\LabVIEW CLI\LabVIEWCLI.exe"
     
     if (-not (Test-Path $labviewPath)) {
         throw "LabVIEW not found at: $labviewPath"
@@ -118,7 +119,7 @@ try {
     Write-Information "Executing: LabVIEWCLI $($cliArgs -join ' ')" -InformationAction Continue
 
     # Execute LabVIEWCLI
-    & LabVIEWCLI @cliArgs
+    & $labviewCLI @cliArgs
     $buildExitCode = $LASTEXITCODE
     Write-Information "Build exit code: $buildExitCode" -InformationAction Continue
 

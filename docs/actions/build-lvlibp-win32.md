@@ -67,7 +67,7 @@ pwsh -File actions/Invoke-OSAction.ps1 -ActionName build-lvlibp-win32 -ArgsJson 
 
 ```yaml
 - name: Build PPL with GitHub-hosted Runner
-  uses: owner/repo/build-lvlibp-win32@v1
+  uses: ni/open-source/build-lvlibp-win32@v1
   with:
     minimum_supported_lv_version: '2025'
     supported_bitness: '32'
@@ -98,7 +98,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup NI Package Manager
-        uses: owner/repo/setup-nipm@v1
+        uses: ni/open-source/setup-nipm@v1
         with:
           log_level: 'INFO'
 
