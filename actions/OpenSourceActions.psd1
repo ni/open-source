@@ -16,6 +16,7 @@
     'Invoke-BuildLvlibp'
     'Invoke-BuildLvlibpDockerLinux'
     'Invoke-BuildLvlibpDockerWindows'
+    'Invoke-BuildLvlibpWin32'
     'Invoke-BuildViPackage'
     'Invoke-CloseLabVIEW'
     'Invoke-GenerateReleaseNotes'
