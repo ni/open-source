@@ -297,7 +297,7 @@ function Invoke-BuildLvlibpDockerLinux {
 # Build: Build number component.
 # Commit: Commit hash or identifier.
 # DockerImage: Docker image name (default: "nationalinstruments/labview").
-# ImageTag: Docker image tag (defaults to "2026-windows").
+# ImageTag: Docker image tag (defaults to "2026q1-windows").
 # DryRun: If set, prints the command instead of executing it.
 # gcliPath: Optional path prepended to PATH for locating the g CLI.
 function Invoke-BuildLvlibpDockerWindows {
@@ -314,7 +314,7 @@ function Invoke-BuildLvlibpDockerWindows {
         [Parameter(Mandatory)] [int] $Build,
         [Parameter(Mandatory)] [string] $Commit,
         [Parameter()] [string] $DockerImage = "nationalinstruments/labview",
-        [Parameter()] [string] $ImageTag = "2026-windows",
+        [Parameter()] [string] $ImageTag = "2026q1-windows",
         [switch] $DryRun,
         [string] $gcliPath
     )
