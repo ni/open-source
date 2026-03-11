@@ -1159,8 +1159,8 @@
       },
       {
         "name": "target_name",
-        "description": "Target that contains the build specification.",
-        "required": true,
+        "description": "Target that contains the build specification. Defaults to \"My Computer\" in helper VI.",
+        "required": false,
         "default": "",
         "type": "string"
       },
@@ -1173,36 +1173,36 @@
       },
       {
         "name": "major",
-        "description": "Major version component for the PPL.",
-        "required": true,
+        "description": "Major version component for the PPL. Omit to skip version setting.",
+        "required": false,
         "default": "",
         "type": "string"
       },
       {
         "name": "minor",
-        "description": "Minor version component for the PPL.",
-        "required": true,
+        "description": "Minor version component for the PPL. Omit to skip version setting.",
+        "required": false,
         "default": "",
         "type": "string"
       },
       {
         "name": "patch",
-        "description": "Patch version component for the PPL.",
-        "required": true,
+        "description": "Patch version component for the PPL. Omit to skip version setting.",
+        "required": false,
         "default": "",
         "type": "string"
       },
       {
         "name": "build",
-        "description": "Build number component for the PPL.",
-        "required": true,
+        "description": "Build number component for the PPL. Omit to skip version setting.",
+        "required": false,
         "default": "",
         "type": "string"
       },
       {
         "name": "commit",
         "description": "Commit hash or identifier recorded in the build.",
-        "required": true,
+        "required": false,
         "default": "",
         "type": "string"
       },
@@ -1238,7 +1238,7 @@
         "name": "dry_run",
         "description": "If true, simulate the action without side effects.",
         "required": false,
-        "default": false,
+        "default": "false",
         "type": "string"
       }
     ],
@@ -1266,8 +1266,8 @@
       },
       {
         "name": "target_name",
-        "description": "Target that contains the build specification.",
-        "required": true,
+        "description": "Target that contains the build specification. Defaults to \"My Computer\" in helper VI.",
+        "required": false,
         "default": "",
         "type": "string"
       },
@@ -1280,36 +1280,36 @@
       },
       {
         "name": "major",
-        "description": "Major version component for the PPL.",
-        "required": true,
+        "description": "Major version component for the PPL. Omit to skip version setting.",
+        "required": false,
         "default": "",
         "type": "string"
       },
       {
         "name": "minor",
-        "description": "Minor version component for the PPL.",
-        "required": true,
+        "description": "Minor version component for the PPL. Omit to skip version setting.",
+        "required": false,
         "default": "",
         "type": "string"
       },
       {
         "name": "patch",
-        "description": "Patch version component for the PPL.",
-        "required": true,
+        "description": "Patch version component for the PPL. Omit to skip version setting.",
+        "required": false,
         "default": "",
         "type": "string"
       },
       {
         "name": "build",
-        "description": "Build number component for the PPL.",
-        "required": true,
+        "description": "Build number component for the PPL. Omit to skip version setting.",
+        "required": false,
         "default": "",
         "type": "string"
       },
       {
         "name": "commit",
         "description": "Commit hash or identifier recorded in the build.",
-        "required": true,
+        "required": false,
         "default": "",
         "type": "string"
       },

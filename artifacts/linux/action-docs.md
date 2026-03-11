@@ -321,15 +321,6 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 
 ### Wrapper Actions
 
-#### activate-labview
-| Name | Type | Required | Default | Description |
-| --- | --- | --- | --- | --- |
-| serial_number | string | true |  | LabVIEW serial number for activation. |
-| package_id | string | false | LabVIEW_COM_PKG 25.0300 | LabVIEW package ID to activate. |
-| working_directory | string | false |  | Working directory where the action will run. |
-| log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
-| dry_run | string | false | false | If true, simulate the action without side effects. |
-
 #### add-token-to-labview
 | Name | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -395,13 +386,13 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 | minimum_supported_lv_version | string | true |  | LabVIEW version year for the build (e.g., "2021", "2026"). |
 | supported_bitness | string | true |  | Bitness of the LabVIEW environment ("32" or "64"). |
 | project_path | string | true |  | Path to the LabVIEW project .lvproj file. |
-| target_name | string | true |  | Target that contains the build specification. |
+| target_name | string | false |  | Target that contains the build specification. Defaults to "My Computer" in helper VI. |
 | build_spec_name | string | false |  | Name of the build specification. If empty, builds all specifications in the target. |
-| major | string | true |  | Major version component for the PPL. |
-| minor | string | true |  | Minor version component for the PPL. |
-| patch | string | true |  | Patch version component for the PPL. |
-| build | string | true |  | Build number component for the PPL. |
-| commit | string | true |  | Commit hash or identifier recorded in the build. |
+| major | string | false |  | Major version component for the PPL. Omit to skip version setting. |
+| minor | string | false |  | Minor version component for the PPL. Omit to skip version setting. |
+| patch | string | false |  | Patch version component for the PPL. Omit to skip version setting. |
+| build | string | false |  | Build number component for the PPL. Omit to skip version setting. |
+| commit | string | false |  | Commit hash or identifier recorded in the build. |
 | docker_image | string | false | nationalinstruments/labview | Docker image name. |
 | image_tag | string | false | 2026q1-linux | Docker image tag. |
 | working_directory | string | false |  | Working directory where the action will run. |
@@ -414,13 +405,13 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 | minimum_supported_lv_version | string | true |  | LabVIEW version year for the build (e.g., "2021", "2026"). |
 | supported_bitness | string | true |  | Bitness of the LabVIEW environment ("32" or "64"). |
 | project_path | string | true |  | Path to the LabVIEW project .lvproj file. |
-| target_name | string | true |  | Target that contains the build specification. |
+| target_name | string | false |  | Target that contains the build specification. Defaults to "My Computer" in helper VI. |
 | build_spec_name | string | false |  | Name of the build specification. If empty, builds all specifications in the target. |
-| major | string | true |  | Major version component for the PPL. |
-| minor | string | true |  | Minor version component for the PPL. |
-| patch | string | true |  | Patch version component for the PPL. |
-| build | string | true |  | Build number component for the PPL. |
-| commit | string | true |  | Commit hash or identifier recorded in the build. |
+| major | string | false |  | Major version component for the PPL. Omit to skip version setting. |
+| minor | string | false |  | Minor version component for the PPL. Omit to skip version setting. |
+| patch | string | false |  | Patch version component for the PPL. Omit to skip version setting. |
+| build | string | false |  | Build number component for the PPL. Omit to skip version setting. |
+| commit | string | false |  | Commit hash or identifier recorded in the build. |
 | docker_image | string | false | nationalinstruments/labview | Docker image name. |
 | image_tag | string | false | 2026q1-windows | Docker image tag. |
 | working_directory | string | false |  | Working directory where the action will run. |
