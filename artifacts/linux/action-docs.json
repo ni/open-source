@@ -196,6 +196,162 @@
         }
       }
     },
+    "Invoke-BuildLvlibpDockerLinux": {
+      "description": "Builds LabVIEW Packed Project Library (.lvlibp) using Linux Docker container. MinimumSupportedLVVersion: LabVIEW version for the build (e.g., \"2021\", \"2026\"). SupportedBitness: Bitness of the LabVIEW environment (\"32\" or \"64\"). ProjectPath: Path to the LabVIEW project .lvproj file. TargetName: Target that contains the build specification. BuildSpecName: Name of the LabVIEW build specification (optional, builds all if empty). Major: Major version component. Minor: Minor version component. Patch: Patch version component. Build: Build number component. Commit: Commit hash or identifier. DockerImage: Docker image name (default: \"nationalinstruments/labview\"). ImageTag: Docker image tag (defaults to \"2026q1-linux\"). DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
+      "parameters": {
+        "Build": {
+          "type": "number",
+          "required": true,
+          "description": "Build number component"
+        },
+        "BuildSpecName": {
+          "type": "string",
+          "required": false,
+          "default": "",
+          "description": "Name of the LabVIEW build specification (optional, builds all if empty)"
+        },
+        "Commit": {
+          "type": "string",
+          "required": true,
+          "description": "Commit hash or identifier"
+        },
+        "DockerImage": {
+          "type": "string",
+          "required": false,
+          "default": "nationalinstruments/labview",
+          "description": "Docker image name (default: \"nationalinstruments/labview\")"
+        },
+        "DryRun": {
+          "type": "boolean",
+          "required": false,
+          "description": "If set, prints the command instead of executing it"
+        },
+        "gcliPath": {
+          "type": "string",
+          "required": false,
+          "description": "Optional path prepended to PATH for locating the g CLI"
+        },
+        "ImageTag": {
+          "type": "string",
+          "required": false,
+          "default": "2026q1-linux",
+          "description": "Docker image tag (defaults to \"2026q1-linux\")"
+        },
+        "Major": {
+          "type": "number",
+          "required": true,
+          "description": "Major version component"
+        },
+        "MinimumSupportedLVVersion": {
+          "type": "string",
+          "required": true,
+          "description": "LabVIEW version for the build (e"
+        },
+        "Minor": {
+          "type": "number",
+          "required": true,
+          "description": "Minor version component"
+        },
+        "Patch": {
+          "type": "number",
+          "required": true,
+          "description": "Patch version component"
+        },
+        "ProjectPath": {
+          "type": "string",
+          "required": true,
+          "description": "Path to the LabVIEW project"
+        },
+        "SupportedBitness": {
+          "type": "string",
+          "required": true,
+          "description": "Bitness of the LabVIEW environment (\"32\" or \"64\")"
+        },
+        "TargetName": {
+          "type": "string",
+          "required": true,
+          "description": "Target that contains the build specification"
+        }
+      }
+    },
+    "Invoke-BuildLvlibpDockerWindows": {
+      "description": "Builds LabVIEW Packed Project Library (.lvlibp) using Windows Docker container. MinimumSupportedLVVersion: LabVIEW version for the build (e.g., \"2021\", \"2026\"). SupportedBitness: Bitness of the LabVIEW environment (\"32\" or \"64\"). ProjectPath: Path to the LabVIEW project .lvproj file. TargetName: Target that contains the build specification. BuildSpecName: Name of the LabVIEW build specification (optional, builds all if empty). Major: Major version component. Minor: Minor version component. Patch: Patch version component. Build: Build number component. Commit: Commit hash or identifier. DockerImage: Docker image name (default: \"nationalinstruments/labview\"). ImageTag: Docker image tag (defaults to \"2026q1-windows\"). DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
+      "parameters": {
+        "Build": {
+          "type": "number",
+          "required": true,
+          "description": "Build number component"
+        },
+        "BuildSpecName": {
+          "type": "string",
+          "required": false,
+          "default": "",
+          "description": "Name of the LabVIEW build specification (optional, builds all if empty)"
+        },
+        "Commit": {
+          "type": "string",
+          "required": true,
+          "description": "Commit hash or identifier"
+        },
+        "DockerImage": {
+          "type": "string",
+          "required": false,
+          "default": "nationalinstruments/labview",
+          "description": "Docker image name (default: \"nationalinstruments/labview\")"
+        },
+        "DryRun": {
+          "type": "boolean",
+          "required": false,
+          "description": "If set, prints the command instead of executing it"
+        },
+        "gcliPath": {
+          "type": "string",
+          "required": false,
+          "description": "Optional path prepended to PATH for locating the g CLI"
+        },
+        "ImageTag": {
+          "type": "string",
+          "required": false,
+          "default": "2026q1-windows",
+          "description": "Docker image tag (defaults to \"2026q1-windows\")"
+        },
+        "Major": {
+          "type": "number",
+          "required": true,
+          "description": "Major version component"
+        },
+        "MinimumSupportedLVVersion": {
+          "type": "string",
+          "required": true,
+          "description": "LabVIEW version for the build (e"
+        },
+        "Minor": {
+          "type": "number",
+          "required": true,
+          "description": "Minor version component"
+        },
+        "Patch": {
+          "type": "number",
+          "required": true,
+          "description": "Patch version component"
+        },
+        "ProjectPath": {
+          "type": "string",
+          "required": true,
+          "description": "Path to the LabVIEW project"
+        },
+        "SupportedBitness": {
+          "type": "string",
+          "required": true,
+          "description": "Bitness of the LabVIEW environment (\"32\" or \"64\")"
+        },
+        "TargetName": {
+          "type": "string",
+          "required": true,
+          "description": "Target that contains the build specification"
+        }
+      }
+    },
     "Invoke-BuildViPackage": {
       "description": "Builds a VI Package using the provided VIPB file and version metadata. MinimumSupportedLVVersion: Minimum LabVIEW version that the package supports. SupportedBitness: Target LabVIEW bitness (32- or 64-bit). LabVIEWMinorRevision: Minor revision of LabVIEW used to build the package. RelativePath: Normalized path to the project root relative to the working directory. VIPBPath: Path to the VIPB build specification file. Major: Major version component. Minor: Minor version component. Patch: Patch version component. Build: Build number component. Commit: Commit identifier used for the build metadata. DisplayInformationJSON: JSON string containing display information for the package. ReleaseNotesFile: Optional path to a release notes file. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
       "parameters": {
@@ -639,6 +795,43 @@
     }
   },
   "wrappers": {
+    "activate-labview": [
+      {
+        "name": "serial_number",
+        "description": "LabVIEW serial number for activation.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "package_id",
+        "description": "LabVIEW package ID to activate.",
+        "required": false,
+        "default": "LabVIEW_COM_PKG 25.0300",
+        "type": "string"
+      },
+      {
+        "name": "working_directory",
+        "description": "Working directory where the action will run.",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "log_level",
+        "description": "Verbosity level (ERROR|WARN|INFO|DEBUG).",
+        "required": false,
+        "default": "INFO",
+        "type": "string"
+      },
+      {
+        "name": "dry_run",
+        "description": "If true, simulate the action without side effects.",
+        "required": false,
+        "default": false,
+        "type": "string"
+      }
+    ],
     "add-token-to-labview": [
       {
         "name": "minimum_supported_lv_version",
@@ -923,6 +1116,313 @@
         "name": "gcli_path",
         "description": "Optional path to the g-cli executable.",
         "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "working_directory",
+        "description": "Working directory where the action will run.",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "log_level",
+        "description": "Verbosity level (ERROR|WARN|INFO|DEBUG).",
+        "required": false,
+        "default": "INFO",
+        "type": "string"
+      },
+      {
+        "name": "dry_run",
+        "description": "If true, simulate the action without side effects.",
+        "required": false,
+        "default": false,
+        "type": "string"
+      }
+    ],
+    "build-lvlibp-docker-linux": [
+      {
+        "name": "minimum_supported_lv_version",
+        "description": "LabVIEW version year for the build (e.g., \"2021\", \"2026\").",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "supported_bitness",
+        "description": "Bitness of the LabVIEW environment (\"32\" or \"64\").",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "project_path",
+        "description": "Path to the LabVIEW project .lvproj file.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "target_name",
+        "description": "Target that contains the build specification.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "build_spec_name",
+        "description": "Name of the build specification. If empty, builds all specifications in the target.",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "major",
+        "description": "Major version component for the PPL.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "minor",
+        "description": "Minor version component for the PPL.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "patch",
+        "description": "Patch version component for the PPL.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "build",
+        "description": "Build number component for the PPL.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "commit",
+        "description": "Commit hash or identifier recorded in the build.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "docker_image",
+        "description": "Docker image name.",
+        "required": false,
+        "default": "nationalinstruments/labview",
+        "type": "string"
+      },
+      {
+        "name": "image_tag",
+        "description": "Docker image tag.",
+        "required": false,
+        "default": "2026q1-linux",
+        "type": "string"
+      },
+      {
+        "name": "working_directory",
+        "description": "Working directory where the action will run.",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "log_level",
+        "description": "Verbosity level (ERROR|WARN|INFO|DEBUG).",
+        "required": false,
+        "default": "INFO",
+        "type": "string"
+      },
+      {
+        "name": "dry_run",
+        "description": "If true, simulate the action without side effects.",
+        "required": false,
+        "default": false,
+        "type": "string"
+      }
+    ],
+    "build-lvlibp-docker-windows": [
+      {
+        "name": "minimum_supported_lv_version",
+        "description": "LabVIEW version year for the build (e.g., \"2021\", \"2026\").",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "supported_bitness",
+        "description": "Bitness of the LabVIEW environment (\"32\" or \"64\").",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "project_path",
+        "description": "Path to the LabVIEW project .lvproj file.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "target_name",
+        "description": "Target that contains the build specification.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "build_spec_name",
+        "description": "Name of the build specification. If empty, builds all specifications in the target.",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "major",
+        "description": "Major version component for the PPL.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "minor",
+        "description": "Minor version component for the PPL.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "patch",
+        "description": "Patch version component for the PPL.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "build",
+        "description": "Build number component for the PPL.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "commit",
+        "description": "Commit hash or identifier recorded in the build.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "docker_image",
+        "description": "Docker image name.",
+        "required": false,
+        "default": "nationalinstruments/labview",
+        "type": "string"
+      },
+      {
+        "name": "image_tag",
+        "description": "Docker image tag.",
+        "required": false,
+        "default": "2026q1-windows",
+        "type": "string"
+      },
+      {
+        "name": "working_directory",
+        "description": "Working directory where the action will run.",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "log_level",
+        "description": "Verbosity level (ERROR|WARN|INFO|DEBUG).",
+        "required": false,
+        "default": "INFO",
+        "type": "string"
+      },
+      {
+        "name": "dry_run",
+        "description": "If true, simulate the action without side effects.",
+        "required": false,
+        "default": false,
+        "type": "string"
+      }
+    ],
+    "build-lvlibp-win32": [
+      {
+        "name": "minimum_supported_lv_version",
+        "description": "LabVIEW version year for the build (e.g., \"2021\", \"2026\").",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "supported_bitness",
+        "description": "Bitness of the LabVIEW environment (\"32\" or \"64\").",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "project_path",
+        "description": "Path to the LabVIEW project .lvproj file.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "target_name",
+        "description": "Target that contains the build specification.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "build_spec_name",
+        "description": "Name of the build specification. If empty, builds all specifications in the target.",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "major",
+        "description": "Major version component for the PPL.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "minor",
+        "description": "Minor version component for the PPL.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "patch",
+        "description": "Patch version component for the PPL.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "build",
+        "description": "Build number component for the PPL.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "commit",
+        "description": "Commit hash or identifier recorded in the build.",
+        "required": true,
         "default": "",
         "type": "string"
       },
