@@ -124,15 +124,8 @@ try {
     }
 
     # Determine action root
-    # In GitHub Actions, use GITHUB_ACTION_PATH
-    # Otherwise, calculate from script directory
-    if ($env:GITHUB_ACTION_PATH) {
-        $actionRoot = $env:GITHUB_ACTION_PATH
-        Write-Verbose "Using GITHUB_ACTION_PATH: $actionRoot"
-    } else {
-        $actionRoot = Split-Path (Split-Path $scriptDir -Parent) -Parent
-        Write-Verbose "Calculated action root from script path: $actionRoot"
-    }
+    $actionRoot = Split-Path $scriptDir -Parent
+    Write-Verbose "Calculated action root from script path: $actionRoot"
 
     $helperDir = Join-Path $actionRoot 'scripts' 'build-lvlibp-helpers'
     
