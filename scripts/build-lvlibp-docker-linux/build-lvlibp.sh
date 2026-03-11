@@ -56,7 +56,7 @@ echo "Version: ${VERSION:-<from build spec>}"
 
 if [[ -n "$VERSION" ]]; then
     echo "Setting build version..."
-    HELPER_VI="/workspace/scripts/build-lvlibp-helpers/SetBuildVersionCaller.vi"
+    HELPER_VI="/helpers/scripts/build-lvlibp-helpers/SetBuildVersionCaller.vi"
 
     if [[ ! -f "$HELPER_VI" ]]; then
         echo "Error: Helper VI not found at $HELPER_VI"

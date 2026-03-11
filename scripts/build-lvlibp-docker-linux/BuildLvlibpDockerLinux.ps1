@@ -14,7 +14,7 @@
 .PARAMETER ProjectPath
     Path to the LabVIEW project .lvproj file that contains the build specification.
 
-PARAMETER TargetName
+.PARAMETER TargetName
     Target that contains the build specification. Defaults to "My Computer".
 
 .PARAMETER BuildSpecName
@@ -115,13 +115,24 @@ try {
         throw "Failed to pull Docker image (exit code: $LASTEXITCODE)"
     }
 
-    # Get the path to the bash script
+    # Get the path to the bash script and helper VI directory
     $scriptDir = $PSScriptRoot
     $buildScript = Join-Path $scriptDir 'build-lvlibp.sh'
     
     if (-not (Test-Path $buildScript)) {
         throw "Build script not found: $buildScript"
     }
+
+    # Get the action repository root
+    $actionRoot = Split-Path (Split-Path $scriptDir -Parent) -Parent
+    $helperDir = Join-Path $actionRoot 'scripts' 'build-lvlibp-helpers'
+    
+    if (-not (Test-Path $helperDir)) {
+        throw "Helper VI directory not found: $helperDir"
+    }
+
+    Write-Verbose "Action root: $actionRoot"
+    Write-Verbose "Helper directory: $helperDir"
 
     # Construct LabVIEWPath for Linux container
     $labviewPath = "/usr/local/natinst/LabVIEW-${MinimumSupportedLVVersion}-${SupportedBitness}/labview"
@@ -155,8 +166,12 @@ try {
     Write-Verbose "Command: bash -c `"$bashCommand`""
 
     # Run build in container
+    # Mount user workspace to /workspace
+    # Mount folder with helper VIs to /helpers
+    # Mount build script to /tmp
     docker run --rm `
         -v "${PWD}:/workspace" `
+        -v "${actionRoot}:/helpers" `
         -v "${buildScript}:${containerScriptPath}" `
         $fullImage `
         bash -c $bashCommand `
