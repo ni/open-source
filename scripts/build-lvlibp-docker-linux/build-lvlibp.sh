@@ -63,26 +63,28 @@ if [[ -n "$VERSION" ]]; then
         exit 1
     fi
 
-    # Build VI arguments: ProjectPath and Version are required
-    # TargetName defaults to "My Computer" if not provided
-    # BuildSpecName: if not provided, applies version to all build specs
-    VI_ARGS="ProjectPath:$PROJECT_PATH;Version:$VERSION"
+    # SetBuildVersionCaller.vi expects positional arguments:
+    # 1. ProjectPath (required)
+    # 2. BuildSpecName (optional, empty string to apply to all)
+    # 3. TargetName (optional, defaults to "My Computer" in VI)
+    # 4. Version (optional, empty string to skip version setting)
     
-    if [[ -n "$TARGET_NAME" ]]; then
-        VI_ARGS="${VI_ARGS};TargetName:$TARGET_NAME"
-    fi
-    
-    if [[ -n "$BUILD_SPEC_NAME" ]]; then
-        VI_ARGS="${VI_ARGS};BuildSpecName:$BUILD_SPEC_NAME"
-    fi
-
     SET_VERSION_ARGS=(
         "-OperationName" "RunVI"
         "-LabVIEWPath" "$LABVIEW_PATH"
         "-VIPath" "$HELPER_VI"
-        "-ViArgs" "$VI_ARGS"
-        "-Headless"
+        "$PROJECT_PATH"
     )
+    
+    SET_VERSION_ARGS+=("${BUILD_SPEC_NAME:-}")
+    
+    # Add TargetName (empty string to use VI default)
+    SET_VERSION_ARGS+=("${TARGET_NAME:-}")
+    
+    # Add Version
+    SET_VERSION_ARGS+=("$VERSION")
+
+    SET_VERSION_ARGS+=("-Headless")
 
     echo "Executing: LabVIEWCLI ${SET_VERSION_ARGS[*]}"
     LabVIEWCLI "${SET_VERSION_ARGS[@]}"
