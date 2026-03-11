@@ -26,7 +26,7 @@ Common parameters are described in [Common parameters](../common-parameters.md).
 
 - **BuildSpecName** (`string`): Name of the build specification to execute. If empty, builds all build specifications under the specified target. Default: `""`.
 - **DockerImage** (`string`): Docker image name. Default: `"nationalinstruments/labview"`.
-- **ImageTag** (`string`): Docker image tag. Default: `"2026-windows"`.
+- **ImageTag** (`string`): Docker image tag. Default: `"2026q1-windows"`.
 
 ### GitHub Action inputs
 

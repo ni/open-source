@@ -17,7 +17,7 @@ Call **`BuildLvlibpDockerWindows.ps1`** to compile LabVIEW packed libraries usin
 | `build` | **Yes** | `1` | Build number component. |
 | `commit` | **Yes** | `abcdef` | Commit identifier. |
 | `docker_image` | No | `nationalinstruments/labview` | Docker image name. |
-| `image_tag` | No | `2026-windows` | Docker image tag. |
+| `image_tag` | No | `2026q1-windows` | Docker image tag. |
 
 ## Quick-start
 
@@ -37,7 +37,7 @@ The following example builds using LabVIEW 2026 inside a Windows Docker containe
     build: 1
     commit: ${{ github.sha }}
     docker_image: nationalinstruments/labview
-    image_tag: 2026-windows
+    image_tag: 2026q1-windows
 ```
 
 ## Build All Specifications
