@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Builds LabVIEW Packed Project Library (.lvlibp) files using a Linux LabVIEW Docker container. This action executes the LabVIEW build specification through LabVIEWCLI inside a Docker container, embedding version information and commit metadata, then renames the resulting artifact with a standardized naming convention.
+Builds LabVIEW Packed Project Library (.lvlibp) files using a Linux LabVIEW Docker container. This action executes the LabVIEW build specification through LabVIEWCLI inside a containerized Linux environment, optionally embedding version information and commit metadata.
 
-Use this action when you need to build PPL files in containerized Linux environments (CI/CD pipelines) without installing LabVIEW directly on the host system.
+Use this action when you need to build PPL files in a Linux Docker container, ensuring a consistent and isolated build environment.
 
 ## Parameters
 
@@ -15,16 +15,16 @@ Common parameters are described in [Common parameters](../common-parameters.md).
 - **MinimumSupportedLVVersion** (`string`): LabVIEW version year for the build (e.g., `"2021"`, `"2023"`, `"2026"`).
 - **SupportedBitness** (`string`): Bitness of the LabVIEW environment (`"32"` or `"64"`).
 - **ProjectPath** (`string`): Path to the LabVIEW project `.lvproj` file that contains the build specification.
-- **TargetName** (`string`): Target that contains the build specification (e.g., `"My Computer"`).
-- **Major** (`int`): Major version component for the PPL.
-- **Minor** (`int`): Minor version component for the PPL.
-- **Patch** (`int`): Patch version component for the PPL.
-- **Build** (`int`): Build number component for the PPL.
-- **Commit** (`string`): Commit hash or identifier recorded in the build.
 
 ### Optional
 
-- **BuildSpecName** (`string`): Name of the build specification to execute. If empty, builds all build specifications under the specified target. Default: `""`.
+- **TargetName** (`string`): Target that contains the build specification. Defaults to `"My Computer"` in helper VI if not provided.
+- **BuildSpecName** (`string`): Name of the build specification to execute. If empty, builds all build specifications in the project.
+- **Major** (`int`): Major version component for the PPL. If not provided (or < 0), version setting is skipped.
+- **Minor** (`int`): Minor version component for the PPL. If not provided (or < 0), version setting is skipped.
+- **Patch** (`int`): Patch version component for the PPL. If not provided (or < 0), version setting is skipped.
+- **Build** (`int`): Build number component for the PPL. If not provided (or < 0), version setting is skipped.
+- **Commit** (`string`): Commit hash or identifier recorded in the build (for documentation purposes).
 - **DockerImage** (`string`): Docker image name. Default: `"nationalinstruments/labview"`.
 - **ImageTag** (`string`): Docker image tag. Default: `"2026q1-linux"`.
 
@@ -35,15 +35,15 @@ Common parameters are described in [Common parameters](../common-parameters.md).
 | `minimum_supported_lv_version` | `MinimumSupportedLVVersion` | LabVIEW version year for the build. |
 | `supported_bitness` | `SupportedBitness` | Bitness (`"32"` or `"64"`). |
 | `project_path` | `ProjectPath` | Path to the LabVIEW project `.lvproj` file. |
-| `target_name` | `TargetName` | Target that contains the build specification. |
+| `target_name` | `TargetName` | Target that contains the build specification (optional). |
 | `build_spec_name` | `BuildSpecName` | Name of the build specification (optional). |
-| `major` | `Major` | Major version component. |
-| `minor` | `Minor` | Minor version component. |
-| `patch` | `Patch` | Patch version component. |
-| `build` | `Build` | Build number component. |
-| `commit` | `Commit` | Commit hash or identifier. |
-| `docker_image` | `DockerImage` | Docker image name. |
-| `image_tag` | `ImageTag` | Docker image tag. |
+| `major` | `Major` | Major version component (optional). |
+| `minor` | `Minor` | Minor version component (optional). |
+| `patch` | `Patch` | Patch version component (optional). |
+| `build` | `Build` | Build number component (optional). |
+| `commit` | `Commit` | Commit hash or identifier (optional). |
+| `docker_image` | `DockerImage` | Docker image name (optional). |
+| `image_tag` | `ImageTag` | Docker image tag (optional). |
 | `working_directory` | `WorkingDirectory` | Base directory for the action. |
 | `log_level` | `LogLevel` | Verbosity level (ERROR\|WARN\|INFO\|DEBUG). |
 | `dry_run` | `DryRun` | If true, simulate without side effects. |
@@ -99,7 +99,6 @@ pwsh -File actions/Invoke-OSAction.ps1 -ActionName build-lvlibp-docker-linux -Ar
     supported_bitness: '64'
     project_path: 'lv_icon_editor.lvproj'
     target_name: 'My Computer'
-    build_spec_name: ''  # Empty - builds all specifications
     major: 1
     minor: 0
     patch: 0
@@ -109,13 +108,38 @@ pwsh -File actions/Invoke-OSAction.ps1 -ActionName build-lvlibp-docker-linux -Ar
 
 ## Behavior
 
-1. Pulls the specified Linux Docker image (e.g., `nationalinstruments/labview:2026q1-linux`)
-2. Mounts the workspace directory into the container at `/workspace`
-3. Mounts the bash build script into the container at `/tmp/build-lvlibp.sh`
-4. Constructs the LabVIEWPath (`/usr/local/natinst/LabVIEW-{version}-{bitness}/labview`)
-5. Executes the bash script which runs `LabVIEWCLI -OperationName ExecuteBuildSpec` with the specified parameters
-6. On success, searches for `.lvlibp` files in the `builds` directory and renames them with version and commit metadata (e.g., `lv_icon_x64_v1.0.0.0+gabc1234.lvlibp`)
-7. On failure, exits with the build error code
+1. **Version Setting**:
+
+   - If all version components (`Major`, `Minor`, `Patch`, `Build`) are provided (≥ 0), the helper VI is called to set the version
+   - If any version component is missing or < 0, version setting is skipped and build specs use their own versions
+   - When version is provided:
+     - If `BuildSpecName` is specified: version is set on that build spec only
+     - If `BuildSpecName` is omitted: version is set on **all** build specs in the project
+
+2. **Docker Image Pull**:
+
+   - Pulls the specified Docker image (or default `nationalinstruments/labview:2026q1-linux`)
+   - Verifies the pull was successful
+
+3. **LabVIEW Path Construction**:
+
+   - Container path: `/usr/local/natinst/LabVIEW-{version}-{bitness}/labview`
+   - Example: `/usr/local/natinst/LabVIEW-2026-64/labview`
+
+4. **Build Execution**:
+
+   - Mounts current directory to `/workspace` in container
+   - Mounts build script to `/tmp/build-lvlibp.sh` in container
+   - Calls helper VI to set version (if version parameters provided)
+   - Executes `LabVIEWCLI -OperationName ExecuteBuildSpec` inside container
+
+5. **Log Collection**:
+
+   - Copies LabVIEW logs from `/tmp` to `/workspace/build-logs` for artifact collection
+
+6. **Error Handling**:
+
+   - On failure, exits with the build error code
 
 ## Return Codes
 

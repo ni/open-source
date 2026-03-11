@@ -9,6 +9,7 @@ LABVIEW_PATH=""
 PROJECT_PATH=""
 TARGET_NAME=""
 BUILD_SPEC_NAME=""
+VERSION=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -28,6 +29,10 @@ while [[ $# -gt 0 ]]; do
             BUILD_SPEC_NAME="$2"
             shift 2
             ;;
+        --version)
+            VERSION="$2"
+            shift 2
+            ;;
         *)
             echo "Unknown argument: $1"
             exit 1
@@ -36,25 +41,73 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validate required arguments
-if [[ -z "$LABVIEW_PATH" ]] || [[ -z "$PROJECT_PATH" ]] || [[ -z "$TARGET_NAME" ]]; then
+if [[ -z "$LABVIEW_PATH" ]] || [[ -z "$PROJECT_PATH" ]]; then
     echo "Error: Missing required arguments"
-    echo "Usage: $0 --labview-path <path> --project-path <path> --target-name <name> [--build-spec-name <name>]"
+    echo "Usage: $0 --labview-path <path> --project-path <path> [--target-name <name>] [--build-spec-name <name>] [--version <M.m.p.b>]"
     exit 1
 fi
 
 echo "Building LabVIEW Packed Project Library..."
 echo "LabVIEW: $LABVIEW_PATH"
 echo "Project: $PROJECT_PATH"
-echo "Target: $TARGET_NAME"
+echo "Target: ${TARGET_NAME:-<My Computer>}"
 echo "Build Spec: ${BUILD_SPEC_NAME:-<all>}"
+echo "Version: ${VERSION:-<from build spec>}"
+
+if [[ -n "$VERSION" ]]; then
+    echo "Setting build version..."
+    HELPER_VI="/workspace/scripts/build-lvlibp-helpers/SetBuildVersionCaller.vi"
+
+    if [[ ! -f "$HELPER_VI" ]]; then
+        echo "Error: Helper VI not found at $HELPER_VI"
+        exit 1
+    fi
+
+    # Build VI arguments: ProjectPath and Version are required
+    # TargetName defaults to "My Computer" if not provided
+    # BuildSpecName: if not provided, applies version to all build specs
+    VI_ARGS="ProjectPath:$PROJECT_PATH;Version:$VERSION"
+    
+    if [[ -n "$TARGET_NAME" ]]; then
+        VI_ARGS="${VI_ARGS};TargetName:$TARGET_NAME"
+    fi
+    
+    if [[ -n "$BUILD_SPEC_NAME" ]]; then
+        VI_ARGS="${VI_ARGS};BuildSpecName:$BUILD_SPEC_NAME"
+    fi
+
+    SET_VERSION_ARGS=(
+        "-OperationName" "RunVI"
+        "-LabVIEWPath" "$LABVIEW_PATH"
+        "-VIPath" "$HELPER_VI"
+        "-ViArgs" "$VI_ARGS"
+        "-Headless"
+    )
+
+    echo "Executing: LabVIEWCLI ${SET_VERSION_ARGS[*]}"
+    LabVIEWCLI "${SET_VERSION_ARGS[@]}"
+    SET_VERSION_EXIT=$?
+
+    if [[ $SET_VERSION_EXIT -ne 0 ]]; then
+        echo "Failed to set build version (exit code: $SET_VERSION_EXIT)"
+        exit $SET_VERSION_EXIT
+    fi
+
+    echo "Build version set successfully"
+else
+    echo "Skipping version set"
+fi
 
 # Construct LabVIEWCLI command
 CLI_ARGS=(
     "-OperationName" "ExecuteBuildSpec"
     "-LabVIEWPath" "$LABVIEW_PATH"
     "-ProjectPath" "$PROJECT_PATH"
-    "-TargetName" "$TARGET_NAME"
 )
+
+if [[ -n "$TARGET_NAME" ]]; then
+    CLI_ARGS+=("-TargetName" "$TARGET_NAME")
+fi
 
 if [[ -n "$BUILD_SPEC_NAME" ]]; then
     CLI_ARGS+=("-BuildSpecName" "$BUILD_SPEC_NAME")
