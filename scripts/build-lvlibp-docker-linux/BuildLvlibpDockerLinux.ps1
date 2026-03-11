@@ -118,14 +118,12 @@ try {
     # Get the path to the bash script
     $scriptDir = $PSScriptRoot
     $buildScript = Join-Path $scriptDir 'build-lvlibp.sh'
-    Write-Information "Build script path: $buildScript" -InformationAction Continue
     
     if (-not (Test-Path $buildScript)) {
         throw "Build script not found: $buildScript"
     }
 
-    # Determine action root
-    $actionRoot = Split-Path $scriptDir -Parent
+    $actionRoot = Split-Path (Split-Path $scriptDir -Parent) -Parent
     Write-Verbose "Calculated action root from script path: $actionRoot"
 
     $helperDir = Join-Path $actionRoot 'scripts' 'build-lvlibp-helpers'
