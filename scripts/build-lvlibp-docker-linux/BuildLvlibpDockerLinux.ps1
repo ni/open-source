@@ -115,7 +115,7 @@ try {
         throw "Failed to pull Docker image (exit code: $LASTEXITCODE)"
     }
 
-    # Get the path to the bash script and helper VI directory
+    # Get the path to the bash script
     $scriptDir = $PSScriptRoot
     $buildScript = Join-Path $scriptDir 'build-lvlibp.sh'
     
@@ -123,8 +123,17 @@ try {
         throw "Build script not found: $buildScript"
     }
 
-    # Get the action repository root
-    $actionRoot = Split-Path (Split-Path $scriptDir -Parent) -Parent
+    # Determine action root
+    # In GitHub Actions, use GITHUB_ACTION_PATH
+    # Otherwise, calculate from script directory
+    if ($env:GITHUB_ACTION_PATH) {
+        $actionRoot = $env:GITHUB_ACTION_PATH
+        Write-Verbose "Using GITHUB_ACTION_PATH: $actionRoot"
+    } else {
+        $actionRoot = Split-Path (Split-Path $scriptDir -Parent) -Parent
+        Write-Verbose "Calculated action root from script path: $actionRoot"
+    }
+
     $helperDir = Join-Path $actionRoot 'scripts' 'build-lvlibp-helpers'
     
     if (-not (Test-Path $helperDir)) {
@@ -133,6 +142,7 @@ try {
 
     Write-Verbose "Action root: $actionRoot"
     Write-Verbose "Helper directory: $helperDir"
+    Write-Verbose "Build script: $buildScript"
 
     # Construct LabVIEWPath for Linux container
     $labviewPath = "/usr/local/natinst/LabVIEW-${MinimumSupportedLVVersion}-${SupportedBitness}/labview"
