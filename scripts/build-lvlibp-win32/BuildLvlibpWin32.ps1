@@ -129,7 +129,7 @@ try {
         
         Write-Host "Executing: LabVIEWCLI -OperationName RunVI -LabVIEWPath `"$LabVIEWPath`" -VIPath `"$helperVI`" `"$projectArg`" `"$buildSpecArg`" `"$targetArg`" `"$versionArg`" -Headless"
         
-        & LabVIEWCLI -OperationName RunVI -LabVIEWPath $LabVIEWPath -VIPath $helperVI $projectArg $buildSpecArg $targetArg $versionArg -Headless
+        & $labviewCLI -OperationName RunVI -LabVIEWPath $LabVIEWPath -VIPath $helperVI $projectArg $buildSpecArg $targetArg $versionArg -Headless
             $setVersionExit = $LASTEXITCODE
             
         if ($setVersionExit -ne 0) {
