@@ -47,14 +47,14 @@ if ($Version) {
     }
 
     # Format arguments for logging - show "" only for empty strings
-    $projectDisplay = if ($ProjectPath) { $ProjectPath } else { '""' }
-    $buildSpecDisplay = if ($BuildSpecName) { $BuildSpecName } else { '""' }
-    $targetDisplay = if ($TargetName) { $TargetName } else { '""' }
-    $versionDisplay = if ($Version) { $Version } else { '""' }
+    $projectArg = if ($ProjectPath) { $ProjectPath } else { '""' }
+    $buildSpecArg = if ($BuildSpecName) { $BuildSpecName } else { '""' }
+    $targetArg = if ($TargetName) { $TargetName } else { '""' }
+    $versionArg = if ($Version) { $Version } else { '""' }
     
-    Write-Host "Executing: LabVIEWCLI -OperationName RunVI -LabVIEWPath `"$LabVIEWPath`" -VIPath `"$helperVI`" $projectDisplay $buildSpecDisplay $targetDisplay $versionDisplay -Headless"
+    Write-Host "Executing: LabVIEWCLI -OperationName RunVI -LabVIEWPath `"$LabVIEWPath`" -VIPath `"$helperVI`" `"$projectArg`" `"$buildSpecArg`" `"$targetArg`" `"$versionArg`" -Headless"
     
-    & LabVIEWCLI -OperationName RunVI -LabVIEWPath $LabVIEWPath -VIPath $helperVI $ProjectPath $BuildSpecName $TargetName $Version -Headless
+    & LabVIEWCLI -OperationName RunVI -LabVIEWPath $LabVIEWPath -VIPath $helperVI $projectArg $buildSpecArg $targetArg $versionArg -Headless
     $setVersionExit = $LASTEXITCODE
     
     if ($setVersionExit -ne 0) {
