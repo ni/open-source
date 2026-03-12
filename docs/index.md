@@ -38,6 +38,7 @@ Open Source LabVIEW Actions unifies LabVIEW [CI/CD](glossary.md#ci-cd) scripts b
 | [set-development-mode](actions/set-development-mode.md) | Configure the repository for development mode by removing packed libraries, adding tokens, preparing sources, and closing LabVIEW. |
 | [setup-labview](actions/setup-labview.md) | Downloads, installs and activates LabVIEW Community Edition from an ISO image for CI/CD environments. |
 | [setup-mkdocs](actions/setup-mkdocs.md) | Install a pinned MkDocs with caching. |
+| [via-lv-docker](actions/via-lv-docker.md) | Execute LabVIEW VI Analyzer tests using a Docker container and parse results. |
 
 ## Workflow Examples
 
@@ -60,3 +61,4 @@ Open Source LabVIEW Actions unifies LabVIEW [CI/CD](glossary.md#ci-cd) scripts b
 | [run-unit-tests](workflows/run-unit-tests.md) | Run LabVIEW unit tests via the LabVIEW Unit Test Framework CLI and report pass/fail/error using standard exit codes. |
 | [set-development-mode](workflows/set-development-mode.md) | Configure the repository for development mode by removing packed libraries, adding tokens, preparing sources, and closing LabVIEW. |
 | [setup-mkdocs](workflows/setup-mkdocs.md) | Install a pinned MkDocs with caching. |
+| [via-lv-docker](workflows/via-lv-docker.md) | Execute LabVIEW VI Analyzer tests using a Docker container and parse results. |

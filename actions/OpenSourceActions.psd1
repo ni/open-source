@@ -31,6 +31,7 @@
     'Invoke-SetupLabview'
     'Invoke-SetupLunit'
     'Invoke-SetupNipm'
+    'Invoke-ViaLvDocker'
   )
 
   PrivateData = @{
