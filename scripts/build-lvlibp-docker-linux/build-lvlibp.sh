@@ -69,25 +69,19 @@ if [[ -n "$VERSION" ]]; then
     # 3. TargetName (optional, defaults to "My Computer" in VI)
     # 4. Version (optional, empty string to skip version setting)
     
-    SET_VERSION_ARGS=(
-        "-OperationName" "RunVI"
-        "-LabVIEWPath" "$LABVIEW_PATH"
-        "-VIPath" "$HELPER_VI"
-        "$PROJECT_PATH"
-    )
+    echo "Executing: LabVIEWCLI -OperationName RunVI -LabVIEWPath \"$LABVIEW_PATH\" -VIPath $HELPER_VI \"$PROJECT_PATH\" \"$BUILD_SPEC_NAME\" \"$TARGET_NAME\" \"$VERSION\""
     
-    SET_VERSION_ARGS+=("${BUILD_SPEC_NAME:-}")
-    
-    # Add TargetName (empty string to use VI default)
-    SET_VERSION_ARGS+=("${TARGET_NAME:-}")
-    
-    # Add Version
-    SET_VERSION_ARGS+=("$VERSION")
+    # Pass all positional arguments, preserving empty strings
+    LabVIEWCLI \
+        -OperationName RunVI \
+        -LabVIEWPath "$LABVIEW_PATH" \
+        -VIPath "$HELPER_VI" \
+        "$PROJECT_PATH" \
+        "$BUILD_SPEC_NAME" \
+        "$TARGET_NAME" \
+        "$VERSION" \
+        -Headless
 
-    SET_VERSION_ARGS+=("-Headless")
-
-    echo "Executing: LabVIEWCLI ${SET_VERSION_ARGS[*]}"
-    LabVIEWCLI "${SET_VERSION_ARGS[@]}"
     SET_VERSION_EXIT=$?
 
     if [[ $SET_VERSION_EXIT -ne 0 ]]; then
