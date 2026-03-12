@@ -2001,6 +2001,64 @@
         "default": false,
         "type": "string"
       }
+    ],
+    "via-lv-docker": [
+      {
+        "name": "config_path",
+        "description": "Path to VI Analyzer configuration file (.viancfg) or LabVIEW files (.vi, .ctl, .llb)",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "template_path",
+        "description": "Path to .viancfg template (required to generate config file dynamically)",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "base_branch",
+        "description": "Branch to compare against for changed files (used when generating config)",
+        "required": false,
+        "default": "origin/develop",
+        "type": "string"
+      },
+      {
+        "name": "labview_version",
+        "description": "LabVIEW Docker image version tag",
+        "required": false,
+        "default": "2026q1-linux",
+        "type": "string"
+      },
+      {
+        "name": "docker_image",
+        "description": "Full Docker image name",
+        "required": false,
+        "default": "nationalinstruments/labview",
+        "type": "string"
+      },
+      {
+        "name": "working_directory",
+        "description": "Working directory where the action will run.",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "log_level",
+        "description": "Verbosity level (ERROR|WARN|INFO|DEBUG).",
+        "required": false,
+        "default": "INFO",
+        "type": "string"
+      },
+      {
+        "name": "dry_run",
+        "description": "If true, simulate the action without side effects.",
+        "required": false,
+        "default": false,
+        "type": "string"
+      }
     ]
   }
 }
