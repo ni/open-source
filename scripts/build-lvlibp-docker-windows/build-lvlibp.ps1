@@ -46,24 +46,15 @@ if ($Version) {
         throw "Helper VI not found at: $helperVI"
     }
 
-    # SetBuildVersionCaller.vi expects positional arguments:
-    # 1. ProjectPath (required)
-    # 2. BuildSpecName (optional, empty string to apply to all)
-    # 3. TargetName (optional, defaults to "My Computer" in VI)
-    # 4. Version (optional, empty string to skip version setting)
-    $setVersionArgs = @(
-        '-OperationName', 'RunVI'
-        '-LabVIEWPath', $LabVIEWPath
-        '-VIPath', $helperVI
-        $ProjectPath
-        $BuildSpecName  
-        $TargetName     
-        $Version
-        '-Headless'
-    )
-
-    Write-Host "Executing: LabVIEWCLI $($setVersionArgs -join ' ')"
-    & LabVIEWCLI @setVersionArgs
+    # Format arguments for logging - show "" only for empty strings
+    $projectDisplay = if ($ProjectPath) { $ProjectPath } else { '""' }
+    $buildSpecDisplay = if ($BuildSpecName) { $BuildSpecName } else { '""' }
+    $targetDisplay = if ($TargetName) { $TargetName } else { '""' }
+    $versionDisplay = if ($Version) { $Version } else { '""' }
+    
+    Write-Host "Executing: LabVIEWCLI -OperationName RunVI -LabVIEWPath `"$LabVIEWPath`" -VIPath `"$helperVI`" $projectDisplay $buildSpecDisplay $targetDisplay $versionDisplay -Headless"
+    
+    & LabVIEWCLI -OperationName RunVI -LabVIEWPath $LabVIEWPath -VIPath $helperVI $ProjectPath $BuildSpecName $TargetName $Version -Headless
     $setVersionExit = $LASTEXITCODE
     
     if ($setVersionExit -ne 0) {
