@@ -17,11 +17,14 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$ProjectPath,
 
-    [Parameter(Mandatory = $true)]
-    [string]$TargetName,
+    [Parameter(Mandatory = $false)]
+    [string]$TargetName = "",
 
     [Parameter(Mandatory = $false)]
-    [string]$BuildSpecName = ""
+    [string]$BuildSpecName = "",
+
+    [Parameter(Mandatory = $false)]
+    [string]$Version = ""
 )
 
 Set-StrictMode -Version Latest
@@ -30,16 +33,66 @@ $ErrorActionPreference = 'Stop'
 Write-Host "Building LabVIEW Packed Project Library..."
 Write-Host "LabVIEW: $LabVIEWPath"
 Write-Host "Project: $ProjectPath"
-Write-Host "Target: $TargetName"
+Write-Host "Target: $(if ($TargetName) { $TargetName } else { '<My Computer>' })"
 Write-Host "Build Spec: $(if ($BuildSpecName) { $BuildSpecName } else { '<all>' })"
+Write-Host "Version: $(if ($Version) { $Version } else { '<from build spec>' })"
+
+#  Set build version using helper VI if Version is provided
+if ($Version) {
+    Write-Host "Setting build version to: $Version..."
+    $helperVI = "C:\actions\scripts\build-lvlibp-helpers\SetBuildVersionCaller.vi"
+
+    if (-not (Test-Path $helperVI)) {
+        throw "Helper VI not found at: $helperVI"
+    }
+
+    # SetBuildVersionCaller.vi expects positional arguments:
+    # 1. ProjectPath (required)
+    # 2. BuildSpecName (optional, empty string to apply to all)
+    # 3. TargetName (optional, defaults to "My Computer" in VI)
+    # 4. Version (optional, empty string to skip version setting)
+    $setVersionArgs = @(
+        '-OperationName', 'RunVI'
+        '-LabVIEWPath', $LabVIEWPath
+        '-VIPath', $helperVI
+        $ProjectPath
+    )
+
+    # Add BuildSpecName (empty string if not provided)
+    $setVersionArgs += if ($BuildSpecName) { $BuildSpecName } else { "" }
+
+    # Add TargetName (empty string to use VI default)
+    $setVersionArgs += if ($TargetName) { $TargetName } else { "" }
+
+    # Add Version
+    $setVersionArgs += $Version
+
+    $setVersionArgs += '-Headless'
+
+    Write-Host "Executing: LabVIEWCLI $($setVersionArgs -join ' ')"
+
+    & LabVIEWCLI @setVersionArgs
+    $setVersionExit = $LASTEXITCODE
+    
+    if ($setVersionExit -ne 0) {
+        throw "Failed to set build version (exit code: $setVersionExit)"
+    }
+    
+    Write-Host "Build version set successfully"
+} else {
+    Write-Host "Skipping version set - using version from build spec(s)"
+}
 
 # Construct LabVIEWCLI command
 $cliArgs = @(
     '-OperationName', 'ExecuteBuildSpec'
     '-LabVIEWPath', $LabVIEWPath
     '-ProjectPath', $ProjectPath
-    '-TargetName', $TargetName
 )
+
+if (-not [string]::IsNullOrWhiteSpace($TargetName)) {
+    $cliArgs += '-TargetName', $TargetName
+}
 
 if (-not [string]::IsNullOrWhiteSpace($BuildSpecName)) {
     $cliArgs += '-BuildSpecName', $BuildSpecName
