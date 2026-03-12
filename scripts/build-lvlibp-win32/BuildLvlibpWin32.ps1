@@ -125,7 +125,7 @@ try {
         $projectArg = if ($ProjectPath) { $ProjectPath } else { '""' }
         $buildSpecArg = if ($BuildSpecName) { $BuildSpecName } else { '""' }
         $targetArg = if ($TargetName) { $TargetName } else { '""' }
-        $versionArg = if ($Version) { $Version } else { '""' }
+        $versionArg = if ($versionString) { $versionString } else { '""' }
         
         Write-Host "Executing: LabVIEWCLI -OperationName RunVI -LabVIEWPath `"$LabVIEWPath`" -VIPath `"$helperVI`" `"$projectArg`" `"$buildSpecArg`" `"$targetArg`" `"$versionArg`" -Headless"
         
