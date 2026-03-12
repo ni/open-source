@@ -122,7 +122,7 @@ try {
         # 2. BuildSpecName (empty string to apply to all)
         # 3. TargetName (empty string to use VI default)
         # 4. Version (required when setting version)
-        $projectArg = if ($ProjectPath) { $ProjectPath } else { '""' }
+        $projectArg = (Resolve-Path $ProjectPath).Path
         $buildSpecArg = if ($BuildSpecName) { $BuildSpecName } else { '""' }
         $targetArg = if ($TargetName) { $TargetName } else { '""' }
         $versionArg = if ($versionString) { $versionString } else { '""' }
