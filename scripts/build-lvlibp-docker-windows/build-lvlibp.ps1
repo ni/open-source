@@ -71,7 +71,8 @@ if ($Version) {
         "`"$ProjectPath`"",
         "`"$BuildSpecName`"",
         "`"$TargetName`"",
-        "`"$Version`""
+        "`"$Version`"",
+        '-Headless'
     )
 
     $processInfo = Start-Process -FilePath 'LabVIEWCLI' -ArgumentList ($argumentList -join ' ') -NoNewWindow -Wait -PassThru
