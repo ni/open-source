@@ -9,19 +9,19 @@ Call **`BuildLvlibpDockerWindows.ps1`** to compile LabVIEW packed libraries usin
 | `minimum_supported_lv_version` | **Yes** | `2026` | LabVIEW version year to use. |
 | `supported_bitness` | **Yes** | `32` or `64` | Target LabVIEW bitness. |
 | `project_path` | **Yes** | `lv_icon_editor.lvproj` | Path to the LabVIEW project file. |
-| `target_name` | **Yes** | `My Computer` | Target that contains the build specification. |
+| `target_name` | No | `My Computer` | Target that contains the build specification. Defaults to "My Computer" in helper VI. |
 | `build_spec_name` | No | `Editor Packed Library` | Build specification name. Leave empty to build all. |
-| `major` | **Yes** | `1` | Major version component. |
-| `minor` | **Yes** | `0` | Minor version component. |
-| `patch` | **Yes** | `0` | Patch version component. |
-| `build` | **Yes** | `1` | Build number component. |
-| `commit` | **Yes** | `abcdef` | Commit identifier. |
+| `major` | No | `1` | Major version component. Omit to skip version setting. |
+| `minor` | No | `0` | Minor version component. Omit to skip version setting. |
+| `patch` | No | `0` | Patch version component. Omit to skip version setting. |
+| `build` | No | `1` | Build number component. Omit to skip version setting. |
+| `commit` | No | `abcdef` | Commit identifier. |
 | `docker_image` | No | `nationalinstruments/labview` | Docker image name. |
 | `image_tag` | No | `2026q1-windows` | Docker image tag. |
 
 ## Quick-start
 
-The following example builds using LabVIEW 2026 inside a Windows Docker container.
+The following example builds using LabVIEW 2026 inside a Windows Docker container with custom version:
 
 ```yaml
 - uses: ./.github/actions/build-lvlibp-docker-windows
@@ -38,6 +38,18 @@ The following example builds using LabVIEW 2026 inside a Windows Docker containe
     commit: ${{ github.sha }}
     docker_image: nationalinstruments/labview
     image_tag: 2026q1-windows
+```
+
+## Minimal Example
+
+Build with only required parameters (skips version setting, builds all specifications in "My Computer"):
+
+```yaml
+- uses: ./.github/actions/build-lvlibp-docker-windows
+  with:
+    minimum_supported_lv_version: 2026
+    supported_bitness: 64
+    project_path: lv_icon_editor.lvproj
 ```
 
 ## Build All Specifications

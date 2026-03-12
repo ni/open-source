@@ -27,21 +27,42 @@ Describe 'BuildLvlibpDockerWindows.Workflow' {
         $dispatchers = Get-Content $dispatchersPath | ConvertFrom-Json
         
         $action = $dispatchers.'build-lvlibp-docker-windows'
+        # Only 3 parameters are required
         $action.parameters.MinimumSupportedLVVersion | Should -Not -BeNullOrEmpty
         $action.parameters.SupportedBitness | Should -Not -BeNullOrEmpty
         $action.parameters.ProjectPath | Should -Not -BeNullOrEmpty
+    }
+
+    It 'validates optional parameters are defined [REQ-040]' -Tag 'REQ-040' {
+        $dispatchersPath = Join-Path $repoRoot 'dispatchers.json'
+        $dispatchers = Get-Content $dispatchersPath | ConvertFrom-Json
+        
+        $action = $dispatchers.'build-lvlibp-docker-windows'
+        # Optional parameters
         $action.parameters.TargetName | Should -Not -BeNullOrEmpty
+        $action.parameters.BuildSpecName | Should -Not -BeNullOrEmpty
         $action.parameters.Major | Should -Not -BeNullOrEmpty
         $action.parameters.Minor | Should -Not -BeNullOrEmpty
         $action.parameters.Patch | Should -Not -BeNullOrEmpty
         $action.parameters.Build | Should -Not -BeNullOrEmpty
         $action.parameters.Commit | Should -Not -BeNullOrEmpty
+        $action.parameters.DockerImage | Should -Not -BeNullOrEmpty
+        $action.parameters.ImageTag | Should -Not -BeNullOrEmpty
     }
 
-    It 'executes dry-run without errors [REQ-040]' -Tag 'REQ-040' {
+    It 'executes dry-run with only required parameters [REQ-040]' -Tag 'REQ-040' {
         $result = & "$repoRoot/actions/Invoke-OSAction.ps1" `
             -ActionName 'build-lvlibp-docker-windows' `
-            -ArgsJson '{"MinimumSupportedLVVersion":"2026","SupportedBitness":"64","ProjectPath":"test.lvproj","TargetName":"My Computer","BuildSpecName":"TestBuild","Major":1,"Minor":0,"Patch":0,"Build":0,"Commit":"abc1234"}' `
+            -ArgsJson '{"MinimumSupportedLVVersion":"2026","SupportedBitness":"64","ProjectPath":"test.lvproj"}' `
+            -DryRun
+        
+        $LASTEXITCODE | Should -Be 0
+    }
+
+    It 'executes dry-run with all parameters [REQ-040]' -Tag 'REQ-040' {
+        $result = & "$repoRoot/actions/Invoke-OSAction.ps1" `
+            -ActionName 'build-lvlibp-docker-windows' `
+            -ArgsJson '{"MinimumSupportedLVVersion":"2026","SupportedBitness":"64","ProjectPath":"test.lvproj","TargetName":"My Computer","BuildSpecName":"TestBuild","Major":1,"Minor":0,"Patch":0,"Build":0,"Commit":"abc1234","DockerImage":"nationalinstruments/labview","ImageTag":"2026q1-windows"}' `
             -DryRun
         
         $LASTEXITCODE | Should -Be 0
@@ -49,12 +70,34 @@ Describe 'BuildLvlibpDockerWindows.Workflow' {
 
     It 'validates module function throws when required parameters are missing [REQ-040]' -Tag 'REQ-040' {
         { Invoke-BuildLvlibpDockerWindows } | Should -Throw
+        { Invoke-BuildLvlibpDockerWindows -MinimumSupportedLVVersion '2026' } | Should -Throw
+        { Invoke-BuildLvlibpDockerWindows -MinimumSupportedLVVersion '2026' -SupportedBitness '64' } | Should -Throw
+    }
+
+    It 'validates module function accepts minimal required parameters [REQ-040]' -Tag 'REQ-040' {
+        { 
+            Invoke-BuildLvlibpDockerWindows `
+                -MinimumSupportedLVVersion '2026' `
+                -SupportedBitness '64' `
+                -ProjectPath 'test.lvproj' `
+                -DryRun 
+        } | Should -Not -Throw
     }
 
     It 'accepts optional parameters in dry-run [REQ-040]' -Tag 'REQ-040' {
         $result = & "$repoRoot/actions/Invoke-OSAction.ps1" `
             -ActionName 'build-lvlibp-docker-windows' `
             -ArgsJson '{"MinimumSupportedLVVersion":"2021","SupportedBitness":"32","ProjectPath":"test.lvproj","TargetName":"My Computer","BuildSpecName":"","Major":2,"Minor":1,"Patch":0,"Build":5,"Commit":"def5678","DockerImage":"custom/labview","ImageTag":"custom-tag"}' `
+            -DryRun
+        
+        $LASTEXITCODE | Should -Be 0
+    }
+
+    It 'accepts partial version parameters in dry-run (should skip version setting) [REQ-040]' -Tag 'REQ-040' {
+        # Omitting version parameters should skip version setting
+        $result = & "$repoRoot/actions/Invoke-OSAction.ps1" `
+            -ActionName 'build-lvlibp-docker-windows' `
+            -ArgsJson '{"MinimumSupportedLVVersion":"2026","SupportedBitness":"64","ProjectPath":"test.lvproj","TargetName":"My Computer","BuildSpecName":"TestBuild"}' `
             -DryRun
         
         $LASTEXITCODE | Should -Be 0
@@ -73,5 +116,10 @@ Describe 'BuildLvlibpDockerWindows.Workflow' {
     It 'validates inner build script exists [REQ-040]' -Tag 'REQ-040' {
         $scriptPath = Join-Path $repoRoot 'scripts' 'build-lvlibp-docker-windows' 'build-lvlibp.ps1'
         Test-Path $scriptPath | Should -Be $true
+    }
+
+    It 'validates helper VI directory exists [REQ-040]' -Tag 'REQ-040' {
+        $helperPath = Join-Path $repoRoot 'scripts' 'build-lvlibp-helpers'
+        Test-Path $helperPath | Should -Be $true
     }
 }

@@ -15,23 +15,23 @@
 .PARAMETER ProjectPath
     Path to the LabVIEW project .lvproj file that contains the build specification.
 
-.PARAMETER TargetName
-    Target that contains the build specification.
+PARAMETER TargetName
+    Target that contains the build specification. Defaults to "My Computer".
 
 .PARAMETER BuildSpecName
     Name of the LabVIEW build specification to execute. If empty, builds all specifications in the target.
 
 .PARAMETER Major
-    Major version component for the PPL.
+    Major version component for the PPL. Optional - if not provided, version setting is skipped.
 
 .PARAMETER Minor
-    Minor version component for the PPL.
+    Minor version component for the PPL. Optional - if not provided, version setting is skipped.
 
 .PARAMETER Patch
-    Patch version component for the PPL.
+    Patch version component for the PPL. Optional - if not provided, version setting is skipped.
 
 .PARAMETER Build
-    Build number component for the PPL.
+    Build number component for the PPL. Optional - if not provided, version setting is skipped.
 
 .PARAMETER Commit
     Commit hash or identifier recorded in the build.
@@ -60,26 +60,26 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$ProjectPath,
 
-    [Parameter(Mandatory = $true)]
-    [string]$TargetName,
+    [Parameter(Mandatory = $false)]
+    [string]$TargetName = "",
 
     [Parameter(Mandatory = $false)]
     [string]$BuildSpecName = "",
 
-    [Parameter(Mandatory = $true)]
-    [int]$Major,
+    [Parameter(Mandatory = $false)]
+    [int]$Major = -1,
 
-    [Parameter(Mandatory = $true)]
-    [int]$Minor,
+    [Parameter(Mandatory = $false)]
+    [int]$Minor = -1,
 
-    [Parameter(Mandatory = $true)]
-    [int]$Patch,
+    [Parameter(Mandatory = $false)]
+    [int]$Patch = -1,
 
-    [Parameter(Mandatory = $true)]
-    [int]$Build,
+    [Parameter(Mandatory = $false)]
+    [int]$Build = -1,
 
-    [Parameter(Mandatory = $true)]
-    [string]$Commit,
+    [Parameter(Mandatory = $false)]
+    [string]$Commit = "",
 
     [Parameter(Mandatory = $false)]
     [string]$DockerImage = "nationalinstruments/labview",
@@ -93,8 +93,18 @@ $ErrorActionPreference = 'Stop'
 
 try {
     Write-Verbose "Building PPL with Windows Docker container"
-    Write-Information "PPL Version: $Major.$Minor.$Patch.$Build" -InformationAction Continue
-    Write-Information "Commit: $Commit" -InformationAction Continue
+    $hasVersion = ($Major -ge 0) -and ($Minor -ge 0) -and ($Patch -ge 0) -and ($Build -ge 0)
+    
+    if ($hasVersion) {
+        $versionString = "$Major.$Minor.$Patch.$Build"
+        Write-Information "PPL Version: $versionString" -InformationAction Continue
+    } else {
+        Write-Information "PPL Version setting skipped." -InformationAction Continue
+    }
+    
+    if ($Commit) {
+        Write-Information "Commit: $Commit" -InformationAction Continue
+    }
 
     $fullImage = "${DockerImage}:${ImageTag}"
     Write-Information "Docker Image: $fullImage" -InformationAction Continue
@@ -113,6 +123,19 @@ try {
     if (-not (Test-Path $buildScript)) {
         throw "Build script not found: $buildScript"
     }
+
+    $actionRoot = Split-Path (Split-Path $scriptDir -Parent) -Parent
+    Write-Verbose "Calculated action root from script path: $actionRoot"
+
+    $helperDir = Join-Path $actionRoot 'scripts' 'build-lvlibp-helpers'
+    
+    if (-not (Test-Path $helperDir)) {
+        throw "Helper VI directory not found: $helperDir"
+    }
+
+    Write-Verbose "Action root: $actionRoot"
+    Write-Verbose "Helper directory: $helperDir"
+    Write-Verbose "Build script path: $buildScript"
 
     # Create temporary directory for script mounting
     $tempDir = Join-Path $env:TEMP "docker-build-$(New-Guid)"
@@ -138,11 +161,18 @@ try {
     $scriptArgs = @(
         "-LabVIEWPath", "`"$labviewPath`""
         "-ProjectPath", "`"$containerProjectPath`""
-        "-TargetName", "`"$TargetName`""
     )
+
+    if (-not [string]::IsNullOrWhiteSpace($TargetName)) {
+        $scriptArgs += "-TargetName", "`"$TargetName`""
+    }
     
     if (-not [string]::IsNullOrWhiteSpace($BuildSpecName)) {
         $scriptArgs += "-BuildSpecName", "`"$BuildSpecName`""
+    }
+
+    if ($hasVersion) {
+        $scriptArgs += "-Version", "`"$versionString`""
     }
 
     Write-Information "Executing build script in Windows Docker container..." -InformationAction Continue
@@ -151,6 +181,7 @@ try {
     # Run build in Windows container using -File with mounted script
     docker run --rm `
         -v "${PWD}:C:\workspace" `
+        -v "${actionRoot}:C:\actions" `
         -v "${tempDir}:C:\scripts" `
         $fullImage `
         powershell -NoProfile -File $containerScriptPath @scriptArgs `
@@ -169,4 +200,10 @@ try {
 catch {
     Write-Error "BuildLvlibpDockerWindows failed: $_"
     exit 1
+}
+finally {
+    if ($tempDir -and (Test-Path $tempDir)) {
+        Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Verbose "Cleaned up temporary directory: $tempDir"
+    }
 }

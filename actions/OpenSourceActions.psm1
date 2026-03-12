@@ -285,6 +285,101 @@ function Invoke-BuildLvlibpDockerLinux {
     return $result
 }
 
+# Builds LabVIEW Packed Project Library (.lvlibp) using Windows Docker container.
+# MinimumSupportedLVVersion: LabVIEW version for the build (e.g., "2021", "2026").
+# SupportedBitness: Bitness of the LabVIEW environment ("32" or "64").
+# ProjectPath: Path to the LabVIEW project .lvproj file.
+# TargetName: Target that contains the build specification (optional, defaults to "My Computer").
+# BuildSpecName: Name of the LabVIEW build specification (optional, builds all if empty).
+# Major: Major version component (optional, skips version setting if < 0).
+# Minor: Minor version component (optional, skips version setting if < 0).
+# Patch: Patch version component (optional, skips version setting if < 0).
+# Build: Build number component (optional, skips version setting if < 0).
+# Commit: Commit hash or identifier (optional).
+# DockerImage: Docker image name (default: "nationalinstruments/labview").
+# ImageTag: Docker image tag (defaults to "2026q1-windows").
+# DryRun: If set, prints the command instead of executing it.
+# gcliPath: Optional path prepended to PATH for locating the g CLI.
+function Invoke-BuildLvlibpDockerWindows {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [string] $MinimumSupportedLVVersion,
+        [Parameter(Mandatory)] [string] $SupportedBitness,
+        [Parameter(Mandatory)] [string] $ProjectPath,
+        [Parameter()] [string] $TargetName = "",
+        [Parameter()] [string] $BuildSpecName = "",
+        [Parameter()] [int] $Major = -1,
+        [Parameter()] [int] $Minor = -1,
+        [Parameter()] [int] $Patch = -1,
+        [Parameter()] [int] $Build = -1,
+        [Parameter()] [string] $Commit = "",
+        [Parameter()] [string] $DockerImage = "nationalinstruments/labview",
+        [Parameter()] [string] $ImageTag = "2026q1-windows",
+        [switch] $DryRun,
+        [string] $gcliPath
+    )
+    Write-Information "Invoking BuildLvlibpDockerWindows" -InformationAction Continue
+    
+    $result = Invoke-OpenSourceActionScript `
+        -ScriptSegments @('build-lvlibp-docker-windows', 'BuildLvlibpDockerWindows.ps1') `
+        -Arguments @{
+            MinimumSupportedLVVersion = $MinimumSupportedLVVersion
+            SupportedBitness = $SupportedBitness
+            ProjectPath = $ProjectPath
+            TargetName = $TargetName
+            BuildSpecName = $BuildSpecName
+            Major = $Major
+            Minor = $Minor
+            Patch = $Patch
+            Build = $Build
+            Commit = $Commit
+            DockerImage = $DockerImage
+            ImageTag = $ImageTag
+        } `
+        -DryRun:$DryRun `
+        -gcliPath $gcliPath
+    
+    return $result
+}
+
+function Invoke-BuildLvlibpWin32 {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [string] $MinimumSupportedLVVersion,
+        [Parameter(Mandatory)] [string] $SupportedBitness,
+        [Parameter(Mandatory)] [string] $ProjectPath,
+        [Parameter()] [string] $TargetName = "",
+        [Parameter()] [string] $BuildSpecName = "",
+        [Parameter()] [int] $Major = -1,
+        [Parameter()] [int] $Minor = -1,
+        [Parameter()] [int] $Patch = -1,
+        [Parameter()] [int] $Build = -1,
+        [Parameter()] [string] $Commit = "",
+        [switch] $DryRun,
+        [string] $gcliPath
+    )
+    Write-Information "Invoking BuildLvlibpWin32" -InformationAction Continue
+    
+    $result = Invoke-OpenSourceActionScript `
+        -ScriptSegments @('build-lvlibp-win32', 'BuildLvlibpWin32.ps1') `
+        -Arguments @{
+            MinimumSupportedLVVersion = $MinimumSupportedLVVersion
+            SupportedBitness = $SupportedBitness
+            ProjectPath = $ProjectPath
+            TargetName = $TargetName
+            BuildSpecName = $BuildSpecName
+            Major = $Major
+            Minor = $Minor
+            Patch = $Patch
+            Build = $Build
+            Commit = $Commit
+        } `
+        -DryRun:$DryRun `
+        -gcliPath $gcliPath
+    
+    return $result
+}
+
 # Builds LabVIEW Packed Project Library (.lvlibp) using Windows GitHub-hosted runner.
 # MinimumSupportedLVVersion: LabVIEW version for the build (e.g., "2021", "2026").
 # SupportedBitness: Bitness of the LabVIEW environment ("32" or "64").
