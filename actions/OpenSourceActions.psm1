@@ -609,6 +609,7 @@ function Invoke-SetupNipm {
         -DryRun:$DryRun
     
     return $result
+}
 
 # Runs VI Analyzer tests using LabVIEW Docker container.
 # ConfigPath: Path to VI Analyzer configuration file (.viancfg) or LabVIEW files (.vi, .ctl, .llb). If empty, generates from changed files.
