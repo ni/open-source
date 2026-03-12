@@ -602,3 +602,15 @@ server.viscripting.ShowScriptingOperationsInEditor=TRUE
 | working_directory | string | false |  | Working directory where the action will run. |
 | log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
 | dry_run | string | false | false | If true, simulate the action without side effects. |
+
+#### via-lv-docker
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| config_path | string | false |  | Path to VI Analyzer configuration file (.viancfg) or LabVIEW files (.vi, .ctl, .llb) |
+| template_path | string | false |  | Path to .viancfg template (required to generate config file dynamically) |
+| base_branch | string | false | origin/develop | Branch to compare against for changed files (used when generating config) |
+| labview_version | string | false | 2026q1-linux | LabVIEW Docker image version tag |
+| docker_image | string | false | nationalinstruments/labview | Full Docker image name |
+| working_directory | string | false |  | Working directory where the action will run. |
+| log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
+| dry_run | string | false | false | If true, simulate the action without side effects. |
