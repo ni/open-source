@@ -108,7 +108,7 @@ try {
         throw "Project file not found: $ProjectPath"
     }
 
-    # Only set build version if BuildSpecName is provided
+    # Only set build version if Version is provided
     if ($hasVersion) {
         Write-Information "Setting build version to: $versionString..." -InformationAction Continue
         $helperVI = Join-Path $PSScriptRoot '..' 'build-lvlibp-helpers' 'SetBuildVersionCaller.vi'
@@ -122,23 +122,16 @@ try {
         # 2. BuildSpecName (empty string to apply to all)
         # 3. TargetName (empty string to use VI default)
         # 4. Version (required when setting version)
+        $projectArg = if ($ProjectPath) { $ProjectPath } else { '""' }
+        $buildSpecArg = if ($BuildSpecName) { $BuildSpecName } else { '""' }
+        $targetArg = if ($TargetName) { $TargetName } else { '""' }
+        $versionArg = if ($Version) { $Version } else { '""' }
         
-        Write-Information "Executing: LabVIEWCLI -OperationName RunVI -LabVIEWPath `"$labviewPath`" -VIPath `"$helperVI`" `"$ProjectPath`" `"$BuildSpecName`" `"$TargetName`" `"$versionString`"" -InformationAction Continue
-
-        $setVersionArgs = @(
-            '-OperationName', 'RunVI'
-            '-LabVIEWPath', $labviewPath
-            '-VIPath', (Resolve-Path $helperVI).Path
-            (Resolve-Path $ProjectPath).Path
-            $BuildSpecName
-            $TargetName
-            $versionString
-            '-Headless'
-        )
-
-        & $labviewCLI @setVersionArgs
-        $setVersionExit = $LASTEXITCODE
+        Write-Host "Executing: LabVIEWCLI -OperationName RunVI -LabVIEWPath `"$LabVIEWPath`" -VIPath `"$helperVI`" `"$projectArg`" `"$buildSpecArg`" `"$targetArg`" `"$versionArg`" -Headless"
         
+        & LabVIEWCLI -OperationName RunVI -LabVIEWPath $LabVIEWPath -VIPath $helperVI $projectArg $buildSpecArg $targetArg $versionArg -Headless
+            $setVersionExit = $LASTEXITCODE
+            
         if ($setVersionExit -ne 0) {
             throw "Failed to set build version (exit code: $setVersionExit)"
         }
@@ -155,11 +148,11 @@ try {
         '-ProjectPath', (Resolve-Path $ProjectPath).Path
     )
 
-    if ($TargetName) {
+    if (-not [string]::IsNullOrWhiteSpace($TargetName)) {
         $cliArgs += '-TargetName', $TargetName
     }
 
-    if ($BuildSpecName) {
+    if (-not [string]::IsNullOrWhiteSpace($BuildSpecName)) {
         $cliArgs += '-BuildSpecName', $BuildSpecName
     }
 
