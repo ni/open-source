@@ -3,8 +3,7 @@
     Builds the LabVIEW Packed Project Library (.lvlibp) using Windows GitHub-hosted runner.
 
 .DESCRIPTION
-    Executes LabVIEW build specification through LabVIEWCLI on a Windows GitHub-hosted runner,
-    embedding the provided version information and commit identifier.
+    Executes LabVIEW build specification through LabVIEWCLI on a Windows GitHub-hosted runner.
 
 .PARAMETER MinimumSupportedLVVersion
     LabVIEW version year used for the build (e.g., "2021", "2023", "2026").
@@ -16,28 +15,28 @@
     Path to the LabVIEW project .lvproj file that contains the build specification.
 
 .PARAMETER TargetName
-    Target that contains the build specification.
+    Target that contains the build specification. Defaults to "My Computer".
 
 .PARAMETER BuildSpecName
     Name of the LabVIEW build specification to execute. If empty, builds all specifications in the target.
 
 .PARAMETER Major
-    Major version component for the PPL.
+    Major version component for the PPL. Optional - if not provided, version setting is skipped.
 
 .PARAMETER Minor
-    Minor version component for the PPL.
+    Minor version component for the PPL. Optional - if not provided, version setting is skipped.
 
 .PARAMETER Patch
-    Patch version component for the PPL.
+    Patch version component for the PPL. Optional - if not provided, version setting is skipped.
 
 .PARAMETER Build
-    Build number component for the PPL.
+    Build number component for the PPL. Optional - if not provided, version setting is skipped.
 
 .PARAMETER Commit
     Commit hash or identifier recorded in the build.
 
 .EXAMPLE
-    .\BuildLvlibpWin32.ps1 -MinimumSupportedLVVersion "2026" -SupportedBitness "64" -ProjectPath "lv_icon_editor.lvproj" -TargetName "My Computer" -BuildSpecName "Editor Packed Library" -Major 1 -Minor 0 -Patch 0 -Build 0 -Commit "abc1234"
+    .\BuildLvlibpWin32.ps1 -MinimumSupportedLVVersion "2025" -SupportedBitness "32" -ProjectPath "lv_icon_editor.lvproj" -TargetName "My Computer" -BuildSpecName "Editor Packed Library" -Major 1 -Minor 0 -Patch 0 -Build 0 -Commit "abc1234"
 
 .NOTES
     [REQ-041] Build LabVIEW Packed Project Library using Windows GitHub-hosted runner
@@ -54,26 +53,26 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$ProjectPath,
 
-    [Parameter(Mandatory = $true)]
-    [string]$TargetName,
+    [Parameter(Mandatory = $false)]
+    [string]$TargetName = "",
 
     [Parameter(Mandatory = $false)]
     [string]$BuildSpecName = "",
 
-    [Parameter(Mandatory = $true)]
-    [int]$Major,
+    [Parameter(Mandatory = $false)]
+    [int]$Major = -1,
 
-    [Parameter(Mandatory = $true)]
-    [int]$Minor,
+    [Parameter(Mandatory = $false)]
+    [int]$Minor = -1,
 
-    [Parameter(Mandatory = $true)]
-    [int]$Patch,
+    [Parameter(Mandatory = $false)]
+    [int]$Patch = -1,
 
-    [Parameter(Mandatory = $true)]
-    [int]$Build,
+    [Parameter(Mandatory = $false)]
+    [int]$Build = -1,
 
-    [Parameter(Mandatory = $true)]
-    [string]$Commit
+    [Parameter(Mandatory = $false)]
+    [string]$Commit = ""
 )
 
 Set-StrictMode -Version Latest
@@ -81,7 +80,15 @@ $ErrorActionPreference = 'Stop'
 
 try {
     Write-Verbose "Building PPL with Windows GitHub-hosted runner"
-    Write-Information "PPL Version: $Major.$Minor.$Patch.$Build" -InformationAction Continue
+    $hasVersion = ($Major -ge 0) -and ($Minor -ge 0) -and ($Patch -ge 0) -and ($Build -ge 0)
+    
+    if ($hasVersion) {
+        $versionString = "$Major.$Minor.$Patch.$Build"
+        Write-Information "PPL Version: $versionString" -InformationAction Continue
+    } else {
+        Write-Information "PPL Version setting skipped." -InformationAction Continue
+    }
+
     Write-Information "Commit: $Commit" -InformationAction Continue
 
     # Construct LabVIEWPath for Windows
@@ -94,12 +101,51 @@ try {
 
     Write-Verbose "LabVIEWPath: $labviewPath"
     Write-Information "Project: $ProjectPath" -InformationAction Continue
-    Write-Information "Target: $TargetName" -InformationAction Continue
+    Write-Information "Target: $(if ($TargetName) { $TargetName } else { '<My Computer>' })" -InformationAction Continue
     Write-Information "Build Spec: $(if ($BuildSpecName) { $BuildSpecName } else { '<all>' })" -InformationAction Continue
-
     # Verify project file exists
     if (-not (Test-Path $ProjectPath)) {
         throw "Project file not found: $ProjectPath"
+    }
+
+    # Only set build version if BuildSpecName is provided
+    if ($hasVersion) {
+        Write-Information "Setting build version to: $versionString..." -InformationAction Continue
+        $helperVI = Join-Path $PSScriptRoot '..' 'build-lvlibp-helpers' 'SetBuildVersionCaller.vi'
+        
+        if (-not (Test-Path $helperVI)) {
+            throw "Helper VI not found at: $helperVI"
+        }
+
+        # SetBuildVersionCaller.vi expects positional arguments:
+        # 1. ProjectPath (required)
+        # 2. BuildSpecName (empty string to apply to all)
+        # 3. TargetName (empty string to use VI default)
+        # 4. Version (required when setting version)
+        
+        Write-Information "Executing: LabVIEWCLI -OperationName RunVI -LabVIEWPath `"$labviewPath`" -VIPath `"$helperVI`" `"$ProjectPath`" `"$BuildSpecName`" `"$TargetName`" `"$versionString`"" -InformationAction Continue
+
+        $setVersionArgs = @(
+            '-OperationName', 'RunVI'
+            '-LabVIEWPath', $labviewPath
+            '-VIPath', (Resolve-Path $helperVI).Path
+            (Resolve-Path $ProjectPath).Path
+            $BuildSpecName
+            $TargetName
+            $versionString
+            '-Headless'
+        )
+
+        & $labviewCLI @setVersionArgs
+        $setVersionExit = $LASTEXITCODE
+        
+        if ($setVersionExit -ne 0) {
+            throw "Failed to set build version (exit code: $setVersionExit)"
+        }
+        
+        Write-Information "Build version set successfully" -InformationAction Continue
+    } else {
+        Write-Information "Skipping version set " -InformationAction Continue
     }
 
     # Construct LabVIEWCLI command
@@ -107,10 +153,13 @@ try {
         '-OperationName', 'ExecuteBuildSpec'
         '-LabVIEWPath', $labviewPath
         '-ProjectPath', (Resolve-Path $ProjectPath).Path
-        '-TargetName', $TargetName
     )
 
-    if (-not [string]::IsNullOrWhiteSpace($BuildSpecName)) {
+    if ($TargetName) {
+        $cliArgs += '-TargetName', $TargetName
+    }
+
+    if ($BuildSpecName) {
         $cliArgs += '-BuildSpecName', $BuildSpecName
     }
 

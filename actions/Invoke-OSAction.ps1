@@ -26,6 +26,7 @@ $FallbackRegistry = [ordered]@{
     'build-lvlibp'                = 'Invoke-BuildLvlibp'
     'build-lvlibp-docker-linux'   = 'Invoke-BuildLvlibpDockerLinux'
     'build-lvlibp-docker-windows' = 'Invoke-BuildLvlibpDockerWindows'
+    'build-lvlibp-win32'          = 'Invoke-BuildLvlibpWin32'
     'build-vi-package'            = 'Invoke-BuildViPackage'
     'close-labview'               = 'Invoke-CloseLabVIEW'
     'generate-release-notes'      = 'Invoke-GenerateReleaseNotes'

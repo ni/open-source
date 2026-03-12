@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Builds LabVIEW Packed Project Library (.lvlibp) files using LabVIEW installed on a Windows GitHub-hosted runner. This action executes the LabVIEW build specification through LabVIEWCLI, embedding version information and commit metadata.
+Builds LabVIEW Packed Project Library (.lvlibp) files using LabVIEW installed on a Windows GitHub-hosted runner. This action executes the LabVIEW build specification through LabVIEWCLI (32-bit), optionally embedding version information and commit metadata.
 
 Use this action when you need to build PPL files on GitHub-hosted Windows runners with locally installed LabVIEW (no Docker required).
 
@@ -15,16 +15,16 @@ Common parameters are described in [Common parameters](../common-parameters.md).
 - **MinimumSupportedLVVersion** (`string`): LabVIEW version year for the build (e.g., `"2021"`, `"2023"`, `"2025"`).
 - **SupportedBitness** (`string`): Bitness of the LabVIEW environment (`"32"` or `"64"`).
 - **ProjectPath** (`string`): Path to the LabVIEW project `.lvproj` file that contains the build specification.
-- **TargetName** (`string`): Target that contains the build specification (e.g., `"My Computer"`).
-- **Major** (`int`): Major version component for the PPL.
-- **Minor** (`int`): Minor version component for the PPL.
-- **Patch** (`int`): Patch version component for the PPL.
-- **Build** (`int`): Build number component for the PPL.
-- **Commit** (`string`): Commit hash or identifier recorded in the build.
 
 ### Optional
 
-- **BuildSpecName** (`string`): Name of the build specification to execute. If empty, builds all build specifications under the specified target. Default: `""`.
+- **TargetName** (`string`): Target that contains the build specification. Defaults to `"My Computer"` in helper VI if not provided.
+- **BuildSpecName** (`string`): Name of the build specification to execute. If empty, builds all build specifications under the specified target.
+- **Major** (`int`): Major version component for the PPL. If not provided (or < 0), version setting is skipped.
+- **Minor** (`int`): Minor version component for the PPL. If not provided (or < 0), version setting is skipped.
+- **Patch** (`int`): Patch version component for the PPL. If not provided (or < 0), version setting is skipped.
+- **Build** (`int`): Build number component for the PPL. If not provided (or < 0), version setting is skipped.
+- **Commit** (`string`): Commit hash or identifier recorded in the build.
 
 ### GitHub Action inputs
 
@@ -33,13 +33,13 @@ Common parameters are described in [Common parameters](../common-parameters.md).
 | `minimum_supported_lv_version` | `MinimumSupportedLVVersion` | LabVIEW version year for the build. |
 | `supported_bitness` | `SupportedBitness` | Bitness (`"32"` or `"64"`). |
 | `project_path` | `ProjectPath` | Path to the LabVIEW project `.lvproj` file. |
-| `target_name` | `TargetName` | Target that contains the build specification. |
-| `build_spec_name` | `BuildSpecName` | Name of the build specification (optional). |
-| `major` | `Major` | Major version component. |
-| `minor` | `Minor` | Minor version component. |
-| `patch` | `Patch` | Patch version component. |
-| `build` | `Build` | Build number component. |
-| `commit` | `Commit` | Commit hash or identifier. |
+| `target_name` | `TargetName` | Target that contains the build specification ("My Computer" is used if empty). |
+| `build_spec_name` | `BuildSpecName` | Name of the build specification (Uses all build specs if empty). |
+| `major` | `Major` | Major version component (optional). |
+| `minor` | `Minor` | Minor version component (optional). |
+| `patch` | `Patch` | Patch version component (optional). |
+| `build` | `Build` | Build number component (optional). |
+| `commit` | `Commit` | Commit hash or identifier (optional). |
 | `working_directory` | `WorkingDirectory` | Base directory for the action. |
 | `log_level` | `LogLevel` | Verbosity level (ERROR\|WARN\|INFO\|DEBUG). |
 | `dry_run` | `DryRun` | If true, simulate without side effects. |
@@ -79,6 +79,17 @@ pwsh -File actions/Invoke-OSAction.ps1 -ActionName build-lvlibp-win32 -ArgsJson 
     patch: 0
     build: 0
     commit: ${{ github.sha }}
+```
+
+### CLI without Version (Skip setting version)
+
+```powershell
+pwsh -File actions/Invoke-OSAction.ps1 -ActionName build-lvlibp-win32 -ArgsJson '{
+  "MinimumSupportedLVVersion": "2025",
+  "SupportedBitness": "32",
+  "ProjectPath": "lv_icon_editor.lvproj",
+  "BuildSpecName": "Editor Packed Library"
+}'
 ```
 
 ### Complete Workflow with LabVIEW Setup
@@ -154,6 +165,8 @@ jobs:
 
 ### Build All Specifications
 
+Omit `build_spec_name` to build all build specifications. The provided version is applied to all specs:
+
 ```yaml
 - name: Build All PPLs
   uses: ni/open-source/build-lvlibp-win32@v1
@@ -162,7 +175,6 @@ jobs:
     supported_bitness: '32'
     project_path: 'lv_icon_editor.lvproj'
     target_name: 'My Computer'
-    build_spec_name: ''  # Empty - builds all specifications
     major: 1
     minor: 0
     patch: 0
@@ -172,12 +184,32 @@ jobs:
 
 ## Behavior
 
-1. Uses the LabVIEWPath: `C:\Program Files (x86)\National Instruments\LabVIEW {version}\LabVIEW.exe`
-2. Verifies that LabVIEW exists at the expected path
-3. Verifies that the project file exists
-4. Executes `LabVIEWCLI -OperationName ExecuteBuildSpec` with the specified parameters
-5. Copies LabVIEW logs from `%TEMP%` to `build-logs\` directory for artifact collection
-6. On failure, exits with the build error code
+1. **Version Setting**:
+
+   - If all version components (`Major`, `Minor`, `Patch`, `Build`) are provided (≥ 0), the helper VI is called to set the version
+   - If any version component is missing or < 0, version setting is skipped
+   - When version is provided:
+     - If `BuildSpecName` is specified: version is set on that build spec only
+     - If `BuildSpecName` is omitted: version is set on **all** build specs in the project
+
+2. **LabVIEW Path Construction**:
+
+   - 32-bit: `C:\Program Files (x86)\National Instruments\LabVIEW {lv_version}\LabVIEW.exe`
+
+3. **Build Execution**:
+
+   - Verifies LabVIEW exists at the expected path
+   - Verifies project file exists
+   - Calls helper VI to set version (if version parameters provided)
+   - Executes `LabVIEWCLI -OperationName ExecuteBuildSpec` with specified parameters
+
+4. **Log Collection**:
+
+   - Copies LabVIEW logs from `%TEMP%` to `build-logs\` directory for artifact collection
+
+5. **Error Handling**:
+
+   - On failure, exits with the build error code
 
 ## Return Codes
 
@@ -191,6 +223,7 @@ jobs:
 - The LabVIEW project file must exist at the specified path
 - The target and build specification must exist in the project
 - Windows runner (Windows Server 2019, 2022, or Windows 10/11)
+- Helper VI (`SetBuildVersionCaller.vi`) must be present in `scripts/build-lvlibp-helpers/`
 
 ## Platform Support
 

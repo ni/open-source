@@ -365,12 +365,13 @@
       }
     },
     "Invoke-BuildLvlibpWin32": {
-      "description": "Builds LabVIEW Packed Project Library (.lvlibp) using Windows GitHub-hosted runner. MinimumSupportedLVVersion: LabVIEW version for the build (e.g., \"2021\", \"2026\"). SupportedBitness: Bitness of the LabVIEW environment (\"32\" or \"64\"). ProjectPath: Path to the LabVIEW project .lvproj file. TargetName: Target that contains the build specification. BuildSpecName: Name of the LabVIEW build specification (optional, builds all if empty). Major: Major version component. Minor: Minor version component. Patch: Patch version component. Build: Build number component. Commit: Commit hash or identifier. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
+      "description": "Builds LabVIEW Packed Project Library (.lvlibp) using Windows GitHub-hosted runner. MinimumSupportedLVVersion: LabVIEW version for the build (e.g., \"2021\", \"2026\"). SupportedBitness: Bitness of the LabVIEW environment (\"32\" or \"64\"). ProjectPath: Path to the LabVIEW project .lvproj file. TargetName: Target that contains the build specification (optional, defaults to \"My Computer\"). BuildSpecName: Name of the LabVIEW build specification (optional, builds all if empty). Major: Major version component (optional, skips version setting if < 0). Minor: Minor version component (optional, skips version setting if < 0). Patch: Patch version component (optional, skips version setting if < 0). Build: Build number component (optional, skips version setting if < 0). Commit: Commit hash or identifier (optional). DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
       "parameters": {
         "Build": {
           "type": "number",
-          "required": true,
-          "description": "Build number component"
+          "required": false,
+          "default": "-1",
+          "description": "Build number component (optional, skips version setting if < 0)"
         },
         "BuildSpecName": {
           "type": "string",
@@ -380,8 +381,9 @@
         },
         "Commit": {
           "type": "string",
-          "required": true,
-          "description": "Commit hash or identifier"
+          "required": false,
+          "default": "",
+          "description": "Commit hash or identifier (optional)"
         },
         "DryRun": {
           "type": "boolean",
@@ -395,8 +397,9 @@
         },
         "Major": {
           "type": "number",
-          "required": true,
-          "description": "Major version component"
+          "required": false,
+          "default": "-1",
+          "description": "Major version component (optional, skips version setting if < 0)"
         },
         "MinimumSupportedLVVersion": {
           "type": "string",
@@ -405,13 +408,15 @@
         },
         "Minor": {
           "type": "number",
-          "required": true,
-          "description": "Minor version component"
+          "required": false,
+          "default": "-1",
+          "description": "Minor version component (optional, skips version setting if < 0)"
         },
         "Patch": {
           "type": "number",
-          "required": true,
-          "description": "Patch version component"
+          "required": false,
+          "default": "-1",
+          "description": "Patch version component (optional, skips version setting if < 0)"
         },
         "ProjectPath": {
           "type": "string",
@@ -425,8 +430,9 @@
         },
         "TargetName": {
           "type": "string",
-          "required": true,
-          "description": "Target that contains the build specification"
+          "required": false,
+          "default": "",
+          "description": "Target that contains the build specification (optional, defaults to \"My Computer\")"
         }
       }
     },
@@ -1443,7 +1449,7 @@
       },
       {
         "name": "supported_bitness",
-        "description": "Bitness of the LabVIEW environment (\"32\").",
+        "description": "Bitness of the LabVIEW environment (\"32\" or \"64\").",
         "required": true,
         "default": "",
         "type": "string"
@@ -1457,8 +1463,8 @@
       },
       {
         "name": "target_name",
-        "description": "Target that contains the build specification.",
-        "required": true,
+        "description": "Target that contains the build specification. Defaults to \"My Computer\" in helper VI.",
+        "required": false,
         "default": "",
         "type": "string"
       },
@@ -1471,36 +1477,36 @@
       },
       {
         "name": "major",
-        "description": "Major version component for the PPL.",
-        "required": true,
+        "description": "Major version component for the PPL. Omit to skip version setting.",
+        "required": false,
         "default": "",
         "type": "string"
       },
       {
         "name": "minor",
-        "description": "Minor version component for the PPL.",
-        "required": true,
+        "description": "Minor version component for the PPL. Omit to skip version setting.",
+        "required": false,
         "default": "",
         "type": "string"
       },
       {
         "name": "patch",
-        "description": "Patch version component for the PPL.",
-        "required": true,
+        "description": "Patch version component for the PPL. Omit to skip version setting.",
+        "required": false,
         "default": "",
         "type": "string"
       },
       {
         "name": "build",
-        "description": "Build number component for the PPL.",
-        "required": true,
+        "description": "Build number component for the PPL. Omit to skip version setting.",
+        "required": false,
         "default": "",
         "type": "string"
       },
       {
         "name": "commit",
         "description": "Commit hash or identifier recorded in the build.",
-        "required": true,
+        "required": false,
         "default": "",
         "type": "string"
       },
@@ -1522,7 +1528,7 @@
         "name": "dry_run",
         "description": "If true, simulate the action without side effects.",
         "required": false,
-        "default": false,
+        "default": "false",
         "type": "string"
       }
     ],

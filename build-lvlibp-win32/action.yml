@@ -5,33 +5,35 @@ inputs:
     description: 'LabVIEW version year for the build (e.g., "2021", "2026").'
     required: true
   supported_bitness:
-    description: 'Bitness of the LabVIEW environment ("32").'
+    description: 'Bitness of the LabVIEW environment ("32" or "64").'
     required: true
   project_path:
     description: 'Path to the LabVIEW project .lvproj file.'
     required: true
   target_name:
-    description: 'Target that contains the build specification.'
-    required: true
+    description: 'Target that contains the build specification. Defaults to "My Computer" in helper VI.'
+    required: false
+    default: ''
   build_spec_name:
     description: 'Name of the build specification. If empty, builds all specifications in the target.'
     required: false
     default: ''
   major:
-    description: 'Major version component for the PPL.'
-    required: true
+    description: 'Major version component for the PPL. Omit to skip version setting.'
+    required: false
   minor:
-    description: 'Minor version component for the PPL.'
-    required: true
+    description: 'Minor version component for the PPL. Omit to skip version setting.'
+    required: false
   patch:
-    description: 'Patch version component for the PPL.'
-    required: true
+    description: 'Patch version component for the PPL. Omit to skip version setting.'
+    required: false
   build:
-    description: 'Build number component for the PPL.'
-    required: true
+    description: 'Build number component for the PPL. Omit to skip version setting.'
+    required: false
   commit:
     description: 'Commit hash or identifier recorded in the build.'
-    required: true
+    required: false
+    default: ''
   working_directory:
     description: 'Working directory where the action will run.'
     required: false
@@ -41,7 +43,7 @@ inputs:
     required: false
   dry_run:
     description: 'If true, simulate the action without side effects.'
-    default: false
+    default: 'false'
     required: false
 
 runs:
@@ -56,13 +58,15 @@ runs:
           SupportedBitness  = '${{ inputs.supported_bitness }}'
           ProjectPath       = '${{ inputs.project_path }}'
           TargetName        = '${{ inputs.target_name }}'
-          Major             = [int]'${{ inputs.major }}'
-          Minor             = [int]'${{ inputs.minor }}'
-          Patch             = [int]'${{ inputs.patch }}'
-          Build             = [int]'${{ inputs.build }}'
+          BuildSpecName     = '${{ inputs.build_spec_name }}'
           Commit            = '${{ inputs.commit }}'
         }
-        if ('${{ inputs.build_spec_name }}') { $args['BuildSpecName'] = '${{ inputs.build_spec_name }}' }
+        
+        # Only add version parameters if they are provided
+        if ('${{ inputs.major }}') { $args['Major'] = [int]'${{ inputs.major }}' }
+        if ('${{ inputs.minor }}') { $args['Minor'] = [int]'${{ inputs.minor }}' }
+        if ('${{ inputs.patch }}') { $args['Patch'] = [int]'${{ inputs.patch }}' }
+        if ('${{ inputs.build }}') { $args['Build'] = [int]'${{ inputs.build }}' }
         
         $params = @{
           ActionName = 'build-lvlibp-win32'

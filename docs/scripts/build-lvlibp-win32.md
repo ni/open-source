@@ -4,18 +4,18 @@ Call **`BuildLvlibpWin32.ps1`** to compile LabVIEW packed libraries using LabVIE
 
 ## Inputs
 
-| Name | Required | Example | Description |
-|------|----------|---------|-------------|
-| `minimum_supported_lv_version` | **Yes** | `2025` | LabVIEW version year to use. |
-| `supported_bitness` | **Yes** | `32` or `64` | Target LabVIEW bitness. |
-| `project_path` | **Yes** | `lv_icon_editor.lvproj` | Path to the LabVIEW project file. |
-| `target_name` | **Yes** | `My Computer` | Target that contains the build specification. |
-| `build_spec_name` | No | `Editor Packed Library` | Build specification name. Leave empty to build all. |
-| `major` | **Yes** | `1` | Major version component. |
-| `minor` | **Yes** | `0` | Minor version component. |
-| `patch` | **Yes** | `0` | Patch version component. |
-| `build` | **Yes** | `1` | Build number component. |
-| `commit` | **Yes** | `abcdef` | Commit identifier. |
+| Name | Required | Default | Example | Description |
+|------|----------|---------|---------|-------------|
+| `minimum_supported_lv_version` | **Yes** | - | `2025` | LabVIEW version year to use. |
+| `supported_bitness` | **Yes** | - | `32` or `64` | Target LabVIEW bitness. |
+| `project_path` | **Yes** | - | `lv_icon_editor.lvproj` | Path to the LabVIEW project file. |
+| `target_name` | No | `""` | `My Computer` | Target containing the build spec. Defaults to "My Computer" in helper VI. |
+| `build_spec_name` | No | `""` | `Editor Packed Library` | Build spec name. If empty, builds all specs. |
+| `major` | No | `-1` | `1` | Major version component. If < 0, version setting is skipped. |
+| `minor` | No | `-1` | `0` | Minor version component. If < 0, version setting is skipped. |
+| `patch` | No | `-1` | `0` | Patch version component. If < 0, version setting is skipped. |
+| `build` | No | `-1` | `1` | Build number component. If < 0, version setting is skipped. |
+| `commit` | No | `""` | `abcdef` | Commit identifier. |
 
 ## Quick-start
 
@@ -88,9 +88,9 @@ jobs:
           path: builds/*.lvlibp
 ```
 
-## Build All Specifications
+## Build All Specifications with Version Override
 
-Leave `build_spec_name` empty to build all build specifications under the target:
+Leave `build_spec_name` empty and provide version to set the same version on all build specs:
 
 ```yaml
 - uses: ./.github/actions/build-lvlibp-win32
@@ -99,7 +99,6 @@ Leave `build_spec_name` empty to build all build specifications under the target
     supported_bitness: 32
     project_path: lv_icon_editor.lvproj
     target_name: My Computer
-    build_spec_name: ''
     major: 1
     minor: 0
     patch: 0
@@ -107,10 +106,35 @@ Leave `build_spec_name` empty to build all build specifications under the target
     commit: ${{ github.sha }}
 ```
 
+## Skip Version setting
+
+Omit version parameters to use versions to skip setting versions in build specifications:
+
+```yaml
+- uses: ./.github/actions/build-lvlibp-win32
+  with:
+    minimum_supported_lv_version: 2025
+    supported_bitness: 32
+    project_path: lv_icon_editor.lvproj
+    build_spec_name: Editor Packed Library
+```
+
+## Version Behavior
+
+- **All version components provided** (`major`, `minor`, `patch`, `build` all ≥ 0):
+  - Helper VI is called to set the version
+  - If `build_spec_name` is provided: version is set on that build spec only
+  - If `build_spec_name` is omitted: version is set on **all** build specs in the project
+
+- **Any version component omitted** (< 0 or not provided):
+  - Version setting is skipped
+  - Build specifications use their own version settings from the project file
+
 ## Requirements
 
 - LabVIEW must be installed on the runner (use `setup-labview` action)
 - LabVIEWCLI must be available in the PATH
+- Helper VI must exist at `scripts/build-lvlibp-helpers/SetBuildVersionCaller.vi`
 - Windows runner (Windows Server 2019, 2022, or Windows 10/11)
 
 ## Platform Notes

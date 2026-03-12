@@ -30,7 +30,15 @@ Describe 'BuildLvlibpWin32.Workflow' {
         $action.parameters.MinimumSupportedLVVersion | Should -Not -BeNullOrEmpty
         $action.parameters.SupportedBitness | Should -Not -BeNullOrEmpty
         $action.parameters.ProjectPath | Should -Not -BeNullOrEmpty
+    }
+
+    It 'validates optional parameters are defined [REQ-041]' -Tag 'REQ-041' {
+        $dispatchersPath = Join-Path $repoRoot 'dispatchers.json'
+        $dispatchers = Get-Content $dispatchersPath | ConvertFrom-Json
+        
+        $action = $dispatchers.'build-lvlibp-win32'
         $action.parameters.TargetName | Should -Not -BeNullOrEmpty
+        $action.parameters.BuildSpecName | Should -Not -BeNullOrEmpty
         $action.parameters.Major | Should -Not -BeNullOrEmpty
         $action.parameters.Minor | Should -Not -BeNullOrEmpty
         $action.parameters.Patch | Should -Not -BeNullOrEmpty
@@ -49,6 +57,18 @@ Describe 'BuildLvlibpWin32.Workflow' {
 
     It 'validates module function throws when required parameters are missing [REQ-041]' -Tag 'REQ-041' {
         { Invoke-BuildLvlibpWin32 } | Should -Throw
+        { Invoke-BuildLvlibpWin32 -MinimumSupportedLVVersion '2026' } | Should -Throw
+        { Invoke-BuildLvlibpWin32 -MinimumSupportedLVVersion '2026' -SupportedBitness '64' } | Should -Throw
+    }
+
+    It 'validates module function accepts minimal required parameters [REQ-041]' -Tag 'REQ-041' {
+        { 
+            Invoke-BuildLvlibpWin32 `
+                -MinimumSupportedLVVersion '2026' `
+                -SupportedBitness '64' `
+                -ProjectPath 'test.lvproj' `
+                -DryRun 
+        } | Should -Not -Throw
     }
 
     It 'accepts optional parameters in dry-run [REQ-041]' -Tag 'REQ-041' {

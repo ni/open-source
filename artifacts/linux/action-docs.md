@@ -122,20 +122,20 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-BuildLvlibpDockerWindows -
 ```
 
 #### Invoke-BuildLvlibpWin32
-Builds LabVIEW Packed Project Library (.lvlibp) using Windows GitHub-hosted runner. MinimumSupportedLVVersion: LabVIEW version for the build (e.g., "2021", "2026"). SupportedBitness: Bitness of the LabVIEW environment ("32" or "64"). ProjectPath: Path to the LabVIEW project .lvproj file. TargetName: Target that contains the build specification. BuildSpecName: Name of the LabVIEW build specification (optional, builds all if empty). Major: Major version component. Minor: Minor version component. Patch: Patch version component. Build: Build number component. Commit: Commit hash or identifier. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.
+Builds LabVIEW Packed Project Library (.lvlibp) using Windows GitHub-hosted runner. MinimumSupportedLVVersion: LabVIEW version for the build (e.g., "2021", "2026"). SupportedBitness: Bitness of the LabVIEW environment ("32" or "64"). ProjectPath: Path to the LabVIEW project .lvproj file. TargetName: Target that contains the build specification (optional, defaults to "My Computer"). BuildSpecName: Name of the LabVIEW build specification (optional, builds all if empty). Major: Major version component (optional, skips version setting if < 0). Minor: Minor version component (optional, skips version setting if < 0). Patch: Patch version component (optional, skips version setting if < 0). Build: Build number component (optional, skips version setting if < 0). Commit: Commit hash or identifier (optional). DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.
 | Parameter | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| Build | number | true |  | Build number component |
+| Build | number | false | -1 | Build number component (optional, skips version setting if < 0) |
 | BuildSpecName | string | false |  | Name of the LabVIEW build specification (optional, builds all if empty) |
-| Commit | string | true |  | Commit hash or identifier |
+| Commit | string | false |  | Commit hash or identifier (optional) |
 | DryRun | boolean | false |  | If set, prints the command instead of executing it |
-| Major | number | true |  | Major version component |
+| Major | number | false | -1 | Major version component (optional, skips version setting if < 0) |
 | MinimumSupportedLVVersion | string | true |  | LabVIEW version for the build (e |
-| Minor | number | true |  | Minor version component |
-| Patch | number | true |  | Patch version component |
+| Minor | number | false | -1 | Minor version component (optional, skips version setting if < 0) |
+| Patch | number | false | -1 | Patch version component (optional, skips version setting if < 0) |
 | ProjectPath | string | true |  | Path to the LabVIEW project |
 | SupportedBitness | string | true |  | Bitness of the LabVIEW environment ("32" or "64") |
-| TargetName | string | true |  | Target that contains the build specification |
+| TargetName | string | false |  | Target that contains the build specification (optional, defaults to "My Computer") |
 | gcliPath | string | false |  | Optional path prepended to PATH for locating the g CLI |
 
 ```powershell
@@ -445,15 +445,15 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 | Name | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | minimum_supported_lv_version | string | true |  | LabVIEW version year for the build (e.g., "2021", "2026"). |
-| supported_bitness | string | true |  | Bitness of the LabVIEW environment ("32"). |
+| supported_bitness | string | true |  | Bitness of the LabVIEW environment ("32" or "64"). |
 | project_path | string | true |  | Path to the LabVIEW project .lvproj file. |
-| target_name | string | true |  | Target that contains the build specification. |
+| target_name | string | false |  | Target that contains the build specification. Defaults to "My Computer" in helper VI. |
 | build_spec_name | string | false |  | Name of the build specification. If empty, builds all specifications in the target. |
-| major | string | true |  | Major version component for the PPL. |
-| minor | string | true |  | Minor version component for the PPL. |
-| patch | string | true |  | Patch version component for the PPL. |
-| build | string | true |  | Build number component for the PPL. |
-| commit | string | true |  | Commit hash or identifier recorded in the build. |
+| major | string | false |  | Major version component for the PPL. Omit to skip version setting. |
+| minor | string | false |  | Minor version component for the PPL. Omit to skip version setting. |
+| patch | string | false |  | Patch version component for the PPL. Omit to skip version setting. |
+| build | string | false |  | Build number component for the PPL. Omit to skip version setting. |
+| commit | string | false |  | Commit hash or identifier recorded in the build. |
 | working_directory | string | false |  | Working directory where the action will run. |
 | log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
 | dry_run | string | false | false | If true, simulate the action without side effects. |
