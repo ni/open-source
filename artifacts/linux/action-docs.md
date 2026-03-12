@@ -307,6 +307,22 @@ Installs and configures NI Package Manager (NIPM). NIPMUrl: URL to download the 
 pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-SetupNipm -ArgsJson '{}'
 ```
 
+#### Invoke-ViaLvDocker
+Runs VI Analyzer tests using LabVIEW Docker container. ConfigPath: Path to VI Analyzer configuration file (.viancfg) or LabVIEW files (.vi, .ctl, .llb). If empty, generates from changed files. TemplatePath: Path to .viancfg template (required when generating config dynamically). BaseBranch: Branch to compare against for changed files (used when generating config). LabviewVersion: LabVIEW Docker image version tag. DockerImage: Full Docker image name. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| BaseBranch | string | false | origin/develop | Branch to compare against for changed files (used when generating config) |
+| ConfigPath | string | false |  | Path to VI Analyzer configuration file ( |
+| DockerImage | string | false | nationalinstruments/labview | Full Docker image name |
+| DryRun | boolean | false |  | If set, prints the command instead of executing it |
+| LabviewVersion | string | false | 2026q1-linux | LabVIEW Docker image version tag |
+| TemplatePath | string | false |  | Path to |
+| gcliPath | string | false |  | Optional path prepended to PATH for locating the g CLI |
+
+```powershell
+pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-ViaLvDocker -ArgsJson '{}'
+```
+
 #### Normalize-RelativePath
 Normalizes a RelativePath value against an optional base directory. RelativePath: Path to normalize. BaseDirectory: Directory used to resolve the relative path. Defaults to the current location.
 | Parameter | Type | Required | Default | Description |
