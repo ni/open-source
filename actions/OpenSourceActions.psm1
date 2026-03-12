@@ -489,3 +489,33 @@ function Invoke-SetDevelopmentMode {
     $args = @{ RelativePath = $RelativePath }
     return Invoke-OpenSourceActionScript -ScriptSegments @('set-development-mode','Set_Development_Mode.ps1') -Arguments $args -DryRun:$DryRun -gcliPath $gcliPath
 }
+
+# Runs VI Analyzer tests using LabVIEW Docker container.
+# ConfigPath: Path to VI Analyzer configuration file (.viancfg) or LabVIEW files (.vi, .ctl, .llb). If empty, generates from changed files.
+# TemplatePath: Path to .viancfg template (required when generating config dynamically).
+# BaseBranch: Branch to compare against for changed files (used when generating config).
+# LabviewVersion: LabVIEW Docker image version tag.
+# DockerImage: Full Docker image name.
+# DryRun: If set, prints the command instead of executing it.
+# gcliPath: Optional path prepended to PATH for locating the g CLI.
+function Invoke-ViaLvDocker {
+    [CmdletBinding()]
+    param(
+        [Parameter()] [string] $ConfigPath = '',
+        [Parameter()] [string] $TemplatePath = '',
+        [Parameter()] [string] $BaseBranch = 'origin/develop',
+        [Parameter()] [string] $LabviewVersion = '2026q1-linux',
+        [Parameter()] [string] $DockerImage = 'nationalinstruments/labview',
+        [Parameter()] [switch] $DryRun,
+        [Parameter()] [string] $gcliPath
+    )
+    Write-Information "Executing ViaLvDocker (DryRun=$DryRun)"
+    $args = @{
+        ConfigPath      = $ConfigPath
+        TemplatePath    = $TemplatePath
+        BaseBranch      = $BaseBranch
+        LabviewVersion  = $LabviewVersion
+        DockerImage     = $DockerImage
+    }
+    return Invoke-OpenSourceActionScript -ScriptSegments @('via-lv-docker','RunViaLvDocker.ps1') -Arguments $args -DryRun:$DryRun -gcliPath $gcliPath
+}
