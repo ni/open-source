@@ -261,6 +261,14 @@
       ]
     },
     {
+      "id": "REQ-034",
+      "description": "Workflow tests the composite action defined in via-lv-docker/action.yml on the GitHub-hosted Ubuntu runner labeled ubuntu-latest.",
+      "runner": "ubuntu-latest",
+      "tests": [
+        "ViaLvDocker.Workflow"
+      ]
+    },
+    {
       "id": "REQ-035",
       "description": "Setup NI Package Manager (NIPM) and configure it for CI/CD environments by installing the package manager and disabling package caching.",
       "tests": [
