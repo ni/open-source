@@ -59,24 +59,11 @@ if ($Version) {
         $BuildSpecName  
         $TargetName     
         $Version
-    )
-
-    Write-Host "Executing: LabVIEWCLI -OperationName RunVI -LabVIEWPath `"$LabVIEWPath`" -VIPath $helperVI `"$ProjectPath`" `"$BuildSpecName`" `"$TargetName`" `"$Version`""
-
-    # Use Start-Process to preserve empty string arguments
-    $argumentList = @(
-        '-OperationName', 'RunVI',
-        '-LabVIEWPath', "`"$LabVIEWPath`"",
-        '-VIPath', $helperVI,
-        "`"$ProjectPath`"",
-        "`"$BuildSpecName`"",
-        "`"$TargetName`"",
-        "`"$Version`"",
         '-Headless'
     )
 
-    $processInfo = Start-Process -FilePath 'LabVIEWCLI' -ArgumentList ($argumentList -join ' ') -NoNewWindow -Wait -PassThru
-    $setVersionExit = $processInfo.ExitCode
+    & LabVIEWCLI @setVersionArgs
+    $setVersionExit = $LASTEXITCODE
     
     if ($setVersionExit -ne 0) {
         throw "Failed to set build version (exit code: $setVersionExit)"
