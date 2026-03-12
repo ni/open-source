@@ -62,7 +62,7 @@ if ($Version) {
         '-Headless'
     )
 
-    Write-Host "Executing: LabVIEWCLI -OperationName RunVI -LabVIEWPath `"$LabVIEWPath`" -VIPath `"$helperVI`" `"$ProjectPath`" `"$BuildSpecName`" `"$TargetName`" `"$Version`" -Headless"
+    Write-Host "Executing: LabVIEWCLI $($setVersionArgs -join ' ')"
     & LabVIEWCLI @setVersionArgs
     $setVersionExit = $LASTEXITCODE
     
