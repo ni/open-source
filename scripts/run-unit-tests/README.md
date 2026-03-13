@@ -9,6 +9,8 @@ The script copies `UnitTestReport.xml` to `artifacts/unit-tests/UnitTestReport.x
 |------|----------|---------|-------------|
 | `minimum_supported_lv_version` | **Yes** | `2021` | LabVIEW major version. |
 | `supported_bitness` | **Yes** | `32` or `64` | Target LabVIEW bitness. |
+| `project_path` | **No** | `Path/to/your/.lvproj` | Path to LabVIEW project file (*.lvproj) relative to the repository root. |
+| `open_project_before_run` | **No** | `true` or `false` | If set, runs `OpenProj.vi` via LabVIEWCLI before executing tests. |
 
 ## Quick-start
 

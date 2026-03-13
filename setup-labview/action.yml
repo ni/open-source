@@ -1,0 +1,55 @@
+name: 'Setup LabVIEW'
+description: 'Download, install, and activate LabVIEW Community Edition'
+inputs:
+  labview_iso_url:
+    description: 'URL to download the LabVIEW ISO installer.'
+    required: false
+    default: 'https://download.ni.com/support/softlib/labview/labview_development_system/2025_Q3/ni-labview-2025-community-x86_25.3.3_offline.iso'
+  timeout_seconds:
+    description: 'Maximum time in seconds to wait for installation to complete.'
+    required: false
+    default: '2700'
+  serial_number:
+    description: 'LabVIEW serial number for activation.'
+    required: true
+  package_id:
+    description: 'LabVIEW package ID to activate.'
+    required: false
+    default: 'LabVIEW_COM_PKG 25.0300'
+  working_directory:
+    description: 'Working directory where the action will run.'
+    required: false
+  log_level:
+    description: 'Verbosity level (ERROR|WARN|INFO|DEBUG).'
+    default: 'INFO'
+    required: false
+  dry_run:
+    description: 'If true, simulate the action without side effects.'
+    default: false
+    required: false
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Dispatch setup-labview
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $args = @{
+          SerialNumber = '${{ inputs.serial_number }}'
+        }
+        if ('${{ inputs.labview_iso_url }}') { $args['LabVIEWIsoUrl'] = '${{ inputs.labview_iso_url }}' }
+        if ('${{ inputs.timeout_seconds }}') { $args['TimeoutSeconds'] = [int]'${{ inputs.timeout_seconds }}' }
+        if ('${{ inputs.package_id }}') { $args['PackageID'] = '${{ inputs.package_id }}' }
+        
+        $params = @{
+          ActionName = 'setup-labview'
+          Args       = $args
+          LogLevel   = '${{ inputs.log_level }}'
+        }
+        if ('${{ inputs.dry_run }}' -eq 'true') { $params['DryRun'] = $true }
+        if ('${{ inputs.working_directory }}') { $params['WorkingDirectory'] = '${{ inputs.working_directory }}' }
+        
+        $script = Join-Path $env:GITHUB_ACTION_PATH '..' 'actions' 'common-dispatch.ps1'
+        & $script @params
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

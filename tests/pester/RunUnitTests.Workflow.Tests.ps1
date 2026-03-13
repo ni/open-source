@@ -37,4 +37,14 @@ Describe 'RunUnitTests.Workflow' {
         $publishStep | Should -Not -BeNullOrEmpty
         $publishStep.with.files | Should -Be 'artifacts/unit-tests/UnitTestReport.xml'
     }
+
+    It 'validates adapter function accepts optional parameters [REQ-020]' -Tag 'REQ-020' {
+        Import-Module (Join-Path $PSScriptRoot '../../actions/OpenSourceActions.psm1') -Force
+        
+        $cmd = Get-Command Invoke-RunUnitTests -ErrorAction Stop
+        $params = $cmd.Parameters.Keys
+        
+        $params | Should -Contain 'ProjectPath'
+        $params | Should -Contain 'OpenProjectBeforeRun'
+    }
 }

@@ -294,6 +294,34 @@
       }
     }
   },
+  "Invoke-ConfigureLabview": {
+    "description": "Configures LabVIEW settings by updating LabVIEW.ini file. LabVIEWVersion: LabVIEW version (e.g., \"2025\", \"2024\"). IniSettings: INI settings to add (multiline string or array). LabVIEWWaitSeconds: Seconds to wait for LabVIEW to generate ini file if it does not exist. DryRun: If set, prints the command instead of executing it.",
+    "parameters": {
+      "DryRun": {
+        "type": "boolean",
+        "required": false,
+        "description": "If set, prints the command instead of executing it"
+      },
+      "IniSettings": {
+        "type": "string",
+        "required": false,
+        "default": "@",
+        "description": "INI settings to add (multiline string or array)"
+      },
+      "LabVIEWVersion": {
+        "type": "string",
+        "required": false,
+        "default": "2025",
+        "description": "LabVIEW version (e"
+      },
+      "LabVIEWWaitSeconds": {
+        "type": "number",
+        "required": false,
+        "default": "50",
+        "description": "Seconds to wait for LabVIEW to generate ini file if it does not exist"
+      }
+    }
+  },
   "Invoke-GenerateReleaseNotes": {
     "description": "Generates a release notes file from the project's metadata. OutputPath: Path where the release notes should be written. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
     "parameters": {
@@ -566,7 +594,7 @@
     }
   },
   "Invoke-RunUnitTests": {
-    "description": "Runs LabVIEW unit tests. MinimumSupportedLVVersion: Minimum LabVIEW version that the project supports. SupportedBitness: Target LabVIEW bitness (32- or 64-bit). DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
+    "description": "Runs LabVIEW unit tests. MinimumSupportedLVVersion: Minimum LabVIEW version that the project supports. SupportedBitness: Target LabVIEW bitness (32- or 64-bit). ProjectPath: (Optional) Path to the LabVIEW project file. OpenProjectBeforeRun: (Optional) If set, runs OpenProj.vi before tests. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
     "parameters": {
       "DryRun": {
         "type": "boolean",
@@ -582,6 +610,16 @@
         "type": "string",
         "required": true,
         "description": "Minimum LabVIEW version that the project supports"
+      },
+      "OpenProjectBeforeRun": {
+        "type": "boolean",
+        "required": false,
+        "description": "(Optional) If set, runs OpenProj"
+      },
+      "ProjectPath": {
+        "type": "string",
+        "required": false,
+        "description": "(Optional) Path to the LabVIEW project file"
       },
       "SupportedBitness": {
         "type": "string",
@@ -607,6 +645,81 @@
         "type": "string",
         "required": true,
         "description": "Path relative to WorkingDirectory that locates the project or repository root."
+      }
+    }
+  },
+  "Invoke-SetupLabview": {
+    "description": "Downloads, installs, and activates LabVIEW Community Edition from an ISO image. LabVIEWIsoUrl: URL to download the LabVIEW ISO installer. TimeoutSeconds: Maximum time in seconds to wait for installation to complete. SerialNumber: LabVIEW serial number for activation (required). PackageID: LabVIEW package ID to activate. DryRun: If set, prints the command instead of executing it.",
+    "parameters": {
+      "DryRun": {
+        "type": "boolean",
+        "required": false,
+        "description": "If set, prints the command instead of executing it"
+      },
+      "LabVIEWIsoUrl": {
+        "type": "string",
+        "required": false,
+        "default": "https://download.ni.com/support/softlib/labview/labview_development_system/2025_Q3/ni-labview-2025-community-x86_25.3.3_offline.iso",
+        "description": "URL to download the LabVIEW ISO installer"
+      },
+      "PackageID": {
+        "type": "string",
+        "required": false,
+        "default": "LabVIEW_COM_PKG 25.0300",
+        "description": "LabVIEW package ID to activate"
+      },
+      "SerialNumber": {
+        "type": "string",
+        "required": true,
+        "description": "LabVIEW serial number for activation (required)"
+      },
+      "TimeoutSeconds": {
+        "type": "number",
+        "required": false,
+        "default": "2700",
+        "description": "Maximum time in seconds to wait for installation to complete"
+      }
+    }
+  },
+  "Invoke-SetupLunit": {
+    "description": "Installs VI Package Manager (VIPM) and LUnit CLI package. LVVersion: LabVIEW version (e.g., \"2025\", \"2024\"). LVBitness: LabVIEW bitness (\"32\" or \"64\"). VipmInstallerUrl: URL to download the VIPM installer. DryRun: If set, prints the command instead of executing it.",
+    "parameters": {
+      "DryRun": {
+        "type": "boolean",
+        "required": false,
+        "description": "If set, prints the command instead of executing it"
+      },
+      "LVBitness": {
+        "type": "string",
+        "required": true,
+        "description": "LabVIEW bitness (\"32\" or \"64\")"
+      },
+      "LVVersion": {
+        "type": "string",
+        "required": true,
+        "description": "LabVIEW version (e"
+      },
+      "VipmInstallerUrl": {
+        "type": "string",
+        "required": false,
+        "default": "https://packages.jki.net/vipm/preview/vipm-setup-latest-preview.exe",
+        "description": "URL to download the VIPM installer"
+      }
+    }
+  },
+  "Invoke-SetupNipm": {
+    "description": "Installs and configures NI Package Manager (NIPM). NIPMUrl: URL to download the NI Package Manager installer. DryRun: If set, prints the command instead of executing it.",
+    "parameters": {
+      "DryRun": {
+        "type": "boolean",
+        "required": false,
+        "description": "If set, prints the command instead of executing it"
+      },
+      "NIPMUrl": {
+        "type": "string",
+        "required": false,
+        "default": "https://download.ni.com/support/nipkg/products/ni-package-manager/installers/NIPackageManager25.8.0.exe",
+        "description": "URL to download the NI Package Manager installer"
       }
     }
   },

@@ -249,6 +249,37 @@ function Invoke-CloseLabVIEW {
     return Invoke-OpenSourceActionScript -ScriptSegments @('close-labview','Close_LabVIEW.ps1') -Arguments $args -DryRun:$DryRun -gcliPath $gcliPath
 }
 
+# Configures LabVIEW settings by updating LabVIEW.ini file.
+# LabVIEWVersion: LabVIEW version (e.g., "2025", "2024").
+# IniSettings: INI settings to add (multiline string or array).
+# LabVIEWWaitSeconds: Seconds to wait for LabVIEW to generate ini file if it does not exist.
+# DryRun: If set, prints the command instead of executing it.
+function Invoke-ConfigureLabview {
+    [CmdletBinding()]
+    param(
+        [Parameter()] [string] $LabVIEWVersion = "2025",
+        [Parameter()] [string] $IniSettings = @"
+server.tcp.enabled=TRUE
+server.tcp.access=+127.0.0.1;+localhost;+*
+server.viscripting.ShowScriptingOperationsInEditor=TRUE
+"@,
+        [Parameter()] [int] $LabVIEWWaitSeconds = 50,
+        [switch] $DryRun
+    )
+    Write-Information "Configuring LabVIEW $LabVIEWVersion settings" -InformationAction Continue
+    
+    $result = Invoke-OpenSourceActionScript `
+        -ScriptSegments @('configure-labview', 'ConfigureLabview.ps1') `
+        -Arguments @{
+            LabVIEWVersion = $LabVIEWVersion
+            IniSettings = $IniSettings
+            LabVIEWWaitSeconds = $LabVIEWWaitSeconds
+        } `
+        -DryRun:$DryRun
+    
+    return $result
+}
+
 # Generates a release notes file from the project's metadata.
 # OutputPath: Path where the release notes should be written.
 # DryRun: If set, prints the command instead of executing it.
@@ -456,6 +487,8 @@ function Invoke-RunPesterTests {
 # Runs LabVIEW unit tests.
 # MinimumSupportedLVVersion: Minimum LabVIEW version that the project supports.
 # SupportedBitness: Target LabVIEW bitness (32- or 64-bit).
+# ProjectPath: (Optional) Path to the LabVIEW project file.
+# OpenProjectBeforeRun: (Optional) If set, runs OpenProj.vi before tests.
 # DryRun: If set, prints the command instead of executing it.
 # gcliPath: Optional path prepended to PATH for locating the g CLI.
 function Invoke-RunUnitTests {
@@ -463,6 +496,8 @@ function Invoke-RunUnitTests {
     param(
         [Parameter(Mandatory)] [string] $MinimumSupportedLVVersion,
         [Parameter(Mandatory)] [string] $SupportedBitness,
+        [Parameter()] [string] $ProjectPath,
+        [Parameter()] [switch] $OpenProjectBeforeRun,
         [Parameter()] [switch] $DryRun,
         [Parameter()] [string] $gcliPath
     )
@@ -470,6 +505,14 @@ function Invoke-RunUnitTests {
     $args = @{
         MinimumSupportedLVVersion = $MinimumSupportedLVVersion
         SupportedBitness          = $SupportedBitness
+    }
+    
+    if ($ProjectPath) {
+        $args['ProjectPath'] = $ProjectPath
+    }
+    
+    if ($OpenProjectBeforeRun) {
+        $args['OpenProjectBeforeRun'] = $true
     }
     return Invoke-OpenSourceActionScript -ScriptSegments @('run-unit-tests','RunUnitTests.ps1') -Arguments $args -DryRun:$DryRun -gcliPath $gcliPath
 }
@@ -488,6 +531,84 @@ function Invoke-SetDevelopmentMode {
     Write-Information "Executing SetDevelopmentMode (DryRun=$DryRun)"
     $args = @{ RelativePath = $RelativePath }
     return Invoke-OpenSourceActionScript -ScriptSegments @('set-development-mode','Set_Development_Mode.ps1') -Arguments $args -DryRun:$DryRun -gcliPath $gcliPath
+}
+
+# Downloads, installs, and activates LabVIEW Community Edition from an ISO image.
+# LabVIEWIsoUrl: URL to download the LabVIEW ISO installer.
+# TimeoutSeconds: Maximum time in seconds to wait for installation to complete.
+# SerialNumber: LabVIEW serial number for activation (required).
+# PackageID: LabVIEW package ID to activate.
+# DryRun: If set, prints the command instead of executing it.
+function Invoke-SetupLabview {
+    [CmdletBinding()]
+    param(
+        [Parameter()] [string] $LabVIEWIsoUrl = "https://download.ni.com/support/softlib/labview/labview_development_system/2025_Q3/ni-labview-2025-community-x86_25.3.3_offline.iso",
+        [Parameter()] [int] $TimeoutSeconds = 2700,
+        [Parameter(Mandatory)] [string] $SerialNumber,
+        [Parameter()] [string] $PackageID = "LabVIEW_COM_PKG 25.0300",
+        [switch] $DryRun
+    )
+    Write-Information "Setting up and activating LabVIEW from $LabVIEWIsoUrl" -InformationAction Continue
+    
+    $result = Invoke-OpenSourceActionScript `
+        -ScriptSegments @('setup-labview', 'SetupLabview.ps1') `
+        -Arguments @{
+            LabVIEWIsoUrl = $LabVIEWIsoUrl
+            TimeoutSeconds = $TimeoutSeconds
+            SerialNumber = $SerialNumber
+            PackageID = $PackageID
+        } `
+        -DryRun:$DryRun
+    
+    return $result
+}
+
+# Installs VI Package Manager (VIPM) and LUnit CLI package.
+# LVVersion: LabVIEW version (e.g., "2025", "2024").
+# LVBitness: LabVIEW bitness ("32" or "64").
+# VipmInstallerUrl: URL to download the VIPM installer.
+# DryRun: If set, prints the command instead of executing it.
+function Invoke-SetupLunit {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [string] $LVVersion,
+        [Parameter(Mandatory)] [ValidateSet("32", "64")] [string] $LVBitness,
+        [Parameter()] [string] $VipmInstallerUrl = "https://packages.jki.net/vipm/preview/vipm-setup-latest-preview.exe",
+        [switch] $DryRun
+    )
+    Write-Information "Setting up LUnit for LabVIEW $LVVersion ($LVBitness-bit)" -InformationAction Continue
+    
+    $result = Invoke-OpenSourceActionScript `
+        -ScriptSegments @('setup-lunit', 'SetupLunit.ps1') `
+        -Arguments @{
+            LVVersion = $LVVersion
+            LVBitness = $LVBitness
+            VipmInstallerUrl = $VipmInstallerUrl
+        } `
+        -DryRun:$DryRun
+    
+    return $result
+}
+            
+# Installs and configures NI Package Manager (NIPM).
+# NIPMUrl: URL to download the NI Package Manager installer.
+# DryRun: If set, prints the command instead of executing it.
+function Invoke-SetupNipm {
+    [CmdletBinding()]
+    param(
+        [Parameter()] [string] $NIPMUrl = "https://download.ni.com/support/nipkg/products/ni-package-manager/installers/NIPackageManager25.8.0.exe",
+        [switch] $DryRun
+    )
+    Write-Information "Setting up NI Package Manager from $NIPMUrl" -InformationAction Continue
+    
+    $result = Invoke-OpenSourceActionScript `
+        -ScriptSegments @('setup-nipm', 'SetupNipm.ps1') `
+        -Arguments @{
+            NIPMUrl = $NIPMUrl
+        } `
+        -DryRun:$DryRun
+    
+    return $result
 }
 
 # Runs VI Analyzer tests using LabVIEW Docker container.

@@ -7,6 +7,13 @@ inputs:
   supported_bitness:
     description: '"32" or "64" bitness of LabVIEW.'
     required: true
+  project_path:
+    description: 'Path to the LabVIEW project file. If not provided, searches upward from script location.'
+    required: false
+  open_project_before_run:
+    description: 'If true, runs OpenProj.vi via LabVIEWCLI before executing tests.'
+    required: false
+    default: 'false'
   gcli_path:
     description: 'Optional path to the g-cli executable.'
     required: false
@@ -32,6 +39,8 @@ runs:
           MinimumSupportedLVVersion = '${{ inputs.minimum_supported_lv_version }}'
           SupportedBitness          = '${{ inputs.supported_bitness }}'
         }
+        if ('${{ inputs.project_path }}') { $args['ProjectPath'] = '${{ inputs.project_path }}' }
+        if ('${{ inputs.open_project_before_run }}' -eq 'true') { $args['OpenProjectBeforeRun'] = $true }
         if ('${{ inputs.gcli_path }}') { $args['gcliPath'] = '${{ inputs.gcli_path }}' }
         $params = @{
           ActionName = 'run-unit-tests'
