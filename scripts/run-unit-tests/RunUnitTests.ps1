@@ -1,12 +1,12 @@
 <#
 .SYNOPSIS
-    Run LabVIEW unit tests using g-cli and output a color-coded table of results.
+    Run LabVIEW unit tests using LUnit CLI and output a color-coded table of results.
 
 .DESCRIPTION
     Demonstrates a Setup/MainSequence/Cleanup flow with:
       - Table-based test results
       - Color-coded pass/fail
-      - Non-zero exit if g-cli fails or if any test fails
+      - Non-zero exit if LUnit CLI fails or if any test fails
       - Automatic search for exactly one *.lvproj file by moving up the folder hierarchy 
         until just before the drive root.
 
@@ -14,11 +14,18 @@
     LabVIEW minimum supported version (e.g., "2021").
 
 .PARAMETER SupportedBitness
-    Bitness for LabVIEW (e.g., "64").
+    Bitness for LabVIEW (e.g., "32", "64").
+
+.PARAMETER ProjectPath
+    (Optional) Path to the LabVIEW project file (*.lvproj). If not provided,
+    the script will search upward from its own location to find exactly one.
+
+.PARAMETER OpenProjectBeforeRun
+    (Optional) If present, runs OpenProj.vi via LabVIEWCLI before executing tests.
 
 .NOTES
     PowerShell 7.5+ assumed for cross-platform support.
-    This script *requires* that g-cli and LabVIEW be compatible with the OS.
+    This script requires that LUnit CLI and LabVIEW be compatible with the OS.
 #>
 
 param(
@@ -29,7 +36,14 @@ param(
     [Parameter(Mandatory=$true)]
     [ValidateSet("32","64")]
     [string]
-    $SupportedBitness
+    $SupportedBitness,
+
+    [Parameter(Mandatory=$false)]
+    [string]
+    $ProjectPath,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$OpenProjectBeforeRun
 )
 
 # --------------------------------------------------------------------
@@ -73,7 +87,18 @@ function Get-SingleLvproj {
     }
 }
 
-$AbsoluteProjectPath = Get-SingleLvproj -StartFolder $PSScriptRoot
+if ($ProjectPath) {
+    # Use the provided project path
+    $AbsoluteProjectPath = Resolve-Path $ProjectPath
+    Write-Host "Using provided LabVIEW project file: $AbsoluteProjectPath"
+} else {
+    # Search for project file
+    $AbsoluteProjectPath = Get-SingleLvproj -StartFolder $PSScriptRoot
+    if (-not $AbsoluteProjectPath) {
+        exit 3
+    }
+    Write-Host "Using LabVIEW project file: $AbsoluteProjectPath"
+}
 
 if (-not $AbsoluteProjectPath) {
     # We failed to find exactly one .lvproj in any ancestor up to the level before root
@@ -91,6 +116,36 @@ $ReportPath = Join-Path -Path $PSScriptRoot -ChildPath "UnitTestReport.xml"
 # --------------------------  SETUP  --------------------------
 function Setup {
     Write-Host "=== Setup ==="
+    $ServiceName = "nisvcloc"
+    $Service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+
+    if ($null -eq $Service) {
+        Write-Warning "NI Service Locator service ('$ServiceName') not found. g-cli may fail to connect to LabVIEW."
+    }
+    else {
+        Write-Host "Checking NI Service Locator status..."
+
+        if ($Service.Status -ne 'Running') {
+            Write-Host "NI Service Locator is $($Service.Status). Starting service..." -ForegroundColor Yellow
+            try {
+                Start-Service -Name $ServiceName -ErrorAction Stop
+
+                $retryCount = 0
+                while ((Get-Service $ServiceName).Status -ne 'Running' -and $retryCount -lt 10) {
+                    Start-Sleep -Seconds 1
+                    $retryCount++
+                }
+                Write-Host "Successfully started NI Service Locator." -ForegroundColor Green
+            }
+            catch {
+                Write-Warning "Failed to start NI Service Locator: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+        }
+        else {
+            Write-Host "NI Service Locator is already running." -ForegroundColor Green
+        }
+    }
+
     if (Test-Path $ReportPath) {
         try {
             Remove-Item $ReportPath -Force -ErrorAction Stop
@@ -108,22 +163,54 @@ function Setup {
 # ------------------------  MAIN SEQUENCE  ----------------------
 function MainSequence {
     Write-Host "`n=== MainSequence ==="
+    
+    if ($OpenProjectBeforeRun) {
+        $PreRunVI = Join-Path -Path $PSScriptRoot -ChildPath "OpenProj.vi"
+        Write-Host "Flag 'OpenProjectBeforeRun' detected." -ForegroundColor Cyan
+        
+        if (Test-Path $PreRunVI) {
+            Write-Host "Executing LabVIEWCLI to run OpenProj.vi..."
+            $labviewCLI = "C:\Program Files (x86)\National Instruments\Shared\LabVIEW CLI\LabVIEWCLI.exe"
+            if (Test-Path $labviewCLI) {
+                & $labviewCLI -OperationName RunVI -VIPath $PreRunVI $AbsoluteProjectPath
+
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Warning "LabVIEW CLI failed to run OpenProj.vi (Exit code: $LASTEXITCODE). Proceeding to tests anyway..."
+                }
+            } else {
+                Write-Warning "LabVIEW CLI not found at $labviewCLI. Skipping pre-run step."
+            }
+        } else {
+            Write-Warning "Could not find OpenProj.vi at $PreRunVI. Skipping pre-run step."
+        }
+    }
+
+    $labviewCLI = "C:\Program Files (x86)\National Instruments\Shared\LabVIEW CLI\LabVIEWCLI.exe"
+    
+    if (-not (Test-Path $labviewCLI)) {
+        Write-Error "LabVIEW CLI not found at $labviewCLI"
+        $script:OriginalExitCode = 1
+        $script:TestsHadFailures = $true
+        return
+``    }
+
     Write-Host "Running unit tests for LabVIEW $MinimumSupportedLVVersion ($SupportedBitness-bit)"
     Write-Host "Project Path: $AbsoluteProjectPath"
     Write-Host "Report will be saved at: $ReportPath"
 
-    Write-Host "`nExecuting g-cli command..."
-    & g-cli --lv-ver $MinimumSupportedLVVersion --arch $SupportedBitness lunit -- -r "$ReportPath" "$AbsoluteProjectPath"
+    Write-Host "`nExecuting LabVIEW CLI with LUnit operation..."
+    & $labviewCLI -OperationName LUnit -ProjectPath $AbsoluteProjectPath -ReportPath $ReportPath
 
     $script:OriginalExitCode = $LASTEXITCODE
+
     if ($script:OriginalExitCode -ne 0) {
-        Write-Error "g-cli test execution failed (exit code $script:OriginalExitCode)."
+        Write-Warning "LabVIEW CLI LUnit execution failed (exit code $script:OriginalExitCode)."
     }
 
-    # If g-cli failed and no report was produced, we can't parse anything
+    # If LUnit failed and no report was produced, we can't parse anything
     if ($script:OriginalExitCode -ne 0 -and -not (Test-Path $ReportPath)) {
         $script:TestsHadFailures = $true
-        Write-Warning "No test report found, and g-cli returned an error."
+        Write-Warning "No test report found, and LabVIEW CLI returned an error."
         return
     }
 

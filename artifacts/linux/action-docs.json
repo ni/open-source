@@ -536,6 +536,34 @@
         }
       }
     },
+    "Invoke-ConfigureLabview": {
+      "description": "Configures LabVIEW settings by updating LabVIEW.ini file. LabVIEWVersion: LabVIEW version (e.g., \"2025\", \"2024\"). IniSettings: INI settings to add (multiline string or array). LabVIEWWaitSeconds: Seconds to wait for LabVIEW to generate ini file if it does not exist. DryRun: If set, prints the command instead of executing it.",
+      "parameters": {
+        "DryRun": {
+          "type": "boolean",
+          "required": false,
+          "description": "If set, prints the command instead of executing it"
+        },
+        "IniSettings": {
+          "type": "string",
+          "required": false,
+          "default": "@",
+          "description": "INI settings to add (multiline string or array)"
+        },
+        "LabVIEWVersion": {
+          "type": "string",
+          "required": false,
+          "default": "2025",
+          "description": "LabVIEW version (e"
+        },
+        "LabVIEWWaitSeconds": {
+          "type": "number",
+          "required": false,
+          "default": "50",
+          "description": "Seconds to wait for LabVIEW to generate ini file if it does not exist"
+        }
+      }
+    },
     "Invoke-GenerateReleaseNotes": {
       "description": "Generates a release notes file from the project's metadata. OutputPath: Path where the release notes should be written. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
       "parameters": {
@@ -808,7 +836,7 @@
       }
     },
     "Invoke-RunUnitTests": {
-      "description": "Runs LabVIEW unit tests. MinimumSupportedLVVersion: Minimum LabVIEW version that the project supports. SupportedBitness: Target LabVIEW bitness (32- or 64-bit). DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
+      "description": "Runs LabVIEW unit tests. MinimumSupportedLVVersion: Minimum LabVIEW version that the project supports. SupportedBitness: Target LabVIEW bitness (32- or 64-bit). ProjectPath: (Optional) Path to the LabVIEW project file. OpenProjectBeforeRun: (Optional) If set, runs OpenProj.vi before tests. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
       "parameters": {
         "DryRun": {
           "type": "boolean",
@@ -824,6 +852,16 @@
           "type": "string",
           "required": true,
           "description": "Minimum LabVIEW version that the project supports"
+        },
+        "OpenProjectBeforeRun": {
+          "type": "boolean",
+          "required": false,
+          "description": "(Optional) If set, runs OpenProj"
+        },
+        "ProjectPath": {
+          "type": "string",
+          "required": false,
+          "description": "(Optional) Path to the LabVIEW project file"
         },
         "SupportedBitness": {
           "type": "string",
@@ -849,6 +887,126 @@
           "type": "string",
           "required": true,
           "description": "Path relative to WorkingDirectory that locates the project or repository root."
+        }
+      }
+    },
+    "Invoke-SetupLabview": {
+      "description": "Downloads, installs, and activates LabVIEW Community Edition from an ISO image. LabVIEWIsoUrl: URL to download the LabVIEW ISO installer. TimeoutSeconds: Maximum time in seconds to wait for installation to complete. SerialNumber: LabVIEW serial number for activation (required). PackageID: LabVIEW package ID to activate. DryRun: If set, prints the command instead of executing it.",
+      "parameters": {
+        "DryRun": {
+          "type": "boolean",
+          "required": false,
+          "description": "If set, prints the command instead of executing it"
+        },
+        "LabVIEWIsoUrl": {
+          "type": "string",
+          "required": false,
+          "default": "https://download.ni.com/support/softlib/labview/labview_development_system/2025_Q3/ni-labview-2025-community-x86_25.3.3_offline.iso",
+          "description": "URL to download the LabVIEW ISO installer"
+        },
+        "PackageID": {
+          "type": "string",
+          "required": false,
+          "default": "LabVIEW_COM_PKG 25.0300",
+          "description": "LabVIEW package ID to activate"
+        },
+        "SerialNumber": {
+          "type": "string",
+          "required": true,
+          "description": "LabVIEW serial number for activation (required)"
+        },
+        "TimeoutSeconds": {
+          "type": "number",
+          "required": false,
+          "default": "2700",
+          "description": "Maximum time in seconds to wait for installation to complete"
+        }
+      }
+    },
+    "Invoke-SetupLunit": {
+      "description": "Installs VI Package Manager (VIPM) and LUnit CLI package. LVVersion: LabVIEW version (e.g., \"2025\", \"2024\"). LVBitness: LabVIEW bitness (\"32\" or \"64\"). VipmInstallerUrl: URL to download the VIPM installer. DryRun: If set, prints the command instead of executing it.",
+      "parameters": {
+        "DryRun": {
+          "type": "boolean",
+          "required": false,
+          "description": "If set, prints the command instead of executing it"
+        },
+        "LVBitness": {
+          "type": "string",
+          "required": true,
+          "description": "LabVIEW bitness (\"32\" or \"64\")"
+        },
+        "LVVersion": {
+          "type": "string",
+          "required": true,
+          "description": "LabVIEW version (e"
+        },
+        "VipmInstallerUrl": {
+          "type": "string",
+          "required": false,
+          "default": "https://packages.jki.net/vipm/preview/vipm-setup-latest-preview.exe",
+          "description": "URL to download the VIPM installer"
+        }
+      }
+    },
+    "Invoke-SetupNipm": {
+      "description": "Installs and configures NI Package Manager (NIPM). NIPMUrl: URL to download the NI Package Manager installer. DryRun: If set, prints the command instead of executing it.",
+      "parameters": {
+        "DryRun": {
+          "type": "boolean",
+          "required": false,
+          "description": "If set, prints the command instead of executing it"
+        },
+        "NIPMUrl": {
+          "type": "string",
+          "required": false,
+          "default": "https://download.ni.com/support/nipkg/products/ni-package-manager/installers/NIPackageManager25.8.0.exe",
+          "description": "URL to download the NI Package Manager installer"
+        }
+      }
+    },
+    "Invoke-ViaLvDocker": {
+      "description": "Runs VI Analyzer tests using LabVIEW Docker container. ConfigPath: Path to VI Analyzer configuration file (.viancfg) or LabVIEW files (.vi, .ctl, .llb). If empty, generates from changed files. TemplatePath: Path to .viancfg template (required when generating config dynamically). BaseBranch: Branch to compare against for changed files (used when generating config). LabviewVersion: LabVIEW Docker image version tag. DockerImage: Full Docker image name. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
+      "parameters": {
+        "BaseBranch": {
+          "type": "string",
+          "required": false,
+          "default": "origin/develop",
+          "description": "Branch to compare against for changed files (used when generating config)"
+        },
+        "ConfigPath": {
+          "type": "string",
+          "required": false,
+          "default": "",
+          "description": "Path to VI Analyzer configuration file ("
+        },
+        "DockerImage": {
+          "type": "string",
+          "required": false,
+          "default": "nationalinstruments/labview",
+          "description": "Full Docker image name"
+        },
+        "DryRun": {
+          "type": "boolean",
+          "required": false,
+          "description": "If set, prints the command instead of executing it"
+        },
+        "gcliPath": {
+          "type": "string",
+          "required": false,
+          "description": "Optional path prepended to PATH for locating the g CLI"
+        },
+        "LabviewVersion": {
+          "type": "string",
+          "required": false,
+          "default": "2026q1-linux",
+          "description": "LabVIEW Docker image version tag"
+        },
+        "TemplatePath": {
+          "type": "string",
+          "required": false,
+          "default": "",
+          "description": "Path to"
         }
       }
     },
@@ -1690,6 +1848,50 @@
         "type": "string"
       }
     ],
+    "configure-labview": [
+      {
+        "name": "labview_version",
+        "description": "LabVIEW version.",
+        "required": false,
+        "default": "2025",
+        "type": "string"
+      },
+      {
+        "name": "ini_settings",
+        "description": "INI settings to add (one per line or comma-separated).",
+        "required": false,
+        "default": "server.tcp.enabled=TRUE\nserver.tcp.access=+127.0.0.1;+localhost;+*\nserver.viscripting.ShowScriptingOperationsInEditor=TRUE\n",
+        "type": "string"
+      },
+      {
+        "name": "labview_wait_seconds",
+        "description": "Seconds to wait for LabVIEW to generate ini file if it does not exist.",
+        "required": false,
+        "default": "60",
+        "type": "string"
+      },
+      {
+        "name": "working_directory",
+        "description": "Working directory where the action will run.",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "log_level",
+        "description": "Verbosity level (ERROR|WARN|INFO|DEBUG).",
+        "required": false,
+        "default": "INFO",
+        "type": "string"
+      },
+      {
+        "name": "dry_run",
+        "description": "If true, simulate the action without side effects.",
+        "required": false,
+        "default": false,
+        "type": "string"
+      }
+    ],
     "generate-release-notes": [
       {
         "name": "output_path",
@@ -2142,6 +2344,20 @@
         "type": "string"
       },
       {
+        "name": "project_path",
+        "description": "Path to the LabVIEW project file. If not provided, searches upward from script location.",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "open_project_before_run",
+        "description": "If true, runs OpenProj.vi via LabVIEWCLI before executing tests.",
+        "required": false,
+        "default": "false",
+        "type": "string"
+      },
+      {
         "name": "gcli_path",
         "description": "Optional path to the g-cli executable.",
         "required": false,
@@ -2207,6 +2423,189 @@
         "type": "string"
       }
     ],
-    "setup-mkdocs": []
+    "setup-labview": [
+      {
+        "name": "labview_iso_url",
+        "description": "URL to download the LabVIEW ISO installer.",
+        "required": false,
+        "default": "https://download.ni.com/support/softlib/labview/labview_development_system/2025_Q3/ni-labview-2025-community-x86_25.3.3_offline.iso",
+        "type": "string"
+      },
+      {
+        "name": "timeout_seconds",
+        "description": "Maximum time in seconds to wait for installation to complete.",
+        "required": false,
+        "default": "2700",
+        "type": "string"
+      },
+      {
+        "name": "serial_number",
+        "description": "LabVIEW serial number for activation.",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "package_id",
+        "description": "LabVIEW package ID to activate.",
+        "required": false,
+        "default": "LabVIEW_COM_PKG 25.0300",
+        "type": "string"
+      },
+      {
+        "name": "working_directory",
+        "description": "Working directory where the action will run.",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "log_level",
+        "description": "Verbosity level (ERROR|WARN|INFO|DEBUG).",
+        "required": false,
+        "default": "INFO",
+        "type": "string"
+      },
+      {
+        "name": "dry_run",
+        "description": "If true, simulate the action without side effects.",
+        "required": false,
+        "default": false,
+        "type": "string"
+      }
+    ],
+    "setup-lunit": [
+      {
+        "name": "lv_version",
+        "description": "LabVIEW version (e.g., \"2025\", \"2024\").",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "lv_bitness",
+        "description": "LabVIEW bitness (\"32\" or \"64\").",
+        "required": true,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "vipm_installer_url",
+        "description": "URL to download the VIPM installer.",
+        "required": false,
+        "default": "https://packages.jki.net/vipm/preview/vipm-setup-latest-preview.exe",
+        "type": "string"
+      },
+      {
+        "name": "working_directory",
+        "description": "Working directory where the action will run.",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "log_level",
+        "description": "Verbosity level (ERROR|WARN|INFO|DEBUG).",
+        "required": false,
+        "default": "INFO",
+        "type": "string"
+      },
+      {
+        "name": "dry_run",
+        "description": "If true, simulate the action without side effects.",
+        "required": false,
+        "default": false,
+        "type": "string"
+      }
+    ],
+    "setup-mkdocs": [],
+    "setup-nipm": [
+      {
+        "name": "nipm_url",
+        "description": "URL to download the NI Package Manager installer.",
+        "required": false,
+        "default": "https://download.ni.com/support/nipkg/products/ni-package-manager/installers/NIPackageManager25.8.0.exe",
+        "type": "string"
+      },
+      {
+        "name": "working_directory",
+        "description": "Working directory where the action will run.",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "log_level",
+        "description": "Verbosity level (ERROR|WARN|INFO|DEBUG).",
+        "required": false,
+        "default": "INFO",
+        "type": "string"
+      },
+      {
+        "name": "dry_run",
+        "description": "If true, simulate the action without side effects.",
+        "required": false,
+        "default": false,
+        "type": "string"
+      }
+    ],
+    "via-lv-docker": [
+      {
+        "name": "config_path",
+        "description": "Path to VI Analyzer configuration file (.viancfg) or LabVIEW files (.vi, .ctl, .llb)",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "template_path",
+        "description": "Path to .viancfg template (required to generate config file dynamically)",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "base_branch",
+        "description": "Branch to compare against for changed files (used when generating config)",
+        "required": false,
+        "default": "origin/develop",
+        "type": "string"
+      },
+      {
+        "name": "labview_version",
+        "description": "LabVIEW Docker image version tag",
+        "required": false,
+        "default": "2026q1-linux",
+        "type": "string"
+      },
+      {
+        "name": "docker_image",
+        "description": "Full Docker image name",
+        "required": false,
+        "default": "nationalinstruments/labview",
+        "type": "string"
+      },
+      {
+        "name": "working_directory",
+        "description": "Working directory where the action will run.",
+        "required": false,
+        "default": "",
+        "type": "string"
+      },
+      {
+        "name": "log_level",
+        "description": "Verbosity level (ERROR|WARN|INFO|DEBUG).",
+        "required": false,
+        "default": "INFO",
+        "type": "string"
+      },
+      {
+        "name": "dry_run",
+        "description": "If true, simulate the action without side effects.",
+        "required": false,
+        "default": false,
+        "type": "string"
+      }
+    ]
   }
 }

@@ -67,6 +67,7 @@ nav:
           - Run Unit Tests: actions/run-unit-tests.md
           - Set Development Mode: actions/set-development-mode.md
           - Setup MkDocs: actions/setup-mkdocs.md
+          - VIA LV Docker: actions/via-lv-docker.md
       - Scripts:
           - Add Token to LabVIEW: scripts/add-token-to-labview.md
           - Apply VIPC: scripts/apply-vipc.md
@@ -103,6 +104,7 @@ nav:
           - Run Unit Tests: workflows/run-unit-tests.md
           - Set Development Mode: workflows/set-development-mode.md
           - Setup MkDocs: workflows/setup-mkdocs.md
+          - VIA LV Docker: workflows/via-lv-docker.md
   - Developer Docs:
       - Adapter Authoring: adapter-authoring.md
       - Versioning: versioning.md

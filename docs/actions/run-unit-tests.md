@@ -15,7 +15,8 @@ Common parameters are described in [Common parameters](../common-parameters.md).
 
 ### Optional
 
-None.
+- **ProjectPath** (`string`): Path to the LabVIEW project file (*.lvproj). If not provided, the script searches upward from its location to find exactly one project file.
+- **OpenProjectBeforeRun** (`switch`): If set, runs `OpenProj.vi` via LabVIEWCLI before executing tests. This is useful for projects that require initialization before testing.
 
 ### GitHub Action inputs
 
@@ -25,6 +26,8 @@ GitHub Action inputs are provided in `snake_case`, while CLI parameters use `Pas
 | --- | --- | --- |
 | `minimum_supported_lv_version` | `MinimumSupportedLVVersion` | LabVIEW version for the test run. |
 | `supported_bitness` | `SupportedBitness` | "32" or "64" bitness of LabVIEW. |
+| `project_path` | `ProjectPath` | Optional Path to LabVIEW project file (*.lvproj) |
+| `open_project_before_run` | `OpenProjectBeforeRun` | If set, runs `OpenProj.vi` via LabVIEWCLI before executing tests. |
 | `gcli_path` | `gcliPath` | Optional path to the g-cli executable. |
 | `working_directory` | `WorkingDirectory` | Base directory for the action; relative paths are resolved from here. |
 | `log_level` | `LogLevel` | Verbosity level (ERROR\|WARN\|INFO\|DEBUG). |
@@ -59,6 +62,22 @@ pwsh -File actions/Invoke-OSAction.ps1 -ActionName run-unit-tests -ArgsFile ./co
     minimum_supported_lv_version: '2020'
     supported_bitness: '64'
 ```
+
+### Pre-Run Project Opening
+
+Enable the `open_project_before_run` flag to run `OpenProj.vi` before tests. Also provide the `project_path`:
+
+```yaml
+- name: Run Unit Tests with Pre-Run
+  uses: LabVIEW-Community-CI-CD/open-source/run-unit-tests@v1
+  with:
+    minimum_supported_lv_version: '2021'
+    supported_bitness: '64'
+    open_project_before_run: true
+    project_path: Path/to/your/.lvproj
+```
+
+**Note**: This requires an `OpenProj.vi` file in the `scripts/run-unit-tests/` directory. The VI should accept the project path and open the project before unit tests run.
 
 ## Return Codes
 

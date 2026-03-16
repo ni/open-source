@@ -11,6 +11,7 @@ List of available GitHub Actions.
 - [build-vi-package](./build-vi-package.md): Update VIPB display information and build a VI package using g-cli.
 - [build](./build.md): Automate building the LabVIEW Icon Editor project, including cleaning, building libraries, and packaging.
 - [close-labview](./close-labview.md): Gracefully close a running LabVIEW instance via g-cli.
+- [configure-labview](./configure-labview.md): Configures LabVIEW settings by updating the `LabVIEW.ini` file so that TCP/IP is enabled.
 - [generate-release-notes](./generate-release-notes.md): Generate release notes from the git history and write them to a markdown file.
 - [missing-in-project](./missing-in-project.md): Check that all files in a LabVIEW project are present by scanning for items missing from the `.lvproj`.
 - [modify-vipb-display-info](./modify-vipb-display-info.md): Update display information in a VIPB file and rebuild the VI package.
@@ -21,6 +22,8 @@ List of available GitHub Actions.
 - [run-pester-tests](./run-pester-tests.md): Run PowerShell Pester tests in a repository.
 - [run-unit-tests](./run-unit-tests.md): Run LabVIEW unit tests via the LabVIEW Unit Test Framework CLI and report pass/fail/error using standard exit codes.
 - [set-development-mode](./set-development-mode.md): Configure the repository for development mode by removing packed libraries, adding tokens, preparing sources, and closing LabVIEW.
+- [setup-labview](./setup-labview.md): Downloads and installs LabVIEW Community Edition from an ISO image for CI/CD environments.
+- [setup-lunit](./setup-lunit.md): Installs VI Package Manager (VIPM) and the LUnit for G-CLI package for LabVIEW automation testing.
 - [setup-mkdocs](./setup-mkdocs.md): Install a pinned MkDocs with caching.
 
 ## See also

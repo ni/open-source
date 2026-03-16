@@ -261,6 +261,42 @@
       ]
     },
     {
+      "id": "REQ-034",
+      "description": "Workflow tests the composite action defined in via-lv-docker/action.yml on the GitHub-hosted Ubuntu runner labeled ubuntu-latest.",
+      "runner": "ubuntu-latest",
+      "tests": [
+        "ViaLvDocker.Workflow"
+      ]
+    },
+    {
+      "id": "REQ-035",
+      "description": "Setup NI Package Manager (NIPM) and configure it for CI/CD environments by installing the package manager and disabling package caching.",
+      "tests": [
+        "SetupNipm.Workflow.Tests"
+      ]
+    },
+    {
+      "id": "REQ-036",
+      "description": "Download, install, and activate LabVIEW Community Edition from an ISO image, handling installation timeouts and cleanup.",
+      "tests": [
+        "SetupLabview.Workflow.Tests"
+      ]
+    },
+    {
+      "id": "REQ-037",
+      "description": "Configure LabVIEW settings by updating LabVIEW.ini to enable TCP/IP server and VI scripting operations.",
+      "tests": [
+        "ConfigureLabview.Workflow.Tests"
+      ]
+    },
+    {
+      "id": "REQ-038",
+      "description": "Install VI Package Manager (VIPM) and LUnit CLI package for LabVIEW automation testing.",
+      "tests": [
+        "SetupLunit.Workflow.Tests"
+      ]
+    },
+    {
       "id": "REQ-039",
       "description": "Build LabVIEW Packed Project Library (.lvlibp) using Linux LabVIEW Docker container with specified version, bitness, and build specification, then rename the artifact with version and commit metadata.",
       "tests": [

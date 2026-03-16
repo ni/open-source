@@ -178,6 +178,19 @@ Closes any running instance of LabVIEW. MinimumSupportedLVVersion: Minimum LabVI
 pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-CloseLabVIEW -ArgsJson '{}'
 ```
 
+#### Invoke-ConfigureLabview
+Configures LabVIEW settings by updating LabVIEW.ini file. LabVIEWVersion: LabVIEW version (e.g., "2025", "2024"). IniSettings: INI settings to add (multiline string or array). LabVIEWWaitSeconds: Seconds to wait for LabVIEW to generate ini file if it does not exist. DryRun: If set, prints the command instead of executing it.
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| DryRun | boolean | false |  | If set, prints the command instead of executing it |
+| IniSettings | string | false | @ | INI settings to add (multiline string or array) |
+| LabVIEWVersion | string | false | 2025 | LabVIEW version (e |
+| LabVIEWWaitSeconds | number | false | 50 | Seconds to wait for LabVIEW to generate ini file if it does not exist |
+
+```powershell
+pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-ConfigureLabview -ArgsJson '{}'
+```
+
 #### Invoke-GenerateReleaseNotes
 Generates a release notes file from the project's metadata. OutputPath: Path where the release notes should be written. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.
 | Parameter | Type | Required | Default | Description |
@@ -297,11 +310,13 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-RunPesterTests -ArgsJson '
 ```
 
 #### Invoke-RunUnitTests
-Runs LabVIEW unit tests. MinimumSupportedLVVersion: Minimum LabVIEW version that the project supports. SupportedBitness: Target LabVIEW bitness (32- or 64-bit). DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.
+Runs LabVIEW unit tests. MinimumSupportedLVVersion: Minimum LabVIEW version that the project supports. SupportedBitness: Target LabVIEW bitness (32- or 64-bit). ProjectPath: (Optional) Path to the LabVIEW project file. OpenProjectBeforeRun: (Optional) If set, runs OpenProj.vi before tests. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.
 | Parameter | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | DryRun | boolean | false |  | If set, prints the command instead of executing it |
 | MinimumSupportedLVVersion | string | true |  | Minimum LabVIEW version that the project supports |
+| OpenProjectBeforeRun | boolean | false |  | (Optional) If set, runs OpenProj |
+| ProjectPath | string | false |  | (Optional) Path to the LabVIEW project file |
 | SupportedBitness | string | true |  | Target LabVIEW bitness (32- or 64-bit) |
 | gcliPath | string | false |  | Optional path prepended to PATH for locating the g CLI |
 
@@ -319,6 +334,60 @@ Configures the repository for development mode. RelativePath: Normalized path to
 
 ```powershell
 pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-SetDevelopmentMode -ArgsJson '{}'
+```
+
+#### Invoke-SetupLabview
+Downloads, installs, and activates LabVIEW Community Edition from an ISO image. LabVIEWIsoUrl: URL to download the LabVIEW ISO installer. TimeoutSeconds: Maximum time in seconds to wait for installation to complete. SerialNumber: LabVIEW serial number for activation (required). PackageID: LabVIEW package ID to activate. DryRun: If set, prints the command instead of executing it.
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| DryRun | boolean | false |  | If set, prints the command instead of executing it |
+| LabVIEWIsoUrl | string | false | https://download.ni.com/support/softlib/labview/labview_development_system/2025_Q3/ni-labview-2025-community-x86_25.3.3_offline.iso | URL to download the LabVIEW ISO installer |
+| PackageID | string | false | LabVIEW_COM_PKG 25.0300 | LabVIEW package ID to activate |
+| SerialNumber | string | true |  | LabVIEW serial number for activation (required) |
+| TimeoutSeconds | number | false | 2700 | Maximum time in seconds to wait for installation to complete |
+
+```powershell
+pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-SetupLabview -ArgsJson '{}'
+```
+
+#### Invoke-SetupLunit
+Installs VI Package Manager (VIPM) and LUnit CLI package. LVVersion: LabVIEW version (e.g., "2025", "2024"). LVBitness: LabVIEW bitness ("32" or "64"). VipmInstallerUrl: URL to download the VIPM installer. DryRun: If set, prints the command instead of executing it.
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| DryRun | boolean | false |  | If set, prints the command instead of executing it |
+| LVBitness | string | true |  | LabVIEW bitness ("32" or "64") |
+| LVVersion | string | true |  | LabVIEW version (e |
+| VipmInstallerUrl | string | false | https://packages.jki.net/vipm/preview/vipm-setup-latest-preview.exe | URL to download the VIPM installer |
+
+```powershell
+pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-SetupLunit -ArgsJson '{}'
+```
+
+#### Invoke-SetupNipm
+Installs and configures NI Package Manager (NIPM). NIPMUrl: URL to download the NI Package Manager installer. DryRun: If set, prints the command instead of executing it.
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| DryRun | boolean | false |  | If set, prints the command instead of executing it |
+| NIPMUrl | string | false | https://download.ni.com/support/nipkg/products/ni-package-manager/installers/NIPackageManager25.8.0.exe | URL to download the NI Package Manager installer |
+
+```powershell
+pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-SetupNipm -ArgsJson '{}'
+```
+
+#### Invoke-ViaLvDocker
+Runs VI Analyzer tests using LabVIEW Docker container. ConfigPath: Path to VI Analyzer configuration file (.viancfg) or LabVIEW files (.vi, .ctl, .llb). If empty, generates from changed files. TemplatePath: Path to .viancfg template (required when generating config dynamically). BaseBranch: Branch to compare against for changed files (used when generating config). LabviewVersion: LabVIEW Docker image version tag. DockerImage: Full Docker image name. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| BaseBranch | string | false | origin/develop | Branch to compare against for changed files (used when generating config) |
+| ConfigPath | string | false |  | Path to VI Analyzer configuration file ( |
+| DockerImage | string | false | nationalinstruments/labview | Full Docker image name |
+| DryRun | boolean | false |  | If set, prints the command instead of executing it |
+| LabviewVersion | string | false | 2026q1-linux | LabVIEW Docker image version tag |
+| TemplatePath | string | false |  | Path to |
+| gcliPath | string | false |  | Optional path prepended to PATH for locating the g CLI |
+
+```powershell
+pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-ViaLvDocker -ArgsJson '{}'
 ```
 
 #### Normalize-RelativePath
@@ -343,6 +412,15 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 ```
 
 ### Wrapper Actions
+
+#### activate-labview
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| serial_number | string | true |  | LabVIEW serial number for activation. |
+| package_id | string | false | LabVIEW_COM_PKG 25.0300 | LabVIEW package ID to activate. |
+| working_directory | string | false |  | Working directory where the action will run. |
+| log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
+| dry_run | string | false | false | If true, simulate the action without side effects. |
 
 #### add-token-to-labview
 | Name | Type | Required | Default | Description |
@@ -488,6 +566,19 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 | log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
 | dry_run | string | false | false | If true, simulate the action without side effects. |
 
+#### configure-labview
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| labview_version | string | false | 2025 | LabVIEW version. |
+| ini_settings | string | false | server.tcp.enabled=TRUE
+server.tcp.access=+127.0.0.1;+localhost;+*
+server.viscripting.ShowScriptingOperationsInEditor=TRUE
+ | INI settings to add (one per line or comma-separated). |
+| labview_wait_seconds | string | false | 60 | Seconds to wait for LabVIEW to generate ini file if it does not exist. |
+| working_directory | string | false |  | Working directory where the action will run. |
+| log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
+| dry_run | string | false | false | If true, simulate the action without side effects. |
+
 #### generate-release-notes
 | Name | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -585,6 +676,8 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 | --- | --- | --- | --- | --- |
 | minimum_supported_lv_version | string | true |  | LabVIEW version for the test run. |
 | supported_bitness | string | true |  | "32" or "64" bitness of LabVIEW. |
+| project_path | string | false |  | Path to the LabVIEW project file. If not provided, searches upward from script location. |
+| open_project_before_run | string | false | false | If true, runs OpenProj.vi via LabVIEWCLI before executing tests. |
 | gcli_path | string | false |  | Optional path to the g-cli executable. |
 | working_directory | string | false |  | Working directory where the action will run. |
 | log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
@@ -599,6 +692,47 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 | log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
 | dry_run | string | false | false | If true, simulate the action without side effects. |
 
+#### setup-labview
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| labview_iso_url | string | false | https://download.ni.com/support/softlib/labview/labview_development_system/2025_Q3/ni-labview-2025-community-x86_25.3.3_offline.iso | URL to download the LabVIEW ISO installer. |
+| timeout_seconds | string | false | 2700 | Maximum time in seconds to wait for installation to complete. |
+| serial_number | string | true |  | LabVIEW serial number for activation. |
+| package_id | string | false | LabVIEW_COM_PKG 25.0300 | LabVIEW package ID to activate. |
+| working_directory | string | false |  | Working directory where the action will run. |
+| log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
+| dry_run | string | false | false | If true, simulate the action without side effects. |
+
+#### setup-lunit
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| lv_version | string | true |  | LabVIEW version (e.g., "2025", "2024"). |
+| lv_bitness | string | true |  | LabVIEW bitness ("32" or "64"). |
+| vipm_installer_url | string | false | https://packages.jki.net/vipm/preview/vipm-setup-latest-preview.exe | URL to download the VIPM installer. |
+| working_directory | string | false |  | Working directory where the action will run. |
+| log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
+| dry_run | string | false | false | If true, simulate the action without side effects. |
+
 #### setup-mkdocs
 | Name | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
+
+#### setup-nipm
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| nipm_url | string | false | https://download.ni.com/support/nipkg/products/ni-package-manager/installers/NIPackageManager25.8.0.exe | URL to download the NI Package Manager installer. |
+| working_directory | string | false |  | Working directory where the action will run. |
+| log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
+| dry_run | string | false | false | If true, simulate the action without side effects. |
+
+#### via-lv-docker
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| config_path | string | false |  | Path to VI Analyzer configuration file (.viancfg) or LabVIEW files (.vi, .ctl, .llb) |
+| template_path | string | false |  | Path to .viancfg template (required to generate config file dynamically) |
+| base_branch | string | false | origin/develop | Branch to compare against for changed files (used when generating config) |
+| labview_version | string | false | 2026q1-linux | LabVIEW Docker image version tag |
+| docker_image | string | false | nationalinstruments/labview | Full Docker image name |
+| working_directory | string | false |  | Working directory where the action will run. |
+| log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
+| dry_run | string | false | false | If true, simulate the action without side effects. |
