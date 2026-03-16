@@ -1037,43 +1037,6 @@
     }
   },
   "wrappers": {
-    "activate-labview": [
-      {
-        "name": "serial_number",
-        "description": "LabVIEW serial number for activation.",
-        "required": true,
-        "default": "",
-        "type": "string"
-      },
-      {
-        "name": "package_id",
-        "description": "LabVIEW package ID to activate.",
-        "required": false,
-        "default": "LabVIEW_COM_PKG 25.0300",
-        "type": "string"
-      },
-      {
-        "name": "working_directory",
-        "description": "Working directory where the action will run.",
-        "required": false,
-        "default": "",
-        "type": "string"
-      },
-      {
-        "name": "log_level",
-        "description": "Verbosity level (ERROR|WARN|INFO|DEBUG).",
-        "required": false,
-        "default": "INFO",
-        "type": "string"
-      },
-      {
-        "name": "dry_run",
-        "description": "If true, simulate the action without side effects.",
-        "required": false,
-        "default": false,
-        "type": "string"
-      }
-    ],
     "add-token-to-labview": [
       {
         "name": "minimum_supported_lv_version",

@@ -413,15 +413,6 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 
 ### Wrapper Actions
 
-#### activate-labview
-| Name | Type | Required | Default | Description |
-| --- | --- | --- | --- | --- |
-| serial_number | string | true |  | LabVIEW serial number for activation. |
-| package_id | string | false | LabVIEW_COM_PKG 25.0300 | LabVIEW package ID to activate. |
-| working_directory | string | false |  | Working directory where the action will run. |
-| log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
-| dry_run | string | false | false | If true, simulate the action without side effects. |
-
 #### add-token-to-labview
 | Name | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
