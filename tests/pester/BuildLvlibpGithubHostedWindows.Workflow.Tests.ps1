@@ -2,11 +2,11 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-Describe 'BuildLvlibpWin32.Workflow' {
+Describe 'BuildLvlibpGithubHostedWindows.Workflow' {
     $meta = @{
         requirement = 'REQ-041'
         Owner       = 'NI'
-        Evidence    = 'tests/pester/BuildLvlibpWin32.Workflow.Tests.ps1'
+        Evidence    = 'tests/pester/BuildLvlibpGithubHostedWindows.Workflow.Tests.ps1'
     }
 
     BeforeAll {
@@ -15,18 +15,18 @@ Describe 'BuildLvlibpWin32.Workflow' {
     }
 
     It 'validates action.yml exists [REQ-041]' -Tag 'REQ-041' {
-        $actionPath = Join-Path $repoRoot 'build-lvlibp-win32' 'action.yml'
+        $actionPath = Join-Path $repoRoot 'build-lvlibp-github-hosted-windows' 'action.yml'
         Test-Path $actionPath | Should -Be $true
     }
 
     It 'validates implementation script exists [REQ-041]' -Tag 'REQ-041' {
-        $scriptPath = Join-Path $repoRoot 'scripts' 'build-lvlibp-win32' 'BuildLvlibpWin32.ps1'
+        $scriptPath = Join-Path $repoRoot 'scripts' 'build-lvlibp-github-hosted-windows' 'BuildLvlibpGithubHostedWindows.ps1'
         Test-Path $scriptPath | Should -Be $true
     }
 
     It 'executes dry-run with only required parameters [REQ-041]' -Tag 'REQ-041' {
         $result = & "$repoRoot/actions/Invoke-OSAction.ps1" `
-            -ActionName 'build-lvlibp-win32' `
+            -ActionName 'build-lvlibp-github-hosted-windows' `
             -ArgsJson '{"MinimumSupportedLVVersion":"2026","SupportedBitness":"64","ProjectPath":"test.lvproj"}' `
             -DryRun
         
@@ -35,7 +35,7 @@ Describe 'BuildLvlibpWin32.Workflow' {
 
     It 'executes dry-run with all parameters [REQ-041]' -Tag 'REQ-041' {
         $result = & "$repoRoot/actions/Invoke-OSAction.ps1" `
-            -ActionName 'build-lvlibp-win32' `
+            -ActionName 'build-lvlibp-github-hosted-windows' `
             -ArgsJson '{"MinimumSupportedLVVersion":"2026","SupportedBitness":"64","ProjectPath":"test.lvproj","TargetName":"My Computer","BuildSpecName":"TestBuild","Major":1,"Minor":0,"Patch":0,"Build":0,"Commit":"abc1234"}' `
             -DryRun
         

@@ -314,7 +314,7 @@
       "id": "REQ-041",
       "description": "Build LabVIEW Packed Project Library (.lvlibp) using Windows GitHub-hosted runner with locally installed LabVIEW.",
       "tests": [
-        "BuildLvlibpWin32.Workflow.Tests"
+        "BuildLvlibpGithubHostedWindows.Workflow.Tests"
       ]
     },
     {

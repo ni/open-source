@@ -1,4 +1,4 @@
-name: 'Build LVLIBP Win32'
+name: 'Build LVLIBP GitHub Hosted Windows'
 description: 'Builds LabVIEW Packed Project Library (.lvlibp) using Windows GitHub-hosted runner'
 inputs:
   minimum_supported_lv_version:
@@ -49,7 +49,7 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Dispatch build-lvlibp-win32
+    - name: Dispatch build-lvlibp-github-hosted-windows
       shell: pwsh
       run: |
         $ErrorActionPreference = 'Stop'
@@ -69,7 +69,7 @@ runs:
         if ('${{ inputs.build }}') { $args['Build'] = [int]'${{ inputs.build }}' }
         
         $params = @{
-          ActionName = 'build-lvlibp-win32'
+          ActionName = 'build-lvlibp-github-hosted-windows'
           ArgsJson   = ($args | ConvertTo-Json -Compress)
           LogLevel   = '${{ inputs.log_level }}'
         }

@@ -52,7 +52,7 @@ LabVIEWCLI \
 
 - [`build-lvlibp-docker-linux`](../build-lvlibp-docker-linux/BuildLvlibpDockerLinux.ps1) – When version parameters are provided
 - [`build-lvlibp-docker-windows`](../build-lvlibp-docker-windows/BuildLvlibpDockerWindows.ps1) – When version parameters are provided
-- [`build-lvlibp-win32`](../build-lvlibp-win32/BuildLvlibpWin32.ps1) – When version parameters are provided
+- [`build-lvlibp-github-hosted-windows`](../build-lvlibp-github-hosted-windows/BuildLvlibpGithubHostedWindows.ps1) – When version parameters are provided
 
 ### When is the Helper VI Called?
 

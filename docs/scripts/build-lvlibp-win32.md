@@ -1,6 +1,6 @@
 # Build Packed Library with Windows Runner 🖥️📦
 
-Call **`BuildLvlibpWin32.ps1`** to compile LabVIEW packed libraries using LabVIEWCLI on a Windows GitHub-hosted runner.
+Call **`BuildLvlibpGithubHostedWindows.ps1`** to compile LabVIEW packed libraries using LabVIEWCLI on a Windows GitHub-hosted runner.
 
 ## Inputs
 
@@ -22,7 +22,7 @@ Call **`BuildLvlibpWin32.ps1`** to compile LabVIEW packed libraries using LabVIE
 The following example builds using LabVIEW 2025 (32-bit) on a Windows runner.
 
 ```yaml
-- uses: ./.github/actions/build-lvlibp-win32
+- uses: ./.github/actions/build-lvlibp-github-hosted-windows
   with:
     minimum_supported_lv_version: 2025
     supported_bitness: 32
@@ -68,7 +68,7 @@ jobs:
           package_id: 'LabVIEW_COM_PKG 25.0300'
 
       - name: Build PPL
-        uses: ./.github/actions/build-lvlibp-win32
+        uses: ./.github/actions/build-lvlibp-github-hosted-windows
         with:
           minimum_supported_lv_version: 2025
           supported_bitness: 32
@@ -93,7 +93,7 @@ jobs:
 Leave `build_spec_name` empty and provide version to set the same version on all build specs:
 
 ```yaml
-- uses: ./.github/actions/build-lvlibp-win32
+- uses: ./.github/actions/build-lvlibp-github-hosted-windows
   with:
     minimum_supported_lv_version: 2025
     supported_bitness: 32
@@ -111,7 +111,7 @@ Leave `build_spec_name` empty and provide version to set the same version on all
 Omit version parameters to use versions to skip setting versions in build specifications:
 
 ```yaml
-- uses: ./.github/actions/build-lvlibp-win32
+- uses: ./.github/actions/build-lvlibp-github-hosted-windows
   with:
     minimum_supported_lv_version: 2025
     supported_bitness: 32
@@ -146,7 +146,7 @@ For containerized builds:
 - Windows containers: [build-lvlibp-docker-windows](build-lvlibp-docker-windows.md)
 - Linux containers: [build-lvlibp-docker-linux](build-lvlibp-docker-linux.md)
 
-See also: [docs/actions/build-lvlibp-win32.md](../actions/build-lvlibp-win32.md)
+See also: [docs/actions/build-lvlibp-github-hosted-windows.md](../actions/build-lvlibp-github-hosted-windows.md)
 
 ## License
 

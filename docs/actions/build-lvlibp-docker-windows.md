@@ -185,6 +185,6 @@ You cannot partially specify version components - either provide all four or non
 ## See also
 
 - [build-lvlibp-docker-linux](build-lvlibp-docker-linux.md) – Linux Docker PPL build action
-- [build-lvlibp-win32](build-lvlibp-win32.md) – Windows native PPL build action
+- [build-lvlibp-github-hosted-windows](build-lvlibp-github-hosted-windows.md) – Windows native PPL build action
 - [build](build.md) – General LabVIEW build action
 - [Architecture documentation](../architecture.md)

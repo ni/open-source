@@ -1,4 +1,4 @@
-# build-lvlibp-win32
+# build-lvlibp-github-hosted-windows
 
 ## Purpose
 
@@ -49,7 +49,7 @@ Common parameters are described in [Common parameters](../common-parameters.md).
 ### CLI
 
 ```powershell
-pwsh -File actions/Invoke-OSAction.ps1 -ActionName build-lvlibp-win32 -ArgsJson '{
+pwsh -File actions/Invoke-OSAction.ps1 -ActionName build-lvlibp-github-hosted-windows -ArgsJson '{
   "MinimumSupportedLVVersion": "2025",
   "SupportedBitness": "32",
   "ProjectPath": "lv_icon_editor.lvproj",
@@ -67,7 +67,7 @@ pwsh -File actions/Invoke-OSAction.ps1 -ActionName build-lvlibp-win32 -ArgsJson 
 
 ```yaml
 - name: Build PPL with GitHub-hosted Runner
-  uses: ni/open-source/build-lvlibp-win32@v1
+  uses: ni/open-source/build-lvlibp-github-hosted-windows@v1
   with:
     minimum_supported_lv_version: '2025'
     supported_bitness: '32'
@@ -84,7 +84,7 @@ pwsh -File actions/Invoke-OSAction.ps1 -ActionName build-lvlibp-win32 -ArgsJson 
 ### CLI without Version (Skip setting version)
 
 ```powershell
-pwsh -File actions/Invoke-OSAction.ps1 -ActionName build-lvlibp-win32 -ArgsJson '{
+pwsh -File actions/Invoke-OSAction.ps1 -ActionName build-lvlibp-github-hosted-windows -ArgsJson '{
   "MinimumSupportedLVVersion": "2025",
   "SupportedBitness": "32",
   "ProjectPath": "lv_icon_editor.lvproj",
@@ -132,7 +132,7 @@ jobs:
           "patch=$($parts[2])" >> $env:GITHUB_OUTPUT
 
       - name: Build PPL
-        uses: ni/open-source/build-lvlibp-win32@v1
+        uses: ni/open-source/build-lvlibp-github-hosted-windows@v1
         with:
           minimum_supported_lv_version: '2025'
           supported_bitness: '32'
@@ -169,7 +169,7 @@ Omit `build_spec_name` to build all build specifications. The provided version i
 
 ```yaml
 - name: Build All PPLs
-  uses: ni/open-source/build-lvlibp-win32@v1
+  uses: ni/open-source/build-lvlibp-github-hosted-windows@v1
   with:
     minimum_supported_lv_version: '2025'
     supported_bitness: '32'

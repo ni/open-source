@@ -355,7 +355,7 @@ function Invoke-BuildLvlibpDockerWindows {
 # Commit: Commit hash or identifier (optional).
 # DryRun: If set, prints the command instead of executing it.
 # gcliPath: Optional path prepended to PATH for locating the g CLI.
-function Invoke-BuildLvlibpWin32 {
+function Invoke-BuildLvlibpGithubHostedWindows {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] [string] $MinimumSupportedLVVersion,
@@ -371,10 +371,10 @@ function Invoke-BuildLvlibpWin32 {
         [switch] $DryRun,
         [string] $gcliPath
     )
-    Write-Information "Invoking BuildLvlibpWin32" -InformationAction Continue
+    Write-Information "Invoking BuildLvlibpGithubHostedWindows" -InformationAction Continue
     
     $result = Invoke-OpenSourceActionScript `
-        -ScriptSegments @('build-lvlibp-win32', 'BuildLvlibpWin32.ps1') `
+        -ScriptSegments @('build-lvlibp-github-hosted-windows', 'BuildLvlibpGithubHostedWindows.ps1') `
         -Arguments @{
             MinimumSupportedLVVersion = $MinimumSupportedLVVersion
             SupportedBitness = $SupportedBitness

@@ -36,7 +36,7 @@
     Commit hash or identifier recorded in the build.
 
 .EXAMPLE
-    .\BuildLvlibpWin32.ps1 -MinimumSupportedLVVersion "2025" -SupportedBitness "32" -ProjectPath "lv_icon_editor.lvproj" -TargetName "My Computer" -BuildSpecName "Editor Packed Library" -Major 1 -Minor 0 -Patch 0 -Build 0 -Commit "abc1234"
+    .\BuildLvlibpGithubHostedWindows.ps1 -MinimumSupportedLVVersion "2025" -SupportedBitness "32" -ProjectPath "lv_icon_editor.lvproj" -TargetName "My Computer" -BuildSpecName "Editor Packed Library" -Major 1 -Minor 0 -Patch 0 -Build 0 -Commit "abc1234"
 
 .NOTES
     [REQ-041] Build LabVIEW Packed Project Library using Windows GitHub-hosted runner
@@ -92,7 +92,12 @@ try {
     Write-Information "Commit: $Commit" -InformationAction Continue
 
     # Construct LabVIEWPath for Windows
-    $labviewPath = "C:\Program Files (x86)\National Instruments\LabVIEW $MinimumSupportedLVVersion\LabVIEW.exe"
+    if ($SupportedBitness -eq "32") {
+        $labviewPath = "C:\Program Files (x86)\National Instruments\LabVIEW $MinimumSupportedLVVersion\LabVIEW.exe"
+    } else {
+        $labviewPath = "C:\Program Files\National Instruments\LabVIEW $MinimumSupportedLVVersion\LabVIEW.exe"
+    }
+
     $labviewCLI = "C:\Program Files (x86)\National Instruments\Shared\LabVIEW CLI\LabVIEWCLI.exe"
     
     if (-not (Test-Path $labviewPath)) {
@@ -186,6 +191,6 @@ try {
     exit 0
 }
 catch {
-    Write-Error "BuildLvlibpWin32 failed: $_"
+    Write-Error "BuildLvlibpGithubHostedWindows failed: $_"
     exit 1
 }

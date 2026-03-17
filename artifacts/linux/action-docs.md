@@ -121,7 +121,7 @@ Builds LabVIEW Packed Project Library (.lvlibp) using Windows Docker container. 
 pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-BuildLvlibpDockerWindows -ArgsJson '{}'
 ```
 
-#### Invoke-BuildLvlibpWin32
+#### Invoke-BuildLvlibpGithubHostedWindows
 Builds LabVIEW Packed Project Library (.lvlibp) using Windows GitHub-hosted runner. MinimumSupportedLVVersion: LabVIEW version for the build (e.g., "2021", "2026"). SupportedBitness: Bitness of the LabVIEW environment ("32" or "64"). ProjectPath: Path to the LabVIEW project .lvproj file. TargetName: Target that contains the build specification (optional, defaults to "My Computer"). BuildSpecName: Name of the LabVIEW build specification (optional, builds all if empty). Major: Major version component (optional, skips version setting if < 0). Minor: Minor version component (optional, skips version setting if < 0). Patch: Patch version component (optional, skips version setting if < 0). Build: Build number component (optional, skips version setting if < 0). Commit: Commit hash or identifier (optional). DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.
 | Parameter | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -139,7 +139,7 @@ Builds LabVIEW Packed Project Library (.lvlibp) using Windows GitHub-hosted runn
 | gcliPath | string | false |  | Optional path prepended to PATH for locating the g CLI |
 
 ```powershell
-pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-BuildLvlibpWin32 -ArgsJson '{}'
+pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-BuildLvlibpGithubHostedWindows -ArgsJson '{}'
 ```
 
 #### Invoke-BuildViPackage
@@ -510,7 +510,7 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 | log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
 | dry_run | string | false | false | If true, simulate the action without side effects. |
 
-#### build-lvlibp-win32
+#### build-lvlibp-github-hosted-windows
 | Name | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | minimum_supported_lv_version | string | true |  | LabVIEW version year for the build (e.g., "2021", "2026"). |
