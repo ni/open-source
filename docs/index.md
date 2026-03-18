@@ -24,6 +24,9 @@ Open Source LabVIEW Actions unifies LabVIEW [CI/CD](glossary.md#ci-cd) scripts b
 | [apply-vipc](actions/apply-vipc.md) | Apply a VI Package Configuration (.vipc) file to a specific LabVIEW installation using g-cli. |
 | [build](actions/build.md) | Automate building the LabVIEW Icon Editor project, including cleaning, building libraries, and packaging. |
 | [build-lvlibp](actions/build-lvlibp.md) | Build a LabVIEW project’s build specification into a Packed Project Library (.lvlibp). |
+| [build-lvlibp-docker-linux](actions/build-lvlibp-docker-linux.md) | Build LVLIBP with Linux Docker. |
+| [build-lvlibp-docker-windows](actions/build-lvlibp-docker-windows.md) | Build LVLIBP with Windows Docker. |
+| [build-lvlibp-github-hosted-windows](actions/build-lvlibp-github-hosted-windows.md) | Build LVLIBP with Windows runner. |
 | [build-vi-package](actions/build-vi-package.md) | Update VIPB display information and build a VI package using g-cli. |
 | [close-labview](actions/close-labview.md) | Gracefully close a running LabVIEW instance via g-cli. |
 | [generate-release-notes](actions/generate-release-notes.md) | Generate release notes from the git history and write them to a markdown file. |

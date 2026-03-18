@@ -33,6 +33,7 @@ Describe 'Unified Dispatcher — DryRun behavior for all actions' {
        LVVersion                 = '2021'
        LVBitness                 = '64'
        ProjectFile               = 'Project.lvproj'
+       ProjectPath               = 'Project.lvproj'
        Major                     = 1
        Minor                     = 0
        Patch                     = 0

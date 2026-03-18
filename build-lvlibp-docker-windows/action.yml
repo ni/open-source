@@ -1,0 +1,90 @@
+name: 'Build LVLIBP Docker Windows'
+description: 'Builds LabVIEW Packed Project Library (.lvlibp) using Windows Docker container'
+inputs:
+  minimum_supported_lv_version:
+    description: 'LabVIEW version year for the build (e.g., "2021", "2026").'
+    required: true
+  supported_bitness:
+    description: 'Bitness of the LabVIEW environment ("32" or "64").'
+    required: true
+  project_path:
+    description: 'Path to the LabVIEW project .lvproj file.'
+    required: true
+  target_name:
+    description: 'Target that contains the build specification. Defaults to "My Computer" in helper VI.'
+    required: false
+    default: ''
+  build_spec_name:
+    description: 'Name of the build specification. If empty, builds all specifications in the target.'
+    required: false
+    default: ''
+  major:
+    description: 'Major version component for the PPL. Omit to skip version setting.'
+    required: false
+  minor:
+    description: 'Minor version component for the PPL. Omit to skip version setting.'
+    required: false
+  patch:
+    description: 'Patch version component for the PPL. Omit to skip version setting.'
+    required: false
+  build:
+    description: 'Build number component for the PPL. Omit to skip version setting.'
+    required: false
+  commit:
+    description: 'Commit hash or identifier recorded in the build.'
+    required: false
+    default: ''
+  docker_image:
+    description: 'Docker image name.'
+    required: false
+    default: 'nationalinstruments/labview'
+  image_tag:
+    description: 'Docker image tag.'
+    required: false
+    default: '2026q1-windows'
+  working_directory:
+    description: 'Working directory where the action will run.'
+    required: false
+  log_level:
+    description: 'Verbosity level (ERROR|WARN|INFO|DEBUG).'
+    default: 'INFO'
+    required: false
+  dry_run:
+    description: 'If true, simulate the action without side effects.'
+    default: false
+    required: false
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Dispatch build-lvlibp-docker-windows
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $args = @{
+          MinimumSupportedLVVersion = '${{ inputs.minimum_supported_lv_version }}'
+          SupportedBitness  = '${{ inputs.supported_bitness }}'
+          ProjectPath       = '${{ inputs.project_path }}'
+          TargetName        = '${{ inputs.target_name }}'
+          BuildSpecName     = '${{ inputs.build_spec_name }}'
+          Commit            = '${{ inputs.commit }}'
+          DockerImage       = '${{ inputs.docker_image }}'
+          ImageTag          = '${{ inputs.image_tag }}'
+        }
+        
+        # Only add version parameters if they are provided
+        if ('${{ inputs.major }}') { $args['Major'] = [int]'${{ inputs.major }}' }
+        if ('${{ inputs.minor }}') { $args['Minor'] = [int]'${{ inputs.minor }}' }
+        if ('${{ inputs.patch }}') { $args['Patch'] = [int]'${{ inputs.patch }}' }
+        if ('${{ inputs.build }}') { $args['Build'] = [int]'${{ inputs.build }}' }
+        
+        $params = @{
+          ActionName = 'build-lvlibp-docker-windows'
+          ArgsJson   = ($args | ConvertTo-Json -Compress)
+          LogLevel   = '${{ inputs.log_level }}'
+        }
+        if ('${{ inputs.dry_run }}' -eq 'true') { $params['DryRun'] = $true }
+        if ('${{ inputs.working_directory }}') { $params['WorkingDirectory'] = '${{ inputs.working_directory }}' }
+        
+        & '${{ github.action_path }}/../actions/Invoke-OSAction.ps1' @params
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
