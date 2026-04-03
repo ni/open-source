@@ -75,8 +75,8 @@ Builds a LabVIEW Packed Library using a project and build spec. MinimumSupported
 pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-BuildLvlibp -ArgsJson '{}'
 ```
 
-#### Invoke-BuildLvlibpDockerLinux
-Builds LabVIEW Packed Project Library (.lvlibp) using Linux Docker container. MinimumSupportedLVVersion: LabVIEW version for the build (e.g., "2021", "2026"). SupportedBitness: Bitness of the LabVIEW environment ("32" or "64"). ProjectPath: Path to the LabVIEW project .lvproj file. TargetName: Target that contains the build specification (optional, defaults to "My Computer"). BuildSpecName: Name of the LabVIEW build specification (optional, builds all if empty). Major: Major version component (optional, skips version setting if < 0). Minor: Minor version component (optional, skips version setting if < 0). Patch: Patch version component (optional, skips version setting if < 0). Build: Build number component (optional, skips version setting if < 0). Commit: Commit hash or identifier (optional). DockerImage: Docker image name (default: "nationalinstruments/labview"). ImageTag: Docker image tag (defaults to "2026q1-linux"). DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.
+#### Invoke-BuildSpecDockerLinux
+Builds LabVIEW build specification using Linux Docker container. MinimumSupportedLVVersion: LabVIEW version for the build (e.g., "2021", "2026"). SupportedBitness: Bitness of the LabVIEW environment ("32" or "64"). ProjectPath: Path to the LabVIEW project .lvproj file. TargetName: Target that contains the build specification (optional, defaults to "My Computer"). BuildSpecName: Name of the LabVIEW build specification (optional, builds all if empty). Major: Major version component (optional, skips version setting if < 0). Minor: Minor version component (optional, skips version setting if < 0). Patch: Patch version component (optional, skips version setting if < 0). Build: Build number component (optional, skips version setting if < 0). Commit: Commit hash or identifier (optional). DockerImage: Docker image name (default: "nationalinstruments/labview"). ImageTag: Docker image tag (defaults to "2026q1-linux"). DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.
 | Parameter | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | Build | number | false | -1 | Build number component (optional, skips version setting if < 0) |
@@ -95,11 +95,11 @@ Builds LabVIEW Packed Project Library (.lvlibp) using Linux Docker container. Mi
 | gcliPath | string | false |  | Optional path prepended to PATH for locating the g CLI |
 
 ```powershell
-pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-BuildLvlibpDockerLinux -ArgsJson '{}'
+pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-BuildSpecDockerLinux -ArgsJson '{}'
 ```
 
-#### Invoke-BuildLvlibpDockerWindows
-Builds LabVIEW Packed Project Library (.lvlibp) using Windows Docker container. MinimumSupportedLVVersion: LabVIEW version for the build (e.g., "2021", "2026"). SupportedBitness: Bitness of the LabVIEW environment ("32" or "64"). ProjectPath: Path to the LabVIEW project .lvproj file. TargetName: Target that contains the build specification (optional, defaults to "My Computer"). BuildSpecName: Name of the LabVIEW build specification (optional, builds all if empty). Major: Major version component (optional, skips version setting if < 0). Minor: Minor version component (optional, skips version setting if < 0). Patch: Patch version component (optional, skips version setting if < 0). Build: Build number component (optional, skips version setting if < 0). Commit: Commit hash or identifier (optional). DockerImage: Docker image name (default: "nationalinstruments/labview"). ImageTag: Docker image tag (defaults to "2026q1-windows"). DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.
+#### Invoke-BuildSpecDockerWindows
+Builds LabVIEW build specification using Windows Docker container. MinimumSupportedLVVersion: LabVIEW version for the build (e.g., "2021", "2026"). SupportedBitness: Bitness of the LabVIEW environment ("32" or "64"). ProjectPath: Path to the LabVIEW project .lvproj file. TargetName: Target that contains the build specification (optional, defaults to "My Computer"). BuildSpecName: Name of the LabVIEW build specification (optional, builds all if empty). Major: Major version component (optional, skips version setting if < 0). Minor: Minor version component (optional, skips version setting if < 0). Patch: Patch version component (optional, skips version setting if < 0). Build: Build number component (optional, skips version setting if < 0). Commit: Commit hash or identifier (optional). DockerImage: Docker image name (default: "nationalinstruments/labview"). ImageTag: Docker image tag (defaults to "2026q1-windows"). DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.
 | Parameter | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | Build | number | false | -1 | Build number component (optional, skips version setting if < 0) |
@@ -118,11 +118,11 @@ Builds LabVIEW Packed Project Library (.lvlibp) using Windows Docker container. 
 | gcliPath | string | false |  | Optional path prepended to PATH for locating the g CLI |
 
 ```powershell
-pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-BuildLvlibpDockerWindows -ArgsJson '{}'
+pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-BuildSpecDockerWindows -ArgsJson '{}'
 ```
 
-#### Invoke-BuildLvlibpGithubHostedWindows
-Builds LabVIEW Packed Project Library (.lvlibp) using Windows GitHub-hosted runner. MinimumSupportedLVVersion: LabVIEW version for the build (e.g., "2021", "2026"). SupportedBitness: Bitness of the LabVIEW environment ("32" or "64"). ProjectPath: Path to the LabVIEW project .lvproj file. TargetName: Target that contains the build specification (optional, defaults to "My Computer"). BuildSpecName: Name of the LabVIEW build specification (optional, builds all if empty). Major: Major version component (optional, skips version setting if < 0). Minor: Minor version component (optional, skips version setting if < 0). Patch: Patch version component (optional, skips version setting if < 0). Build: Build number component (optional, skips version setting if < 0). Commit: Commit hash or identifier (optional). DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.
+#### Invoke-BuildSpecGithubHostedWindows
+Builds LabVIEW build specification using Windows GitHub-hosted runner. MinimumSupportedLVVersion: LabVIEW version for the build (e.g., "2021", "2026"). SupportedBitness: Bitness of the LabVIEW environment ("32" or "64"). ProjectPath: Path to the LabVIEW project .lvproj file. TargetName: Target that contains the build specification (optional, defaults to "My Computer"). BuildSpecName: Name of the LabVIEW build specification (optional, builds all if empty). Major: Major version component (optional, skips version setting if < 0). Minor: Minor version component (optional, skips version setting if < 0). Patch: Patch version component (optional, skips version setting if < 0). Build: Build number component (optional, skips version setting if < 0). Commit: Commit hash or identifier (optional). DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.
 | Parameter | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | Build | number | false | -1 | Build number component (optional, skips version setting if < 0) |
@@ -139,7 +139,7 @@ Builds LabVIEW Packed Project Library (.lvlibp) using Windows GitHub-hosted runn
 | gcliPath | string | false |  | Optional path prepended to PATH for locating the g CLI |
 
 ```powershell
-pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-BuildLvlibpGithubHostedWindows -ArgsJson '{}'
+pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-BuildSpecGithubHostedWindows -ArgsJson '{}'
 ```
 
 #### Invoke-BuildViPackage
