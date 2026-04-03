@@ -74,6 +74,7 @@ Leave `build_spec_name` empty and provide version to set the same version on all
 - Docker must be installed and running on the host system
 - The specified Linux Docker image must contain LabVIEWCLI
 - The LabVIEW project file must exist at the specified path
+- The Build specification must be supported in Linux. For more information on build specifications, take a look at the [LabVIEW User Manual](https://www.ni.com/docs/en-US/bundle/labview/page/using-build-specifications.html)
 
 See also: [docs/actions/build-spec-docker-linux.md](../actions/build-spec-docker-linux.md)
 

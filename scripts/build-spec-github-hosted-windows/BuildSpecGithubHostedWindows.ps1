@@ -128,9 +128,9 @@ try {
         # 3. TargetName (empty string to use VI default)
         # 4. Version (required when setting version)
         $projectArg = (Resolve-Path $ProjectPath).Path
-        $buildSpecArg = if ($BuildSpecName) { $BuildSpecName } else { '""' }
-        $targetArg = if ($TargetName) { $TargetName } else { '""' }
-        $versionArg = if ($versionString) { $versionString } else { '""' }
+        $buildSpecArg = if ($BuildSpecName) { $BuildSpecName } else { '' }
+        $targetArg = if ($TargetName) { $TargetName } else { '' }
+        $versionArg = if ($versionString) { $versionString } else { '' }
         
         Write-Host "Executing: LabVIEWCLI -OperationName RunVI -LabVIEWPath `"$LabVIEWPath`" -VIPath `"$helperVI`" `"$projectArg`" `"$buildSpecArg`" `"$targetArg`" `"$versionArg`" -Headless"
         
