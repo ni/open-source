@@ -5,9 +5,9 @@ List of available GitHub Actions.
 - [add-token-to-labview](./add-token-to-labview.md): Add a custom library path token to the LabVIEW INI file so LabVIEW can locate project libraries.
 - [apply-vipc](./apply-vipc.md): Apply a VI Package Configuration (.vipc) file to a specific LabVIEW installation using g-cli.
 - [build-lvlibp](./build-lvlibp.md): Build a LabVIEW project’s build specification into a Packed Project Library (.lvlibp)
-- [build-lvlibp-docker-linux](./build-lvlibp-docker-linux.md) – Build LVLIBP using Linux Docker container
-- [build-lvlibp-docker-windows](./build-lvlibp-docker-windows.md) – Build LVLIBP using Windows Docker container
-- [build-lvlibp-github-hosted-windows](./build-lvlibp-github-hosted-windows.md) – Build LVLIBP using Windows GitHub-hosted runner
+- [build-spec-docker-linux](./build-spec-docker-linux.md) – Build LabVIEW build specification using Linux Docker container
+- [build-spec-docker-windows](./build-spec-docker-windows.md) – Build LabVIEW build specification using Windows Docker container
+- [build-spec-github-hosted-windows](./build-spec-github-hosted-windows.md) – Build LabVIEW build specification using Windows GitHub-hosted runner
 - [build-vi-package](./build-vi-package.md): Update VIPB display information and build a VI package using g-cli.
 - [build](./build.md): Automate building the LabVIEW Icon Editor project, including cleaning, building libraries, and packaging.
 - [close-labview](./close-labview.md): Gracefully close a running LabVIEW instance via g-cli.
@@ -25,6 +25,8 @@ List of available GitHub Actions.
 - [setup-labview](./setup-labview.md): Downloads and installs LabVIEW Community Edition from an ISO image for CI/CD environments.
 - [setup-lunit](./setup-lunit.md): Installs VI Package Manager (VIPM) and the LUnit for G-CLI package for LabVIEW automation testing.
 - [setup-mkdocs](./setup-mkdocs.md): Install a pinned MkDocs with caching.
+- [setup-nipm](./setup-nipm.md): Installs and configures NI Package Manager (NIPM) for LabVIEW package management in CI/CD environments.
+- [via-lv-docker](via-lv-docker.md): Execute LabVIEW VI Analyzer tests using a Docker container and parse results.
 
 ## See also
 

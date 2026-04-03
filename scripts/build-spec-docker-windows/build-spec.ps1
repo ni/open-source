@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-    Build LabVIEW Packed Project Library using LabVIEWCLI
+    Build LabVIEW build specification using LabVIEWCLI
 
 .DESCRIPTION
-    [REQ-040] Build LVLIBP using Windows Docker container
+    [REQ-040] Build LabVIEW build specification using Windows Docker container
 
 .NOTES
     This script is executed inside the Windows Docker container.
@@ -30,7 +30,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-Write-Host "Building LabVIEW Packed Project Library..."
+Write-Host "Building LabVIEW build specification..."
 Write-Host "LabVIEW: $LabVIEWPath"
 Write-Host "Project: $ProjectPath"
 Write-Host "Target: $(if ($TargetName) { $TargetName } else { '<My Computer>' })"
@@ -40,7 +40,7 @@ Write-Host "Version: $(if ($Version) { $Version } else { '<from build spec>' })"
 #  Set build version using helper VI if Version is provided
 if ($Version) {
     Write-Host "Setting build version to: $Version..."
-    $helperVI = "C:\actions\scripts\build-lvlibp-helpers\SetBuildVersionCaller.vi"
+    $helperVI = "C:\actions\scripts\build-spec-helpers\SetBuildVersionCaller.vi"
 
     if (-not (Test-Path $helperVI)) {
         throw "Helper VI not found at: $helperVI"
@@ -63,7 +63,7 @@ if ($Version) {
     
     Write-Host "Build version set successfully"
 } else {
-    Write-Host "Skipping version set - using version from build spec(s)"
+    Write-Host "Skipping build specification version set - using version from build spec(s)"
 }
 
 # Construct LabVIEWCLI command

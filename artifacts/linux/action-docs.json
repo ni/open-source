@@ -1346,7 +1346,7 @@
         "type": "string"
       }
     ],
-    "build-lvlibp-docker-linux": [
+    "build-spec-docker-linux": [
       {
         "name": "minimum_supported_lv_version",
         "description": "LabVIEW version year for the build (e.g., \"2021\", \"2026\").",
@@ -1384,28 +1384,28 @@
       },
       {
         "name": "major",
-        "description": "Major version component for the PPL. Omit to skip version setting.",
+        "description": "Major version component for the build specification. Omit to skip version setting.",
         "required": false,
         "default": "",
         "type": "string"
       },
       {
         "name": "minor",
-        "description": "Minor version component for the PPL. Omit to skip version setting.",
+        "description": "Minor version component for the build specification. Omit to skip version setting.",
         "required": false,
         "default": "",
         "type": "string"
       },
       {
         "name": "patch",
-        "description": "Patch version component for the PPL. Omit to skip version setting.",
+        "description": "Patch version component for the build specification. Omit to skip version setting.",
         "required": false,
         "default": "",
         "type": "string"
       },
       {
         "name": "build",
-        "description": "Build number component for the PPL. Omit to skip version setting.",
+        "description": "Build number component for the build specification. Omit to skip version setting.",
         "required": false,
         "default": "",
         "type": "string"
@@ -1453,7 +1453,7 @@
         "type": "string"
       }
     ],
-    "build-lvlibp-docker-windows": [
+    "build-spec-docker-windows": [
       {
         "name": "minimum_supported_lv_version",
         "description": "LabVIEW version year for the build (e.g., \"2021\", \"2026\").",
@@ -1491,28 +1491,28 @@
       },
       {
         "name": "major",
-        "description": "Major version component for the PPL. Omit to skip version setting.",
+        "description": "Major version component for the build specification. Omit to skip version setting.",
         "required": false,
         "default": "",
         "type": "string"
       },
       {
         "name": "minor",
-        "description": "Minor version component for the PPL. Omit to skip version setting.",
+        "description": "Minor version component for the build specification. Omit to skip version setting.",
         "required": false,
         "default": "",
         "type": "string"
       },
       {
         "name": "patch",
-        "description": "Patch version component for the PPL. Omit to skip version setting.",
+        "description": "Patch version component for the build specification. Omit to skip version setting.",
         "required": false,
         "default": "",
         "type": "string"
       },
       {
         "name": "build",
-        "description": "Build number component for the PPL. Omit to skip version setting.",
+        "description": "Build number component for the build specification. Omit to skip version setting.",
         "required": false,
         "default": "",
         "type": "string"
@@ -1560,7 +1560,7 @@
         "type": "string"
       }
     ],
-    "build-lvlibp-github-hosted-windows": [
+    "build-spec-github-hosted-windows": [
       {
         "name": "minimum_supported_lv_version",
         "description": "LabVIEW version year for the build (e.g., \"2021\", \"2026\").",
@@ -1598,28 +1598,28 @@
       },
       {
         "name": "major",
-        "description": "Major version component for the PPL. Omit to skip version setting.",
+        "description": "Major version component for the build specification. Omit to skip version setting.",
         "required": false,
         "default": "",
         "type": "string"
       },
       {
         "name": "minor",
-        "description": "Minor version component for the PPL. Omit to skip version setting.",
+        "description": "Minor version component for the build specification. Omit to skip version setting.",
         "required": false,
         "default": "",
         "type": "string"
       },
       {
         "name": "patch",
-        "description": "Patch version component for the PPL. Omit to skip version setting.",
+        "description": "Patch version component for the build specification. Omit to skip version setting.",
         "required": false,
         "default": "",
         "type": "string"
       },
       {
         "name": "build",
-        "description": "Build number component for the PPL. Omit to skip version setting.",
+        "description": "Build number component for the build specification. Omit to skip version setting.",
         "required": false,
         "default": "",
         "type": "string"

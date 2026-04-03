@@ -472,7 +472,7 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 | log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
 | dry_run | string | false | false | If true, simulate the action without side effects. |
 
-#### build-lvlibp-docker-linux
+#### build-spec-docker-linux
 | Name | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | minimum_supported_lv_version | string | true |  | LabVIEW version year for the build (e.g., "2021", "2026"). |
@@ -480,10 +480,10 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 | project_path | string | true |  | Path to the LabVIEW project .lvproj file. |
 | target_name | string | false |  | Target that contains the build specification. Defaults to "My Computer" in helper VI. |
 | build_spec_name | string | false |  | Name of the build specification. If empty, builds all specifications in the target. |
-| major | string | false |  | Major version component for the PPL. Omit to skip version setting. |
-| minor | string | false |  | Minor version component for the PPL. Omit to skip version setting. |
-| patch | string | false |  | Patch version component for the PPL. Omit to skip version setting. |
-| build | string | false |  | Build number component for the PPL. Omit to skip version setting. |
+| major | string | false |  | Major version component for the build specification. Omit to skip version setting. |
+| minor | string | false |  | Minor version component for the build specification. Omit to skip version setting. |
+| patch | string | false |  | Patch version component for the build specification. Omit to skip version setting. |
+| build | string | false |  | Build number component for the build specification. Omit to skip version setting. |
 | commit | string | false |  | Commit hash or identifier recorded in the build. |
 | docker_image | string | false | nationalinstruments/labview | Docker image name. |
 | image_tag | string | false | 2026q1-linux | Docker image tag. |
@@ -491,7 +491,7 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 | log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
 | dry_run | string | false | false | If true, simulate the action without side effects. |
 
-#### build-lvlibp-docker-windows
+#### build-spec-docker-windows
 | Name | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | minimum_supported_lv_version | string | true |  | LabVIEW version year for the build (e.g., "2021", "2026"). |
@@ -499,10 +499,10 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 | project_path | string | true |  | Path to the LabVIEW project .lvproj file. |
 | target_name | string | false |  | Target that contains the build specification. Defaults to "My Computer" in helper VI. |
 | build_spec_name | string | false |  | Name of the build specification. If empty, builds all specifications in the target. |
-| major | string | false |  | Major version component for the PPL. Omit to skip version setting. |
-| minor | string | false |  | Minor version component for the PPL. Omit to skip version setting. |
-| patch | string | false |  | Patch version component for the PPL. Omit to skip version setting. |
-| build | string | false |  | Build number component for the PPL. Omit to skip version setting. |
+| major | string | false |  | Major version component for the build specification. Omit to skip version setting. |
+| minor | string | false |  | Minor version component for the build specification. Omit to skip version setting. |
+| patch | string | false |  | Patch version component for the build specification. Omit to skip version setting. |
+| build | string | false |  | Build number component for the build specification. Omit to skip version setting. |
 | commit | string | false |  | Commit hash or identifier recorded in the build. |
 | docker_image | string | false | nationalinstruments/labview | Docker image name. |
 | image_tag | string | false | 2026q1-windows | Docker image tag. |
@@ -510,7 +510,7 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 | log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
 | dry_run | string | false | false | If true, simulate the action without side effects. |
 
-#### build-lvlibp-github-hosted-windows
+#### build-spec-github-hosted-windows
 | Name | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | minimum_supported_lv_version | string | true |  | LabVIEW version year for the build (e.g., "2021", "2026"). |
@@ -518,10 +518,10 @@ pwsh ./actions/Invoke-OSAction.ps1 -ActionName Set-LogLevel -ArgsJson '{}'
 | project_path | string | true |  | Path to the LabVIEW project .lvproj file. |
 | target_name | string | false |  | Target that contains the build specification. Defaults to "My Computer" in helper VI. |
 | build_spec_name | string | false |  | Name of the build specification. If empty, builds all specifications in the target. |
-| major | string | false |  | Major version component for the PPL. Omit to skip version setting. |
-| minor | string | false |  | Minor version component for the PPL. Omit to skip version setting. |
-| patch | string | false |  | Patch version component for the PPL. Omit to skip version setting. |
-| build | string | false |  | Build number component for the PPL. Omit to skip version setting. |
+| major | string | false |  | Major version component for the build specification. Omit to skip version setting. |
+| minor | string | false |  | Minor version component for the build specification. Omit to skip version setting. |
+| patch | string | false |  | Patch version component for the build specification. Omit to skip version setting. |
+| build | string | false |  | Build number component for the build specification. Omit to skip version setting. |
 | commit | string | false |  | Commit hash or identifier recorded in the build. |
 | working_directory | string | false |  | Working directory where the action will run. |
 | log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
