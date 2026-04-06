@@ -228,7 +228,7 @@ function Invoke-BuildLvlibp {
     return Invoke-OpenSourceActionScript -ScriptSegments @('build-lvlibp','Build_lvlibp.ps1') -Arguments $args -DryRun:$DryRun -gcliPath $gcliPath
 }
 
-# Builds LabVIEW Packed Project Library (.lvlibp) using Linux Docker container.
+# Builds LabVIEW build specification using Linux Docker container.
 # MinimumSupportedLVVersion: LabVIEW version for the build (e.g., "2021", "2026").
 # SupportedBitness: Bitness of the LabVIEW environment ("32" or "64").
 # ProjectPath: Path to the LabVIEW project .lvproj file.
@@ -243,7 +243,7 @@ function Invoke-BuildLvlibp {
 # ImageTag: Docker image tag (defaults to "2026q1-linux").
 # DryRun: If set, prints the command instead of executing it.
 # gcliPath: Optional path prepended to PATH for locating the g CLI.
-function Invoke-BuildLvlibpDockerLinux {
+function Invoke-BuildSpecDockerLinux {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] [string] $MinimumSupportedLVVersion,
@@ -261,10 +261,10 @@ function Invoke-BuildLvlibpDockerLinux {
         [switch] $DryRun,
         [string] $gcliPath
     )
-    Write-Information "Invoking BuildLvlibpDockerLinux" -InformationAction Continue
+    Write-Information "Invoking BuildSpecDockerLinux" -InformationAction Continue
     
     $result = Invoke-OpenSourceActionScript `
-        -ScriptSegments @('build-lvlibp-docker-linux', 'BuildLvlibpDockerLinux.ps1') `
+        -ScriptSegments @('build-spec-docker-linux', 'BuildSpecDockerLinux.ps1') `
         -Arguments @{
             MinimumSupportedLVVersion = $MinimumSupportedLVVersion
             SupportedBitness = $SupportedBitness
@@ -285,7 +285,7 @@ function Invoke-BuildLvlibpDockerLinux {
     return $result
 }
 
-# Builds LabVIEW Packed Project Library (.lvlibp) using Windows Docker container.
+# Builds LabVIEW build specification using Windows Docker container.
 # MinimumSupportedLVVersion: LabVIEW version for the build (e.g., "2021", "2026").
 # SupportedBitness: Bitness of the LabVIEW environment ("32" or "64").
 # ProjectPath: Path to the LabVIEW project .lvproj file.
@@ -300,7 +300,7 @@ function Invoke-BuildLvlibpDockerLinux {
 # ImageTag: Docker image tag (defaults to "2026q1-windows").
 # DryRun: If set, prints the command instead of executing it.
 # gcliPath: Optional path prepended to PATH for locating the g CLI.
-function Invoke-BuildLvlibpDockerWindows {
+function Invoke-BuildSpecDockerWindows {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] [string] $MinimumSupportedLVVersion,
@@ -318,10 +318,10 @@ function Invoke-BuildLvlibpDockerWindows {
         [switch] $DryRun,
         [string] $gcliPath
     )
-    Write-Information "Invoking BuildLvlibpDockerWindows" -InformationAction Continue
+    Write-Information "Invoking BuildSpecDockerWindows" -InformationAction Continue
     
     $result = Invoke-OpenSourceActionScript `
-        -ScriptSegments @('build-lvlibp-docker-windows', 'BuildLvlibpDockerWindows.ps1') `
+        -ScriptSegments @('build-spec-docker-windows', 'BuildSpecDockerWindows.ps1') `
         -Arguments @{
             MinimumSupportedLVVersion = $MinimumSupportedLVVersion
             SupportedBitness = $SupportedBitness
@@ -342,7 +342,7 @@ function Invoke-BuildLvlibpDockerWindows {
     return $result
 }
 
-# Builds LabVIEW Packed Project Library (.lvlibp) using Windows GitHub-hosted runner.
+# Builds LabVIEW build specification using Windows GitHub-hosted runner.
 # MinimumSupportedLVVersion: LabVIEW version for the build (e.g., "2021", "2026").
 # SupportedBitness: Bitness of the LabVIEW environment ("32" or "64").
 # ProjectPath: Path to the LabVIEW project .lvproj file.
@@ -355,7 +355,7 @@ function Invoke-BuildLvlibpDockerWindows {
 # Commit: Commit hash or identifier (optional).
 # DryRun: If set, prints the command instead of executing it.
 # gcliPath: Optional path prepended to PATH for locating the g CLI.
-function Invoke-BuildLvlibpGithubHostedWindows {
+function Invoke-BuildSpecGithubHostedWindows {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] [string] $MinimumSupportedLVVersion,
@@ -371,10 +371,10 @@ function Invoke-BuildLvlibpGithubHostedWindows {
         [switch] $DryRun,
         [string] $gcliPath
     )
-    Write-Information "Invoking BuildLvlibpGithubHostedWindows" -InformationAction Continue
+    Write-Information "Invoking BuildSpecGithubHostedWindows" -InformationAction Continue
     
     $result = Invoke-OpenSourceActionScript `
-        -ScriptSegments @('build-lvlibp-github-hosted-windows', 'BuildLvlibpGithubHostedWindows.ps1') `
+        -ScriptSegments @('build-spec-github-hosted-windows', 'BuildSpecGithubHostedWindows.ps1') `
         -Arguments @{
             MinimumSupportedLVVersion = $MinimumSupportedLVVersion
             SupportedBitness = $SupportedBitness

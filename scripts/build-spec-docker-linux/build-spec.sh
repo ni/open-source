@@ -1,6 +1,6 @@
 #!/bin/bash
-# Build LabVIEW Packed Project Library using LabVIEWCLI
-# [REQ-039] Build LVLIBP using Docker container
+# Build LabVIEW Build Specification using LabVIEWCLI
+# [REQ-039] Build LabVIEW build specification using Docker container
 
 set -euo pipefail
 
@@ -47,7 +47,7 @@ if [[ -z "$LABVIEW_PATH" ]] || [[ -z "$PROJECT_PATH" ]]; then
     exit 1
 fi
 
-echo "Building LabVIEW Packed Project Library..."
+echo "Building LabVIEW Build Specification..."
 echo "LabVIEW: $LABVIEW_PATH"
 echo "Project: $PROJECT_PATH"
 echo "Target: ${TARGET_NAME:-<My Computer>}"
@@ -56,7 +56,7 @@ echo "Version: ${VERSION:-<from build spec>}"
 
 if [[ -n "$VERSION" ]]; then
     echo "Setting build version..."
-    HELPER_VI="/helpers/scripts/build-lvlibp-helpers/SetBuildVersionCaller.vi"
+    HELPER_VI="/helpers/scripts/build-spec-helpers/SetBuildVersionCaller.vi"
 
     if [[ ! -f "$HELPER_VI" ]]; then
         echo "Error: Helper VI not found at $HELPER_VI"

@@ -1,6 +1,6 @@
-# Build LVLIBP Common Scripts
+# Build LabVIEW Build Specification Common Scripts
 
-This directory contains shared utilities used by all LVLIBP build actions.
+This directory contains shared utilities used by all build specification actions.
 
 ## SetBuildVersion.vi
 
@@ -32,7 +32,7 @@ Helper VI that sets the build version for LabVIEW build specification(s).
 LabVIEWCLI \
   -OperationName RunVI \
   -LabVIEWPath "/usr/local/natinst/LabVIEW-2025-64/labview" \
-  -VIPath "/workspace/scripts/build-lvlibp-common/SetBuildVersion.vi" \
+  -VIPath "/workspace/scripts/build-spec-helpers/SetBuildVersionCaller.vi" \
   "/workspace/project.lvproj" "My PPL" "My Computer" "1.0.0.4"\
   -Headless
 ```
@@ -43,16 +43,16 @@ LabVIEWCLI \
 LabVIEWCLI \
   -OperationName RunVI \
   -LabVIEWPath "/usr/local/natinst/LabVIEW-2025-64/labview" \
-  -VIPath "/workspace/scripts/build-lvlibp-common/SetBuildVersion.vi" \
+  -VIPath "/workspace/scripts/build-spec-helpers/SetBuildVersionCaller.vi" \
   "/workspace/project.lvproj" "" "My Computer" "2.0.0.4"\
   -Headless
 ```
 
 ### Used By
 
-- [`build-lvlibp-docker-linux`](../build-lvlibp-docker-linux/BuildLvlibpDockerLinux.ps1) – When version parameters are provided
-- [`build-lvlibp-docker-windows`](../build-lvlibp-docker-windows/BuildLvlibpDockerWindows.ps1) – When version parameters are provided
-- [`build-lvlibp-github-hosted-windows`](../build-lvlibp-github-hosted-windows/BuildLvlibpGithubHostedWindows.ps1) – When version parameters are provided
+- [`build-spec-docker-linux`](../build-spec-docker-linux/BuildSpecDockerLinux.ps1) – When version parameters are provided
+- [`build-spec-docker-windows`](../build-spec-docker-windows/BuildSpecDockerWindows.ps1) – When version parameters are provided
+- [`build-spec-github-hosted-windows`](../build-spec-github-hosted-windows/BuildSpecGithubHostedWindows.ps1) – When version parameters are provided
 
 ### When is the Helper VI Called?
 

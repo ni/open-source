@@ -1,5 +1,5 @@
-name: 'Build LVLIBP Docker Linux'
-description: 'Builds LabVIEW Packed Project Library (.lvlibp) using Linux Docker container'
+name: 'Build Spec GitHub Hosted Windows'
+description: 'Builds a LabVIEW build specification using Windows GitHub-hosted runner'
 inputs:
   minimum_supported_lv_version:
     description: 'LabVIEW version year for the build (e.g., "2021", "2026").'
@@ -19,29 +19,21 @@ inputs:
     required: false
     default: ''
   major:
-    description: 'Major version component for the PPL. Omit to skip version setting.'
+    description: 'Major version component for the build specification. Omit to skip version setting.'
     required: false
   minor:
-    description: 'Minor version component for the PPL. Omit to skip version setting.'
+    description: 'Minor version component for the build specification. Omit to skip version setting.'
     required: false
   patch:
-    description: 'Patch version component for the PPL. Omit to skip version setting.'
+    description: 'Patch version component for the build specification. Omit to skip version setting.'
     required: false
   build:
-    description: 'Build number component for the PPL. Omit to skip version setting.'
+    description: 'Build number component for the build specification. Omit to skip version setting.'
     required: false
   commit:
     description: 'Commit hash or identifier recorded in the build.'
     required: false
     default: ''
-  docker_image:
-    description: 'Docker image name.'
-    required: false
-    default: 'nationalinstruments/labview'
-  image_tag:
-    description: 'Docker image tag.'
-    required: false
-    default: '2026q1-linux'
   working_directory:
     description: 'Working directory where the action will run.'
     required: false
@@ -57,7 +49,7 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Dispatch build-lvlibp-docker-linux
+    - name: Dispatch build-spec-github-hosted-windows
       shell: pwsh
       run: |
         $ErrorActionPreference = 'Stop'
@@ -68,8 +60,6 @@ runs:
           TargetName        = '${{ inputs.target_name }}'
           BuildSpecName     = '${{ inputs.build_spec_name }}'
           Commit            = '${{ inputs.commit }}'
-          DockerImage       = '${{ inputs.docker_image }}'
-          ImageTag          = '${{ inputs.image_tag }}'
         }
         
         # Only add version parameters if they are provided
@@ -79,7 +69,7 @@ runs:
         if ('${{ inputs.build }}') { $args['Build'] = [int]'${{ inputs.build }}' }
         
         $params = @{
-          ActionName = 'build-lvlibp-docker-linux'
+          ActionName = 'build-spec-github-hosted-windows'
           ArgsJson   = ($args | ConvertTo-Json -Compress)
           LogLevel   = '${{ inputs.log_level }}'
         }

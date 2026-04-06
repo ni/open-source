@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Builds the LabVIEW Packed Project Library (.lvlibp) using Windows GitHub-hosted runner.
+    Builds LabVIEW build specification using Windows GitHub-hosted runner.
 
 .DESCRIPTION
     Executes LabVIEW build specification through LabVIEWCLI on a Windows GitHub-hosted runner.
@@ -21,16 +21,16 @@
     Name of the LabVIEW build specification to execute. If empty, builds all specifications in the target.
 
 .PARAMETER Major
-    Major version component for the PPL. Optional - if not provided, version setting is skipped.
+    Major version component for the build specification. Optional - if not provided, version setting is skipped.
 
 .PARAMETER Minor
-    Minor version component for the PPL. Optional - if not provided, version setting is skipped.
+    Minor version component for the build specification. Optional - if not provided, version setting is skipped.
 
 .PARAMETER Patch
-    Patch version component for the PPL. Optional - if not provided, version setting is skipped.
+    Patch version component for the build specification. Optional - if not provided, version setting is skipped.
 
 .PARAMETER Build
-    Build number component for the PPL. Optional - if not provided, version setting is skipped.
+    Build number component for the build specification. Optional - if not provided, version setting is skipped.
 
 .PARAMETER Commit
     Commit hash or identifier recorded in the build.
@@ -39,7 +39,7 @@
     .\BuildLvlibpGithubHostedWindows.ps1 -MinimumSupportedLVVersion "2025" -SupportedBitness "32" -ProjectPath "lv_icon_editor.lvproj" -TargetName "My Computer" -BuildSpecName "Editor Packed Library" -Major 1 -Minor 0 -Patch 0 -Build 0 -Commit "abc1234"
 
 .NOTES
-    [REQ-041] Build LabVIEW Packed Project Library using Windows GitHub-hosted runner
+    [REQ-041] Build LabVIEW build specification using Windows GitHub-hosted runner
 #>
 
 [CmdletBinding()]
@@ -79,14 +79,14 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 try {
-    Write-Verbose "Building PPL with Windows GitHub-hosted runner"
+    Write-Verbose "Building build specification with Windows GitHub-hosted runner"
     $hasVersion = ($Major -ge 0) -and ($Minor -ge 0) -and ($Patch -ge 0) -and ($Build -ge 0)
     
     if ($hasVersion) {
         $versionString = "$Major.$Minor.$Patch.$Build"
-        Write-Information "PPL Version: $versionString" -InformationAction Continue
+        Write-Information "Build Specification Version: $versionString" -InformationAction Continue
     } else {
-        Write-Information "PPL Version setting skipped." -InformationAction Continue
+        Write-Information "Build Specification Version setting skipped." -InformationAction Continue
     }
 
     Write-Information "Commit: $Commit" -InformationAction Continue
@@ -116,7 +116,7 @@ try {
     # Only set build version if Version is provided
     if ($hasVersion) {
         Write-Information "Setting build version to: $versionString..." -InformationAction Continue
-        $helperVI = Join-Path $PSScriptRoot '..' 'build-lvlibp-helpers' 'SetBuildVersionCaller.vi'
+        $helperVI = Join-Path $PSScriptRoot '..' 'build-spec-helpers' 'SetBuildVersionCaller.vi'
         
         if (-not (Test-Path $helperVI)) {
             throw "Helper VI not found at: $helperVI"
@@ -128,9 +128,9 @@ try {
         # 3. TargetName (empty string to use VI default)
         # 4. Version (required when setting version)
         $projectArg = (Resolve-Path $ProjectPath).Path
-        $buildSpecArg = if ($BuildSpecName) { $BuildSpecName } else { '""' }
-        $targetArg = if ($TargetName) { $TargetName } else { '""' }
-        $versionArg = if ($versionString) { $versionString } else { '""' }
+        $buildSpecArg = if ($BuildSpecName) { $BuildSpecName } else { '' }
+        $targetArg = if ($TargetName) { $TargetName } else { '' }
+        $versionArg = if ($versionString) { $versionString } else { '' }
         
         Write-Host "Executing: LabVIEWCLI -OperationName RunVI -LabVIEWPath `"$LabVIEWPath`" -VIPath `"$helperVI`" `"$projectArg`" `"$buildSpecArg`" `"$targetArg`" `"$versionArg`" -Headless"
         
@@ -143,7 +143,7 @@ try {
         
         Write-Information "Build version set successfully" -InformationAction Continue
     } else {
-        Write-Information "Skipping version set " -InformationAction Continue
+        Write-Information "Skipping build specification version set " -InformationAction Continue
     }
 
     # Construct LabVIEWCLI command
@@ -191,6 +191,6 @@ try {
     exit 0
 }
 catch {
-    Write-Error "BuildLvlibpGithubHostedWindows failed: $_"
+    Write-Error "BuildSpecGithubHostedWindows failed: $_"
     exit 1
 }

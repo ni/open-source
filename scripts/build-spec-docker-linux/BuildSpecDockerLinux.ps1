@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Builds the LabVIEW Packed Project Library (.lvlibp) using Linux LabVIEW Docker container.
+    Builds a LabVIEW build specification using Linux LabVIEW Docker container.
 
 .DESCRIPTION
     Executes LabVIEW build specification through LabVIEWCLI inside a Docker container.
@@ -21,16 +21,16 @@
     Name of the LabVIEW build specification to execute. If empty, builds all specifications in the target.
 
 .PARAMETER Major
-    Major version component for the PPL. Optional - if not provided, version setting is skipped.
+    Major version component for the build specification. Optional - if not provided, version setting is skipped.
 
 .PARAMETER Minor
-    Minor version component for the PPL. Optional - if not provided, version setting is skipped.
+    Minor version component for the build specification. Optional - if not provided, version setting is skipped.
 
 .PARAMETER Patch
-    Patch version component for the PPL. Optional - if not provided, version setting is skipped.
+    Patch version component for the build specification. Optional - if not provided, version setting is skipped.
 
 .PARAMETER Build
-    Build number component for the PPL. Optional - if not provided, version setting is skipped.
+    Build number component for the build specification. Optional - if not provided, version setting is skipped.
 
 .PARAMETER Commit
     Commit hash or identifier recorded in the build.
@@ -42,10 +42,10 @@
     Docker image tag (e.g., "2026q1-linux").
 
 .EXAMPLE
-    .\BuildLvlibpDockerLinux.ps1 -MinimumSupportedLVVersion "2026" -SupportedBitness "64" -ProjectPath "lv_icon_editor.lvproj" -TargetName "My Computer" -BuildSpecName "Editor Packed Library" -Major 1 -Minor 0 -Patch 0 -Build 0 -Commit "abc1234"
+    .\BuildSpecDockerLinux.ps1 -MinimumSupportedLVVersion "2026" -SupportedBitness "64" -ProjectPath "lv_icon_editor.lvproj" -TargetName "My Computer" -BuildSpecName "Editor Packed Library" -Major 1 -Minor 0 -Patch 0 -Build 0 -Commit "abc1234"
 
 .NOTES
-    [REQ-039] Build LabVIEW Packed Project Library using Linux Docker container
+    [REQ-039] Build LabVIEW build specification using Linux Docker container
 #>
 
 [CmdletBinding()]
@@ -91,14 +91,14 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 try {
-    Write-Verbose "Building PPL with Linux Docker container"
+    Write-Verbose "Building build specification with Linux Docker container"
     $hasVersion = ($Major -ge 0) -and ($Minor -ge 0) -and ($Patch -ge 0) -and ($Build -ge 0)
     
     if ($hasVersion) {
         $versionString = "$Major.$Minor.$Patch.$Build"
-        Write-Information "PPL Version: $versionString" -InformationAction Continue
+        Write-Information "Build Specification Version: $versionString" -InformationAction Continue
     } else {
-        Write-Information "PPL Version setting skipped." -InformationAction Continue
+        Write-Information "Build Specification Version setting skipped." -InformationAction Continue
     }
     
     if ($Commit) {
@@ -117,7 +117,7 @@ try {
 
     # Get the path to the bash script
     $scriptDir = $PSScriptRoot
-    $buildScript = Join-Path $scriptDir 'build-lvlibp.sh'
+    $buildScript = Join-Path $scriptDir 'build-spec.sh'
     
     if (-not (Test-Path $buildScript)) {
         throw "Build script not found: $buildScript"
@@ -126,7 +126,7 @@ try {
     $actionRoot = Split-Path (Split-Path $scriptDir -Parent) -Parent
     Write-Verbose "Calculated action root from script path: $actionRoot"
 
-    $helperDir = Join-Path $actionRoot 'scripts' 'build-lvlibp-helpers'
+    $helperDir = Join-Path $actionRoot 'scripts' 'build-spec-helpers'
     
     if (-not (Test-Path $helperDir)) {
         throw "Helper VI directory not found: $helperDir"
@@ -142,7 +142,7 @@ try {
     
     # Container paths are always Linux-style
     $containerProjectPath = "/workspace/$ProjectPath"
-    $containerScriptPath = "/tmp/build-lvlibp.sh"
+    $containerScriptPath = "/tmp/build-spec.sh"
 
     # Construct bash command arguments
     $bashArgs = @(
@@ -190,6 +190,6 @@ try {
     exit 0
 }
 catch {
-    Write-Error "BuildLvlibpDockerLinux failed: $_"
+    Write-Error "BuildSpecDockerLinux failed: $_"
     exit 1
 }

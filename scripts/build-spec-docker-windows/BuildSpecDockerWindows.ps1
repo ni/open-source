@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Builds the LabVIEW Packed Project Library (.lvlibp) using Windows LabVIEW Docker container.
+    Builds a LabVIEW build specification using Windows LabVIEW Docker container.
 
 .DESCRIPTION
     Executes LabVIEW build specification through LabVIEWCLI inside a Windows Docker container,
@@ -22,16 +22,16 @@ PARAMETER TargetName
     Name of the LabVIEW build specification to execute. If empty, builds all specifications in the target.
 
 .PARAMETER Major
-    Major version component for the PPL. Optional - if not provided, version setting is skipped.
+    Major version component for the build specification. Optional - if not provided, version setting is skipped.
 
 .PARAMETER Minor
-    Minor version component for the PPL. Optional - if not provided, version setting is skipped.
+    Minor version component for the build specification. Optional - if not provided, version setting is skipped.
 
 .PARAMETER Patch
-    Patch version component for the PPL. Optional - if not provided, version setting is skipped.
+    Patch version component for the build specification. Optional - if not provided, version setting is skipped.
 
 .PARAMETER Build
-    Build number component for the PPL. Optional - if not provided, version setting is skipped.
+    Build number component for the build specification. Optional - if not provided, version setting is skipped.
 
 .PARAMETER Commit
     Commit hash or identifier recorded in the build.
@@ -43,10 +43,10 @@ PARAMETER TargetName
     Docker image tag (e.g., "2026q1-windows").
 
 .EXAMPLE
-    .\BuildLvlibpDockerWindows.ps1 -MinimumSupportedLVVersion "2026" -SupportedBitness "64" -ProjectPath "lv_icon_editor.lvproj" -TargetName "My Computer" -BuildSpecName "Editor Packed Library" -Major 1 -Minor 0 -Patch 0 -Build 0 -Commit "abc1234"
+    .\BuildSpecDockerWindows.ps1 -MinimumSupportedLVVersion "2026" -SupportedBitness "64" -ProjectPath "lv_icon_editor.lvproj" -TargetName "My Computer" -BuildSpecName "Editor Packed Library" -Major 1 -Minor 0 -Patch 0 -Build 0 -Commit "abc1234"
 
 .NOTES
-    [REQ-040] Build LabVIEW Packed Project Library using Windows Docker container
+    [REQ-040] Build LabVIEW build specification using Windows Docker container
 #>
 
 [CmdletBinding()]
@@ -92,14 +92,14 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 try {
-    Write-Verbose "Building PPL with Windows Docker container"
+    Write-Verbose "Building build specification with Windows Docker container"
     $hasVersion = ($Major -ge 0) -and ($Minor -ge 0) -and ($Patch -ge 0) -and ($Build -ge 0)
     
     if ($hasVersion) {
         $versionString = "$Major.$Minor.$Patch.$Build"
-        Write-Information "PPL Version: $versionString" -InformationAction Continue
+        Write-Information "Build Specification Version: $versionString" -InformationAction Continue
     } else {
-        Write-Information "PPL Version setting skipped." -InformationAction Continue
+        Write-Information "Build Specification Version setting skipped." -InformationAction Continue
     }
     
     if ($Commit) {
@@ -118,7 +118,7 @@ try {
 
     # Get the path to the PowerShell build script
     $scriptDir = $PSScriptRoot
-    $buildScript = Join-Path $scriptDir 'build-lvlibp.ps1'
+    $buildScript = Join-Path $scriptDir 'build-spec.ps1'
     
     if (-not (Test-Path $buildScript)) {
         throw "Build script not found: $buildScript"
@@ -127,7 +127,7 @@ try {
     $actionRoot = Split-Path (Split-Path $scriptDir -Parent) -Parent
     Write-Verbose "Calculated action root from script path: $actionRoot"
 
-    $helperDir = Join-Path $actionRoot 'scripts' 'build-lvlibp-helpers'
+    $helperDir = Join-Path $actionRoot 'scripts' 'build-spec-helpers'
     
     if (-not (Test-Path $helperDir)) {
         throw "Helper VI directory not found: $helperDir"
@@ -140,7 +140,7 @@ try {
     # Create temporary directory for script mounting
     $tempDir = Join-Path $env:TEMP "docker-build-$(New-Guid)"
     New-Item -Path $tempDir -ItemType Directory -Force | Out-Null
-    $tempScript = Join-Path $tempDir 'build-lvlibp.ps1'
+    $tempScript = Join-Path $tempDir 'build-spec.ps1'
     Copy-Item -Path $buildScript -Destination $tempScript -Force
     Write-Verbose "Copied build script to: $tempScript"
 
@@ -155,7 +155,7 @@ try {
     
     # Windows container paths
     $containerProjectPath = "C:\workspace\$ProjectPath"
-    $containerScriptPath = "C:\scripts\build-lvlibp.ps1"
+    $containerScriptPath = "C:\scripts\build-spec.ps1"
 
     # Construct PowerShell command arguments
     $scriptArgs = @(
@@ -198,7 +198,7 @@ try {
     exit 0
 }
 catch {
-    Write-Error "BuildLvlibpDockerWindows failed: $_"
+    Write-Error "BuildSpecDockerWindows failed: $_"
     exit 1
 }
 finally {

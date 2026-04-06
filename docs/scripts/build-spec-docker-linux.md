@@ -1,6 +1,6 @@
-# Build Packed Library with Docker Linux 🐳📦
+# Build LabVIEW Build Specification with Docker Linux 🐳📦
 
-Call **`BuildLvlibpDockerLinux.ps1`** to compile LabVIEW packed libraries using LabVIEWCLI inside a Linux Docker container.
+Call **`BuildSpecDockerLinux.ps1`** to compile LabVIEW build specification using LabVIEWCLI inside a Linux Docker container.
 
 ## Inputs
 
@@ -24,7 +24,7 @@ Call **`BuildLvlibpDockerLinux.ps1`** to compile LabVIEW packed libraries using 
 The following example builds using LabVIEW 2026 inside a Linux Docker container.
 
 ```yaml
-- uses: ./.github/actions/build-lvlibp-docker-linux
+- uses: ./.github/actions/build-spec-docker-linux
   with:
     minimum_supported_lv_version: 2026
     supported_bitness: 64
@@ -45,7 +45,7 @@ The following example builds using LabVIEW 2026 inside a Linux Docker container.
 Leave `build_spec_name` empty and provide version to set the same version on all build specs:
 
 ```yaml
-- uses: ./.github/actions/build-lvlibp-docker-linux
+- uses: ./.github/actions/build-spec-docker-linux
   with:
     minimum_supported_lv_version: 2026
     supported_bitness: 64
@@ -67,13 +67,16 @@ Leave `build_spec_name` empty and provide version to set the same version on all
 - **Any version component omitted** (< 0 or not provided):
   - Version setting is skipped
 
+- For **Zip Files**, Version is not set.
+
 ## Requirements
 
 - Docker must be installed and running on the host system
 - The specified Linux Docker image must contain LabVIEWCLI
 - The LabVIEW project file must exist at the specified path
+- The Build specification must be supported in Linux. For more information on build specifications, take a look at the [LabVIEW User Manual](https://www.ni.com/docs/en-US/bundle/labview/page/using-build-specifications.html)
 
-See also: [docs/actions/build-lvlibp-docker-linux.md](../actions/build-lvlibp-docker-linux.md)
+See also: [docs/actions/build-spec-docker-linux.md](../actions/build-spec-docker-linux.md)
 
 ## License
 

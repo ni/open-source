@@ -298,23 +298,23 @@
     },
     {
       "id": "REQ-039",
-      "description": "Build LabVIEW Packed Project Library (.lvlibp) using Linux LabVIEW Docker container with specified version, bitness, and build specification, then rename the artifact with version and commit metadata.",
+      "description": "Build LabVIEW Build Specification using Linux LabVIEW Docker container with specified version, bitness, and build specification, then rename the artifact with version and commit metadata.",
       "tests": [
-        "BuildLvlibpDockerLinux.Workflow.Tests"
+        "BuildSpecDockerLinux.Workflow.Tests"
       ]
     },
     {
       "id": "REQ-040",
-      "description": "Build LabVIEW Packed Project Library (.lvlibp) using Windows LabVIEW Docker container with specified version, bitness, and build specification, then rename the artifact with version and commit metadata.",
+      "description": "Build LabVIEW Build Specification using Windows LabVIEW Docker container with specified version, bitness, and build specification, then rename the artifact with version and commit metadata.",
       "tests": [
-        "BuildLvlibpDockerWindows.Workflow.Tests"
+        "BuildSpecDockerWindows.Workflow.Tests"
       ]
     },
     {
       "id": "REQ-041",
-      "description": "Build LabVIEW Packed Project Library (.lvlibp) using Windows GitHub-hosted runner with locally installed LabVIEW.",
+      "description": "Build LabVIEW Build Specification using Windows GitHub-hosted runner with locally installed LabVIEW.",
       "tests": [
-        "BuildLvlibpGithubHostedWindows.Workflow.Tests"
+        "BuildSpecGithubHostedWindows.Workflow.Tests"
       ]
     },
     {

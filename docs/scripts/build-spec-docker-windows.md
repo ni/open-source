@@ -1,6 +1,6 @@
-# Build Packed Library with Docker Windows 🐳📦
+# Build LabVIEW Build Specification with Docker Windows 🐳📦
 
-Call **`BuildLvlibpDockerWindows.ps1`** to compile LabVIEW packed libraries using LabVIEWCLI inside a Windows Docker container.
+Call **`BuildSpecDockerWindows.ps1`** to compile LabVIEW build specification using LabVIEWCLI inside a Windows Docker container.
 
 ## Inputs
 
@@ -24,7 +24,7 @@ Call **`BuildLvlibpDockerWindows.ps1`** to compile LabVIEW packed libraries usin
 The following example builds using LabVIEW 2026 inside a Windows Docker container with custom version:
 
 ```yaml
-- uses: ./.github/actions/build-lvlibp-docker-windows
+- uses: ./.github/actions/build-spec-docker-windows
   with:
     minimum_supported_lv_version: 2026
     supported_bitness: 64
@@ -45,7 +45,7 @@ The following example builds using LabVIEW 2026 inside a Windows Docker containe
 Build with only required parameters (skips version setting, builds all specifications in "My Computer"):
 
 ```yaml
-- uses: ./.github/actions/build-lvlibp-docker-windows
+- uses: ./.github/actions/build-spec-docker-windows
   with:
     minimum_supported_lv_version: 2026
     supported_bitness: 64
@@ -57,7 +57,7 @@ Build with only required parameters (skips version setting, builds all specifica
 Leave `build_spec_name` empty to build all build specifications under the target:
 
 ```yaml
-- uses: ./.github/actions/build-lvlibp-docker-windows
+- uses: ./.github/actions/build-spec-docker-windows
   with:
     minimum_supported_lv_version: 2026
     supported_bitness: 64
@@ -70,6 +70,8 @@ Leave `build_spec_name` empty to build all build specifications under the target
     build: 1
     commit: ${{ github.sha }}
 ```
+
+- Note: For **Zip Files**, Version is not set.
 
 ## Requirements
 
@@ -85,9 +87,9 @@ This action requires **Windows containers**, which are only available on:
 - Windows Server 2016 or later
 - Windows 10/11 with Docker Desktop configured for Windows containers
 
-For Linux-based builds, use [build-lvlibp-docker-linux](build-lvlibp-docker-linux.md).
+For Linux-based builds, use [build-spec-docker-linux](build-spec-docker-linux.md).
 
-See also: [docs/actions/build-lvlibp-docker-windows.md](../actions/build-lvlibp-docker-windows.md)
+See also: [docs/actions/build-spec-docker-windows.md](../actions/build-spec-docker-windows.md)
 
 ## License
 
