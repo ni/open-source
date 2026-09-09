@@ -15,5 +15,5 @@ jobs:
           vip_lv_version: '2021'
           supported_bitness: '64'
           relative_path: '.'
-          vipc_path: 'scripts/apply-vipc/runner_dependencies.vipc'
+          vipm_toml: 'scripts/apply-vipc/vipm.toml'
           dry_run: true

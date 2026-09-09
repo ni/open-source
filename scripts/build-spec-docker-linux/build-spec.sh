@@ -10,6 +10,8 @@ PROJECT_PATH=""
 TARGET_NAME=""
 BUILD_SPEC_NAME=""
 VERSION=""
+VIPM_TOML=""
+VIPM_LOCK=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -31,6 +33,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --version)
             VERSION="$2"
+            shift 2
+            ;;
+        --vipm-toml)
+            VIPM_TOML="$2"
+            shift 2
+            ;;
+        --vipm-lock)
+            VIPM_LOCK="$2"
             shift 2
             ;;
         *)
@@ -92,6 +102,23 @@ if [[ -n "$VERSION" ]]; then
     echo "Build version set successfully"
 else
     echo "Skipping version set"
+fi
+
+# Install project dependencies from vipm.toml/vipm.lock before building.
+# VIPM_LOCK is optional here: install-vipm-deps.sh auto-detects vipm.lock next
+# to vipm.toml and fails if it's missing, matching the Windows build path.
+if [[ -n "$VIPM_TOML" ]]; then
+    VIPM_HELPER="/helpers/scripts/vipm-common/install-vipm-deps.sh"
+    if [[ ! -f "$VIPM_HELPER" ]]; then
+        echo "Error: VIPM helper not found at $VIPM_HELPER"
+        exit 1
+    fi
+    HELPER_ARGS=(--vipm-toml "$VIPM_TOML")
+    if [[ -n "$VIPM_LOCK" ]]; then
+        HELPER_ARGS+=(--vipm-lock "$VIPM_LOCK")
+    fi
+    chmod +x "$VIPM_HELPER"
+    "$VIPM_HELPER" "${HELPER_ARGS[@]}"
 fi
 
 # Construct LabVIEWCLI command

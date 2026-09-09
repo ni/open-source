@@ -66,6 +66,8 @@ function Invoke-AddTokenToLabVIEW {
 # SupportedBitness: Target LabVIEW bitness (32- or 64-bit).
 # RelativePath: Normalized path to the project root relative to the working directory.
 # VIPCPath: Optional path to the VIPC file.
+# VipmToml: Optional path to a VIPM TOML manifest used to install dependencies via the VIPM CLI.
+# VipmLock: Optional path to a VIPM lock file verified against the manifest before install.
 # DryRun: If set, prints the command instead of executing it.
 # gcliPath: Optional path prepended to PATH for locating the g CLI.
 function Invoke-ApplyVIPC {
@@ -76,6 +78,8 @@ function Invoke-ApplyVIPC {
         [Parameter(Mandatory)] [string] $SupportedBitness,
         [Parameter(Mandatory)] [string] $RelativePath,
         [Parameter()] [string] $VIPCPath,
+        [Parameter()] [string] $VipmToml,
+        [Parameter()] [string] $VipmLock,
         [Parameter()] [switch] $DryRun,
         [Parameter()] [string] $gcliPath
     )
@@ -86,6 +90,8 @@ function Invoke-ApplyVIPC {
         SupportedBitness          = $SupportedBitness
         RelativePath              = $RelativePath
         VIPCPath                  = $VIPCPath
+        VipmToml                  = $VipmToml
+        VipmLock                  = $VipmLock
     }
     return Invoke-OpenSourceActionScript -ScriptSegments @('apply-vipc','ApplyVIPC.ps1') -Arguments $args -DryRun:$DryRun -gcliPath $gcliPath
 }
@@ -241,6 +247,8 @@ function Invoke-BuildLvlibp {
 # Commit: Commit hash or identifier (optional).
 # DockerImage: Docker image name (default: "nationalinstruments/labview").
 # ImageTag: Docker image tag (defaults to "2026q1-linux").
+# VipmToml: Optional path to a VIPM TOML manifest used to install dependencies via the VIPM CLI.
+# VipmLock: Optional path to a VIPM lock file verified against the manifest before install.
 # DryRun: If set, prints the command instead of executing it.
 # gcliPath: Optional path prepended to PATH for locating the g CLI.
 function Invoke-BuildSpecDockerLinux {
@@ -258,6 +266,8 @@ function Invoke-BuildSpecDockerLinux {
         [Parameter()] [string] $Commit = "",
         [Parameter()] [string] $DockerImage = "nationalinstruments/labview",
         [Parameter()] [string] $ImageTag = "2026q1-linux",
+        [Parameter()] [string] $VipmToml = "",
+        [Parameter()] [string] $VipmLock = "",
         [switch] $DryRun,
         [string] $gcliPath
     )
@@ -278,6 +288,8 @@ function Invoke-BuildSpecDockerLinux {
             Commit = $Commit
             DockerImage = $DockerImage
             ImageTag = $ImageTag
+            VipmToml = $VipmToml
+            VipmLock = $VipmLock
         } `
         -DryRun:$DryRun `
         -gcliPath $gcliPath
@@ -298,6 +310,8 @@ function Invoke-BuildSpecDockerLinux {
 # Commit: Commit hash or identifier (optional).
 # DockerImage: Docker image name (default: "nationalinstruments/labview").
 # ImageTag: Docker image tag (defaults to "2026q1-windows").
+# VipmToml: Optional path to a VIPM TOML manifest used to install dependencies via the VIPM CLI.
+# VipmLock: Optional path to a VIPM lock file verified against the manifest before install.
 # DryRun: If set, prints the command instead of executing it.
 # gcliPath: Optional path prepended to PATH for locating the g CLI.
 function Invoke-BuildSpecDockerWindows {
@@ -315,6 +329,8 @@ function Invoke-BuildSpecDockerWindows {
         [Parameter()] [string] $Commit = "",
         [Parameter()] [string] $DockerImage = "nationalinstruments/labview",
         [Parameter()] [string] $ImageTag = "2026q1-windows",
+        [Parameter()] [string] $VipmToml = "",
+        [Parameter()] [string] $VipmLock = "",
         [switch] $DryRun,
         [string] $gcliPath
     )
@@ -335,6 +351,8 @@ function Invoke-BuildSpecDockerWindows {
             Commit = $Commit
             DockerImage = $DockerImage
             ImageTag = $ImageTag
+            VipmToml = $VipmToml
+            VipmLock = $VipmLock
         } `
         -DryRun:$DryRun `
         -gcliPath $gcliPath
@@ -353,6 +371,8 @@ function Invoke-BuildSpecDockerWindows {
 # Patch: Patch version component (optional, skips version setting if < 0).
 # Build: Build number component (optional, skips version setting if < 0).
 # Commit: Commit hash or identifier (optional).
+# VipmToml: Optional path to a VIPM TOML manifest used to install dependencies via the VIPM CLI.
+# VipmLock: Optional path to a VIPM lock file verified against the manifest before install.
 # DryRun: If set, prints the command instead of executing it.
 # gcliPath: Optional path prepended to PATH for locating the g CLI.
 function Invoke-BuildSpecGithubHostedWindows {
@@ -368,6 +388,8 @@ function Invoke-BuildSpecGithubHostedWindows {
         [Parameter()] [int] $Patch = -1,
         [Parameter()] [int] $Build = -1,
         [Parameter()] [string] $Commit = "",
+        [Parameter()] [string] $VipmToml = "",
+        [Parameter()] [string] $VipmLock = "",
         [switch] $DryRun,
         [string] $gcliPath
     )
@@ -386,6 +408,8 @@ function Invoke-BuildSpecGithubHostedWindows {
             Patch = $Patch
             Build = $Build
             Commit = $Commit
+            VipmToml = $VipmToml
+            VipmLock = $VipmLock
         } `
         -DryRun:$DryRun `
         -gcliPath $gcliPath

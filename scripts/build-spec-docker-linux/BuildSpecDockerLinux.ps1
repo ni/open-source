@@ -84,7 +84,13 @@ param(
     [string]$DockerImage = "nationalinstruments/labview",
 
     [Parameter(Mandatory = $false)]
-    [string]$ImageTag = "2026q1-linux"
+    [string]$ImageTag = "2026q1-linux",
+
+    [Parameter(Mandatory = $false)]
+    [string]$VipmToml = "",
+
+    [Parameter(Mandatory = $false)]
+    [string]$VipmLock = ""
 )
 
 Set-StrictMode -Version Latest
@@ -160,6 +166,17 @@ try {
     
     if ($hasVersion) {
         $bashArgs += "--version", "'$versionString'"
+    }
+
+    # Workspace is mounted at /workspace, so manifest paths are repo-relative.
+    if (-not [string]::IsNullOrWhiteSpace($VipmToml)) {
+        $bashArgs += "--vipm-toml", "'/workspace/$VipmToml'"
+    }
+
+    # Optional: install-vipm-deps.sh auto-detects vipm.lock next to vipm.toml
+    # and fails if it's missing when not passed explicitly here.
+    if (-not [string]::IsNullOrWhiteSpace($VipmLock)) {
+        $bashArgs += "--vipm-lock", "'/workspace/$VipmLock'"
     }
 
     $bashCommand = "chmod +x $containerScriptPath && $containerScriptPath $($bashArgs -join ' ')"

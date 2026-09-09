@@ -1,0 +1,25 @@
+name: Refresh VIPM Lock
+
+on:
+  workflow_dispatch:
+
+jobs:
+  refresh-vipm-lock:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+      - name: Generate or refresh vipm.lock
+        shell: pwsh
+        env:
+          VIPM_SERIAL_NUMBER: ${{ secrets.VIPM_SERIAL_NUMBER }}
+          VIPM_FULL_NAME: ${{ secrets.VIPM_FULL_NAME }}
+          VIPM_EMAIL: ${{ secrets.VIPM_EMAIL }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          scripts/vipm-common/New-VipmLock.ps1 -VipmToml 'scripts/apply-vipc/vipm.toml'
+      - name: Upload vipm.lock artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: vipm-lock
+          path: 'scripts/apply-vipc/vipm.lock'
+          if-no-files-found: error

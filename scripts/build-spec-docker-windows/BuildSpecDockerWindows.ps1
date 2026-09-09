@@ -85,7 +85,13 @@ param(
     [string]$DockerImage = "nationalinstruments/labview",
 
     [Parameter(Mandatory = $false)]
-    [string]$ImageTag = "2026q1-windows"
+    [string]$ImageTag = "2026q1-windows",
+
+    [Parameter(Mandatory = $false)]
+    [string]$VipmToml = "",
+
+    [Parameter(Mandatory = $false)]
+    [string]$VipmLock = ""
 )
 
 Set-StrictMode -Version Latest
@@ -173,6 +179,15 @@ try {
 
     if ($hasVersion) {
         $scriptArgs += "-Version", "`"$versionString`""
+    }
+
+    # Workspace is mounted at C:\workspace, so manifest paths are repo-relative.
+    if (-not [string]::IsNullOrWhiteSpace($VipmToml)) {
+        $scriptArgs += "-VipmToml", "`"C:\workspace\$VipmToml`""
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($VipmLock)) {
+        $scriptArgs += "-VipmLock", "`"C:\workspace\$VipmLock`""
     }
 
     Write-Information "Executing build script in Windows Docker container..." -InformationAction Continue

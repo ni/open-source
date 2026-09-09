@@ -16,6 +16,12 @@ inputs:
   vipc_path:
     description: 'Path to the VIPC file.'
     required: false
+  vipm_toml:
+    description: 'Path to a vipm.toml manifest. When set, dependencies are installed via the VIPM CLI instead of a .vipc.'
+    required: false
+  vipm_lock:
+    description: 'Path to a vipm.lock file to verify against the manifest before install.'
+    required: false
   gcli_path:
     description: 'Optional path to the g-cli executable.'
     required: false
@@ -44,6 +50,8 @@ runs:
           RelativePath              = '${{ inputs.relative_path }}'
         }
         if ('${{ inputs.vipc_path }}') { $args['VIPCPath'] = '${{ inputs.vipc_path }}' }
+        if ('${{ inputs.vipm_toml }}') { $args['VipmToml'] = '${{ inputs.vipm_toml }}' }
+        if ('${{ inputs.vipm_lock }}') { $args['VipmLock'] = '${{ inputs.vipm_lock }}' }
         if ('${{ inputs.gcli_path }}') { $args['gcliPath'] = '${{ inputs.gcli_path }}' }
         $params = @{
           ActionName = 'apply-vipc'

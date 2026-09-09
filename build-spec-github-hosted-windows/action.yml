@@ -34,6 +34,14 @@ inputs:
     description: 'Commit hash or identifier recorded in the build.'
     required: false
     default: ''
+  vipm_toml:
+    description: 'Path to a vipm.toml manifest. When set, dependencies are installed via the VIPM CLI.'
+    required: false
+    default: ''
+  vipm_lock:
+    description: 'Path to a vipm.lock file to verify against the manifest before install.'
+    required: false
+    default: ''
   working_directory:
     description: 'Working directory where the action will run.'
     required: false
@@ -67,6 +75,8 @@ runs:
         if ('${{ inputs.minor }}') { $args['Minor'] = [int]'${{ inputs.minor }}' }
         if ('${{ inputs.patch }}') { $args['Patch'] = [int]'${{ inputs.patch }}' }
         if ('${{ inputs.build }}') { $args['Build'] = [int]'${{ inputs.build }}' }
+        if ('${{ inputs.vipm_toml }}') { $args['VipmToml'] = '${{ inputs.vipm_toml }}' }
+        if ('${{ inputs.vipm_lock }}') { $args['VipmLock'] = '${{ inputs.vipm_lock }}' }
         
         $params = @{
           ActionName = 'build-spec-github-hosted-windows'

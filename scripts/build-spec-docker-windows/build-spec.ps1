@@ -24,7 +24,13 @@ param(
     [string]$BuildSpecName = "",
 
     [Parameter(Mandatory = $false)]
-    [string]$Version = ""
+    [string]$Version = "",
+
+    [Parameter(Mandatory = $false)]
+    [string]$VipmToml = "",
+
+    [Parameter(Mandatory = $false)]
+    [string]$VipmLock = ""
 )
 
 Set-StrictMode -Version Latest
@@ -64,6 +70,18 @@ if ($Version) {
     Write-Host "Build version set successfully"
 } else {
     Write-Host "Skipping build specification version set - using version from build spec(s)"
+}
+
+# Install project dependencies from vipm.toml/vipm.lock before building
+if ($VipmToml) {
+    $vipmHelper = "C:\actions\scripts\vipm-common\Invoke-VipmInstall.ps1"
+    if (-not (Test-Path $vipmHelper)) {
+        throw "VIPM helper not found at: $vipmHelper"
+    }
+    $helperParams = @{ VipmToml = $VipmToml }
+    if ($VipmLock) { $helperParams['VipmLock'] = $VipmLock }
+    & $vipmHelper @helperParams
+    if ($LASTEXITCODE -ne 0) { throw "VIPM dependency installation failed (exit code $LASTEXITCODE)." }
 }
 
 # Construct LabVIEWCLI command

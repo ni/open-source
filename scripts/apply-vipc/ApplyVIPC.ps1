@@ -13,8 +13,47 @@ Param (
     [string]$VIP_LVVersion,
     [string]$SupportedBitness,
     [string]$RelativePath,
-    [string]$VIPCPath
+    [string]$VIPCPath,
+    [string]$VipmToml,
+    [string]$VipmLock
 )
+
+# Auto-detect a vipm.toml alongside this script when one isn't provided explicitly.
+if (-not $VipmToml) {
+    $defaultToml = Join-Path $PSScriptRoot 'vipm.toml'
+    if (Test-Path $defaultToml) {
+        $VipmToml = $defaultToml
+        Write-Verbose "Auto-detected VipmToml: $VipmToml"
+    }
+}
+
+# Prefer vipm.toml/vipm.lock when provided; delegates to the shared VIPM helper.
+if ($VipmToml) {
+    $ResolvedRelativePath = Resolve-Path -Path $RelativePath -ErrorAction Stop
+    if ([System.IO.Path]::IsPathRooted($VipmToml)) {
+        $tomlPath = $VipmToml
+    } else {
+        $tomlPath = Join-Path -Path $ResolvedRelativePath -ChildPath $VipmToml
+    }
+    $helperParams = @{ VipmToml = $tomlPath }
+    if ($VipmLock) {
+        if ([System.IO.Path]::IsPathRooted($VipmLock)) {
+            $helperParams['VipmLock'] = $VipmLock
+        } else {
+            $helperParams['VipmLock'] = Join-Path -Path $ResolvedRelativePath -ChildPath $VipmLock
+        }
+    } else {
+        $defaultLock = Join-Path (Split-Path -Parent $tomlPath) 'vipm.lock'
+        if (Test-Path $defaultLock) { $helperParams['VipmLock'] = $defaultLock }
+    }
+    $vipmHelper = Join-Path $PSScriptRoot '..' 'vipm-common' 'Invoke-VipmInstall.ps1'
+    if (-not (Test-Path $vipmHelper)) {
+        Write-Error "VIPM helper not found at: $vipmHelper"
+        exit 1
+    }
+    & $vipmHelper @helperParams
+    exit $LASTEXITCODE
+}
 
 # Auto-detect the VIPC file if one isn't provided
 if (-not $VIPCPath) {

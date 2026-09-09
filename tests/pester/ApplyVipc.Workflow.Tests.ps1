@@ -28,7 +28,7 @@ Describe 'ApplyVipc.DryRunTrue.Workflow' {
         $applyStep.with.vip_lv_version | Should -Be '2021'
         $applyStep.with.supported_bitness | Should -Be '64'
         $applyStep.with.relative_path | Should -Be '.'
-        $applyStep.with.vipc_path | Should -Be 'scripts/apply-vipc/runner_dependencies.vipc'
+        $applyStep.with.vipm_toml | Should -Be 'scripts/apply-vipc/vipm.toml'
         $applyStep.with.dry_run | Should -Be $true
     }
 }

@@ -40,7 +40,6 @@ jobs:
       - run: npm run link:check
       - run: npm run derive:registry
       - run: git diff --exit-code -- dispatchers.json
-      - run: npm run check:traceability
   ps-ci:
     needs: release-check
     strategy:
@@ -56,6 +55,7 @@ jobs:
             runs-on: self-hosted-windows-lv
             runner_type: default
     runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 30
     env:
       RUNNER_TYPE: ${{ matrix.runner_type }}
     steps:
@@ -85,6 +85,10 @@ jobs:
         run: |
           if (-not (Get-Module -ListAvailable -Name Pester |
                     Where-Object { $_.Version -ge [Version]'5.7.1' })) {
+            if (-not (Get-PackageProvider -Name NuGet -ListAvailable -ErrorAction SilentlyContinue)) {
+              Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser
+            }
+            Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
             Remove-Module Pester -ErrorAction SilentlyContinue
             Install-Module -Name Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Force -SkipPublisherCheck
           }
@@ -132,6 +136,7 @@ jobs:
           DISPATCHER_REGISTRY: dispatchers.json
           EVIDENCE_DIR: artifacts/evidence
       - run: npx tsx scripts/generate-traceability-matrix.ts
+      - run: npm run check:traceability
       - run: cat artifacts/linux/traceability-matrix.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: ${{ (success() || failure()) && !cancelled() }}
