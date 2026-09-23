@@ -53,7 +53,6 @@ jobs:
                 vipm activate --serial-number "$VIPM_SERIAL_NUMBER" --name "$VIPM_FULL_NAME" --email "$VIPM_EMAIL"
               fi
 
-              vipm package-list-refresh
               cd scripts/apply-vipc
               vipm lock
           VIPM_SCRIPT
