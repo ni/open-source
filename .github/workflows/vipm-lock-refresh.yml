@@ -25,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          docker run --rm \
+          docker run --rm -i \
             --volume "${PWD}:/workspace" \
             --workdir /workspace \
             -e VIPM_SERIAL_NUMBER="${VIPM_SERIAL_NUMBER}" \
