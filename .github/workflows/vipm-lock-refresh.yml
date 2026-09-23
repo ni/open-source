@@ -1,0 +1,67 @@
+name: Refresh VIPM Lock
+
+on:
+  pull_request:
+    branches: [actions]
+    paths:
+      - scripts/apply-vipc/vipm.toml
+      - .github/workflows/vipm-lock-refresh.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  refresh-vipm-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+      - name: Generate vipm.lock
+        shell: bash
+        env:
+          VIPM_SERIAL_NUMBER: ${{ secrets.VIPM_SERIAL_NUMBER }}
+          VIPM_FULL_NAME: ${{ secrets.VIPM_FULL_NAME }}
+          VIPM_EMAIL: ${{ secrets.VIPM_EMAIL }}
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            --volume "${PWD}:/workspace" \
+            --workdir /workspace \
+            -e VIPM_SERIAL_NUMBER="${VIPM_SERIAL_NUMBER}" \
+            -e VIPM_FULL_NAME="${VIPM_FULL_NAME}" \
+            -e VIPM_EMAIL="${VIPM_EMAIL}" \
+            nationalinstruments/labview:latest-linux \
+            bash -s <<'VIPM_SCRIPT'
+              set -euo pipefail
+
+              apt-get update
+              apt-get install -y wget ca-certificates xvfb
+
+              if ! command -v vipm >/dev/null 2>&1; then
+                wget -O /tmp/vipm.deb "https://traffic.libsyn.com/secure/jkinc/vipm_26.3.1-4025_amd64.deb"
+                apt-get install -y /tmp/vipm.deb
+              fi
+
+              export DISPLAY=:99
+              export VIPM_TIMEOUT=500
+              Xvfb "$DISPLAY" -screen 0 1280x720x24 -ac +extension GLX +render -noreset >/tmp/xvfb.log 2>&1 &
+
+              vipm --version
+
+              if [ -n "${VIPM_SERIAL_NUMBER:-}" ]; then
+                vipm activate --serial-number "$VIPM_SERIAL_NUMBER" --name "$VIPM_FULL_NAME" --email "$VIPM_EMAIL"
+              fi
+
+              vipm package-list-refresh
+              cd scripts/apply-vipc
+              vipm lock
+          VIPM_SCRIPT
+
+          test -f scripts/apply-vipc/vipm.lock
+      - name: Upload vipm.lock artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: vipm-lock
+          path: scripts/apply-vipc/vipm.lock
+          if-no-files-found: error
