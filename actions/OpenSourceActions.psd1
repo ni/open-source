@@ -1,6 +1,6 @@
 @{
   RootModule            = 'OpenSourceActions.psm1'
-  ModuleVersion         = '1.0.0'
+  ModuleVersion         = '1.1.0'
   GUID                  = '8c0a64c5-6a52-4d7e-9f74-8f79f21f1b2c'
   Author                = 'LabVIEW Community CI/CD'
   CompanyName           = 'LabVIEW Community'
@@ -22,6 +22,7 @@
     'Invoke-CloseLabVIEW'
     'Invoke-ConfigureLabview'
     'Invoke-GenerateReleaseNotes'
+    'Invoke-GenerateSbom'
     'Invoke-MissingInProject'
     'Invoke-ModifyVIPBDisplayInfo'
     'Invoke-PrepareLabVIEWSource'
@@ -41,6 +42,7 @@
     PSData = @{
       ReleaseNotes = @(
         '1.0.0 - Initial release: adapters for apply-vipc, build-lvlibp, missing-in-project, run-unit-tests; Format-UnitTestReport helper; discovery flags; DryRun; cross-platform g-cli support.'
+        '1.1.0 - Add generate-sbom adapter: minimal CycloneDX SBOM generation via vipm sbom, assuming VIPM is already installed/activated on the runner.'
       )
     }
   }

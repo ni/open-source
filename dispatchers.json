@@ -583,6 +583,69 @@
       }
     }
   },
+  "Invoke-GenerateSbom": {
+    "description": "Generates a CycloneDX SBOM for a LabVIEW build spec using `vipm sbom`. Assumes VIPM CLI is already installed/activated and LabVIEW is available on the runner; the caller is responsible for that (same as ni/labview-icon-editor#540's own \"Install VIPM CLI\" step). LvprojPath: Path to the .lvproj file to scan. LabVIEWVersion: LabVIEW version (YYYY). LabVIEWBitness: \"32\" or \"64\". BuildSpecName: Name of the build specification to scope the SBOM to. TargetName: LabVIEW project target containing the build spec (default: \"My Computer\"). ProductName: Name recorded in the SBOM's metadata.component. ProductVersion: Version recorded in the SBOM's metadata.component. OutputPath: Output file path for the generated SBOM. Format: SBOM output format (default: \"cyclonedx\"). SchemaVersion: CycloneDX schema version (default: \"1.5\"). DryRun: If set, prints the command instead of executing it.",
+    "parameters": {
+      "BuildSpecName": {
+        "type": "string",
+        "required": true,
+        "description": "Name of the build specification to scope the SBOM to"
+      },
+      "DryRun": {
+        "type": "boolean",
+        "required": false,
+        "description": "If set, prints the command instead of executing it"
+      },
+      "Format": {
+        "type": "string",
+        "required": false,
+        "default": "cyclonedx",
+        "description": "SBOM output format (default: \"cyclonedx\")"
+      },
+      "LabVIEWBitness": {
+        "type": "string",
+        "required": true,
+        "description": "\"32\" or \"64\""
+      },
+      "LabVIEWVersion": {
+        "type": "string",
+        "required": true,
+        "description": "LabVIEW version (YYYY)"
+      },
+      "LvprojPath": {
+        "type": "string",
+        "required": true,
+        "description": "Path to the"
+      },
+      "OutputPath": {
+        "type": "string",
+        "required": true,
+        "description": "Output file path for the generated SBOM"
+      },
+      "ProductName": {
+        "type": "string",
+        "required": true,
+        "description": "Name recorded in the SBOM's metadata"
+      },
+      "ProductVersion": {
+        "type": "string",
+        "required": true,
+        "description": "Version recorded in the SBOM's metadata"
+      },
+      "SchemaVersion": {
+        "type": "string",
+        "required": false,
+        "default": "1.5",
+        "description": "CycloneDX schema version (default: \"1"
+      },
+      "TargetName": {
+        "type": "string",
+        "required": false,
+        "default": "My Computer",
+        "description": "LabVIEW project target containing the build spec (default: \"My Computer\")"
+      }
+    }
+  },
   "Invoke-MissingInProject": {
     "description": "Lists files referenced in a LabVIEW project that are missing on disk. LVVersion: LabVIEW version of the project. SupportedBitness: Target LabVIEW bitness (32- or 64-bit). ProjectFile: Path to the .lvproj file to analyze. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
     "parameters": {

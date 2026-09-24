@@ -1,0 +1,76 @@
+name: 'Generate SBOM'
+description: 'Generates a CycloneDX SBOM for a LabVIEW build spec using vipm sbom. Assumes VIPM CLI is already installed/activated on the runner.'
+inputs:
+  lvproj_path:
+    description: 'Path to the .lvproj file to scan.'
+    required: true
+  labview_version:
+    description: 'LabVIEW version (YYYY).'
+    required: true
+  labview_bitness:
+    description: '"32" or "64".'
+    required: true
+  build_spec_name:
+    description: 'Name of the build specification to scope the SBOM to.'
+    required: true
+  target_name:
+    description: 'LabVIEW project target containing the build spec.'
+    default: 'My Computer'
+    required: false
+  product_name:
+    description: 'Name recorded in the SBOM metadata.component.'
+    required: true
+  product_version:
+    description: 'Version recorded in the SBOM metadata.component.'
+    required: true
+  output_path:
+    description: 'Output file path for the generated SBOM.'
+    required: true
+  format:
+    description: 'SBOM output format.'
+    default: 'cyclonedx'
+    required: false
+  schema_version:
+    description: 'CycloneDX schema version.'
+    default: '1.5'
+    required: false
+  working_directory:
+    description: 'Working directory where the action will run.'
+    required: false
+  log_level:
+    description: 'Verbosity level (ERROR|WARN|INFO|DEBUG).'
+    default: 'INFO'
+    required: false
+  dry_run:
+    description: 'If true, simulate the action without side effects.'
+    default: false
+    required: false
+runs:
+  using: 'composite'
+  steps:
+    - name: Dispatch generate-sbom
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $args = @{
+          LvprojPath     = '${{ inputs.lvproj_path }}'
+          LabVIEWVersion = '${{ inputs.labview_version }}'
+          LabVIEWBitness = '${{ inputs.labview_bitness }}'
+          BuildSpecName  = '${{ inputs.build_spec_name }}'
+          TargetName     = '${{ inputs.target_name }}'
+          ProductName    = '${{ inputs.product_name }}'
+          ProductVersion = '${{ inputs.product_version }}'
+          OutputPath     = '${{ inputs.output_path }}'
+          Format         = '${{ inputs.format }}'
+          SchemaVersion  = '${{ inputs.schema_version }}'
+        }
+        $params = @{
+          ActionName = 'generate-sbom'
+          Args       = $args
+          LogLevel   = '${{ inputs.log_level }}'
+        }
+        if ('${{ inputs.dry_run }}' -eq 'true') { $params['DryRun'] = $true }
+        if ('${{ inputs.working_directory }}') { $params['WorkingDirectory'] = '${{ inputs.working_directory }}' }
+        $script = Join-Path $env:GITHUB_ACTION_PATH '..' 'actions' 'common-dispatch.ps1'
+        & $script @params
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
