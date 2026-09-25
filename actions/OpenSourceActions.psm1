@@ -805,3 +805,54 @@ function Invoke-ViaLvDocker {
     }
     return Invoke-OpenSourceActionScript -ScriptSegments @('via-lv-docker','RunViaLvDocker.ps1') -Arguments $args -DryRun:$DryRun -gcliPath $gcliPath
 }
+
+# Generates a CycloneDX SBOM for a LabVIEW build spec using `vipm sbom`.
+# Assumes VIPM CLI is already installed/activated and LabVIEW is available on
+# the runner; the caller is responsible for that (same as ni/labview-icon-editor#540's
+# own "Install VIPM CLI" step).
+# LvprojPath: Path to the .lvproj file to scan.
+# LabVIEWVersion: LabVIEW version (YYYY).
+# LabVIEWBitness: "32" or "64".
+# BuildSpecName: Name of the build specification to scope the SBOM to.
+# TargetName: LabVIEW project target containing the build spec (default: "My Computer").
+# ProductName: Name recorded in the SBOM's metadata.component.
+# ProductVersion: Version recorded in the SBOM's metadata.component.
+# OutputPath: Output file path for the generated SBOM.
+# Format: SBOM output format (default: "cyclonedx").
+# SchemaVersion: CycloneDX schema version (default: "1.5").
+# DryRun: If set, prints the command instead of executing it.
+function Invoke-GenerateSbom {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [string] $LvprojPath,
+        [Parameter(Mandatory)] [string] $LabVIEWVersion,
+        [Parameter(Mandatory)] [string] $LabVIEWBitness,
+        [Parameter(Mandatory)] [string] $BuildSpecName,
+        [Parameter()] [string] $TargetName = "My Computer",
+        [Parameter(Mandatory)] [string] $ProductName,
+        [Parameter(Mandatory)] [string] $ProductVersion,
+        [Parameter(Mandatory)] [string] $OutputPath,
+        [Parameter()] [string] $Format = "cyclonedx",
+        [Parameter()] [string] $SchemaVersion = "1.5",
+        [switch] $DryRun
+    )
+    Write-Information "Invoking GenerateSbom" -InformationAction Continue
+
+    $result = Invoke-OpenSourceActionScript `
+        -ScriptSegments @('generate-sbom', 'GenerateSbom.ps1') `
+        -Arguments @{
+            LvprojPath     = $LvprojPath
+            LabVIEWVersion = $LabVIEWVersion
+            LabVIEWBitness = $LabVIEWBitness
+            BuildSpecName  = $BuildSpecName
+            TargetName     = $TargetName
+            ProductName    = $ProductName
+            ProductVersion = $ProductVersion
+            OutputPath     = $OutputPath
+            Format         = $Format
+            SchemaVersion  = $SchemaVersion
+        } `
+        -DryRun:$DryRun
+
+    return $result
+}
