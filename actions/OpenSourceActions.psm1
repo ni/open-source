@@ -824,13 +824,13 @@ function Invoke-ViaLvDocker {
 function Invoke-GenerateSbom {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)] [string] $LvprojPath,
-        [Parameter(Mandatory)] [string] $LabVIEWVersion,
-        [Parameter(Mandatory)] [string] $LabVIEWBitness,
-        [Parameter(Mandatory)] [string] $BuildSpecName,
+        [Parameter(Mandatory)][Alias('ProjectPath', 'ProjectFile')] [string] $LvprojPath,
+        [Parameter(Mandatory)][Alias('LVVersion', 'MinimumSupportedLVVersion')] [string] $LabVIEWVersion,
+        [Parameter(Mandatory)][Alias('LVBitness', 'SupportedBitness')] [string] $LabVIEWBitness,
+        [Parameter(Mandatory)][Alias('Build_Spec')] [string] $BuildSpecName,
         [Parameter()] [string] $TargetName = "My Computer",
-        [Parameter(Mandatory)] [string] $ProductName,
-        [Parameter(Mandatory)] [string] $ProductVersion,
+        [Parameter()] [string] $ProductName = "",
+        [Parameter()] [string] $ProductVersion = "",
         [Parameter(Mandatory)] [string] $OutputPath,
         [Parameter()] [string] $Format = "cyclonedx",
         [Parameter()] [string] $SchemaVersion = "1.5",

@@ -624,12 +624,14 @@
       },
       "ProductName": {
         "type": "string",
-        "required": true,
+        "required": false,
+        "default": "",
         "description": "Name recorded in the SBOM's metadata"
       },
       "ProductVersion": {
         "type": "string",
-        "required": true,
+        "required": false,
+        "default": "",
         "description": "Version recorded in the SBOM's metadata"
       },
       "SchemaVersion": {

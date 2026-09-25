@@ -203,6 +203,26 @@ Generates a release notes file from the project's metadata. OutputPath: Path whe
 pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-GenerateReleaseNotes -ArgsJson '{}'
 ```
 
+#### Invoke-GenerateSbom
+Generates a CycloneDX SBOM for a LabVIEW build spec using `vipm sbom`. Assumes VIPM CLI is already installed/activated and LabVIEW is available on the runner; the caller is responsible for that (same as ni/labview-icon-editor#540's own "Install VIPM CLI" step). LvprojPath: Path to the .lvproj file to scan. LabVIEWVersion: LabVIEW version (YYYY). LabVIEWBitness: "32" or "64". BuildSpecName: Name of the build specification to scope the SBOM to. TargetName: LabVIEW project target containing the build spec (default: "My Computer"). ProductName: Name recorded in the SBOM's metadata.component. ProductVersion: Version recorded in the SBOM's metadata.component. OutputPath: Output file path for the generated SBOM. Format: SBOM output format (default: "cyclonedx"). SchemaVersion: CycloneDX schema version (default: "1.5"). DryRun: If set, prints the command instead of executing it.
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| BuildSpecName | string | true |  | Name of the build specification to scope the SBOM to |
+| DryRun | boolean | false |  | If set, prints the command instead of executing it |
+| Format | string | false | cyclonedx | SBOM output format (default: "cyclonedx") |
+| LabVIEWBitness | string | true |  | "32" or "64" |
+| LabVIEWVersion | string | true |  | LabVIEW version (YYYY) |
+| LvprojPath | string | true |  | Path to the |
+| OutputPath | string | true |  | Output file path for the generated SBOM |
+| ProductName | string | false |  | Name recorded in the SBOM's metadata |
+| ProductVersion | string | false |  | Version recorded in the SBOM's metadata |
+| SchemaVersion | string | false | 1.5 | CycloneDX schema version (default: "1 |
+| TargetName | string | false | My Computer | LabVIEW project target containing the build spec (default: "My Computer") |
+
+```powershell
+pwsh ./actions/Invoke-OSAction.ps1 -ActionName Invoke-GenerateSbom -ArgsJson '{}'
+```
+
 #### Invoke-MissingInProject
 Lists files referenced in a LabVIEW project that are missing on disk. LVVersion: LabVIEW version of the project. SupportedBitness: Target LabVIEW bitness (32- or 64-bit). ProjectFile: Path to the .lvproj file to analyze. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.
 | Parameter | Type | Required | Default | Description |
@@ -575,6 +595,23 @@ server.viscripting.ShowScriptingOperationsInEditor=TRUE
 | --- | --- | --- | --- | --- |
 | output_path | string | false | Tooling/deployment/release_notes.md | Path to output markdown file. |
 | gcli_path | string | false |  | Optional path to the g-cli executable. |
+| working_directory | string | false |  | Working directory where the action will run. |
+| log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
+| dry_run | string | false | false | If true, simulate the action without side effects. |
+
+#### generate-sbom
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| lvproj_path | string | true |  | Path to the .lvproj file to scan. |
+| labview_version | string | true |  | LabVIEW version (YYYY). |
+| labview_bitness | string | true |  | "32" or "64". |
+| build_spec_name | string | true |  | Name of the build specification to scope the SBOM to. |
+| target_name | string | false | My Computer | LabVIEW project target containing the build spec. |
+| product_name | string | true |  | Name recorded in the SBOM metadata.component. |
+| product_version | string | true |  | Version recorded in the SBOM metadata.component. |
+| output_path | string | true |  | Output file path for the generated SBOM. |
+| format | string | false | cyclonedx | SBOM output format. |
+| schema_version | string | false | 1.5 | CycloneDX schema version. |
 | working_directory | string | false |  | Working directory where the action will run. |
 | log_level | string | false | INFO | Verbosity level (ERROR|WARN|INFO|DEBUG). |
 | dry_run | string | false | false | If true, simulate the action without side effects. |
