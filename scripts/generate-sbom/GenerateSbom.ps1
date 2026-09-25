@@ -3,11 +3,12 @@
     Generates a CycloneDX SBOM for a LabVIEW build spec using `vipm sbom`.
 
 .DESCRIPTION
-    Minimal wrapper: assumes VIPM CLI is already installed/activated and LabVIEW
-    is available on the runner (the consumer's workflow is responsible for that,
-    same as ni/labview-icon-editor#540's own "Install VIPM CLI" step). Just runs
-    `vipm sbom` with the given flags and verifies the output file exists.
-    See docs.vipm.io/cli/command-reference#vipm-sbom.
+    Minimal wrapper: requires VIPM CLI to be available on the runner and LabVIEW
+    to be available for the target project. The reusable workflow installs VIPM
+    before invoking this script; callers that invoke the action directly are
+    responsible for installing VIPM themselves. Just runs `vipm sbom` with the
+    given flags and verifies the output file exists. See
+    docs.vipm.io/cli/command-reference#vipm-sbom.
 
 .PARAMETER LvprojPath
     Path to the .lvproj file to scan.

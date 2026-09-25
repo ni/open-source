@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Generate a CycloneDX Software Bill of Materials (SBOM) for a LabVIEW build specification using `vipm sbom`. Minimal implementation ported from [ni/labview-icon-editor#540](https://github.com/ni/labview-icon-editor/pull/540): assumes VIPM CLI is already installed/activated and LabVIEW is available on the runner. Additional execution modes (Docker-based builds, headless LabVIEW/VI Server warm-up) can be added later if a real consumer requires them.
+Generate a CycloneDX Software Bill of Materials (SBOM) for a LabVIEW build specification using `vipm sbom`. Minimal implementation ported from [ni/labview-icon-editor#540](https://github.com/ni/labview-icon-editor/pull/540): requires VIPM CLI to be available on the runner and LabVIEW to be available for the target project. The reusable workflow installs VIPM itself, and additional execution modes (Docker-based builds, headless LabVIEW/VI Server warm-up) can be added later if a real consumer requires them.
 
 ## Parameters
 

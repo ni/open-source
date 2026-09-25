@@ -1,5 +1,5 @@
 name: 'Generate SBOM'
-description: 'Generates a CycloneDX SBOM for a LabVIEW build spec using vipm sbom. Assumes VIPM CLI is already installed/activated on the runner.'
+description: 'Generates a CycloneDX SBOM for a LabVIEW build spec using vipm sbom. Requires VIPM CLI to be available on the runner; the reusable workflow installs it automatically.'
 inputs:
   lvproj_path:
     description: 'Path to the .lvproj file to scan.'
