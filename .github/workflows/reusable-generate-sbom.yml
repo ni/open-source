@@ -1,0 +1,85 @@
+name: Reusable - Generate SBOM
+
+on:
+  workflow_call:
+    inputs:
+      lvproj_path:
+        description: 'Path to the .lvproj file to scan.'
+        required: true
+        type: string
+      labview_version:
+        required: true
+        type: string
+      labview_bitness:
+        required: true
+        type: string
+      build_spec_name:
+        required: true
+        type: string
+      target_name:
+        required: false
+        type: string
+        default: 'My Computer'
+      product_name:
+        required: true
+        type: string
+      product_version:
+        required: true
+        type: string
+      output_path:
+        required: true
+        type: string
+      format:
+        required: false
+        type: string
+        default: 'cyclonedx'
+      schema_version:
+        required: false
+        type: string
+        default: '1.5'
+      artifact_name:
+        description: 'Name for the uploaded SBOM artifact.'
+        required: false
+        type: string
+        default: 'sbom'
+
+permissions:
+  contents: read
+
+jobs:
+  generate-sbom:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+      # workflow_call runs in its own fresh job, so VIPM must be installed here
+      # even if the caller's own job already has it - self-contained by design.
+      - name: Install VIPM CLI
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri 'https://traffic.libsyn.com/secure/jkinc/vipm-26.3.4025-windows-setup.exe' -OutFile "$env:TEMP\vipm-setup.exe"
+          Start-Process -Wait -FilePath "$env:TEMP\vipm-setup.exe" -ArgumentList '/exenoui /qn'
+          Remove-Item "$env:TEMP\vipm-setup.exe" -Force
+          $vipmExe = Get-ChildItem -Path "$env:ProgramFiles", "${env:ProgramFiles(x86)}" -Filter vipm.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $vipmExe) { throw "vipm.exe was not found under Program Files after installation." }
+          "$(Split-Path $vipmExe -Parent)" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & $vipmExe --version
+      - uses: ni/open-source/generate-sbom@main
+        with:
+          lvproj_path: ${{ inputs.lvproj_path }}
+          labview_version: ${{ inputs.labview_version }}
+          labview_bitness: ${{ inputs.labview_bitness }}
+          build_spec_name: ${{ inputs.build_spec_name }}
+          target_name: ${{ inputs.target_name }}
+          product_name: ${{ inputs.product_name }}
+          product_version: ${{ inputs.product_version }}
+          output_path: ${{ inputs.output_path }}
+          format: ${{ inputs.format }}
+          schema_version: ${{ inputs.schema_version }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: success()
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: ${{ inputs.output_path }}
+          retention-days: 90
+          if-no-files-found: error
