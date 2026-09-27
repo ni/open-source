@@ -66,4 +66,3 @@ runs:
         $script = Join-Path $env:GITHUB_ACTION_PATH '..' 'actions' 'common-dispatch.ps1'
         & $script @params
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
