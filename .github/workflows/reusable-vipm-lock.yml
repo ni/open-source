@@ -38,10 +38,6 @@ on:
       VIPM_EMAIL:
         required: false
 
-permissions:
-  contents: write
-  pull-requests: write
-
 jobs:
   refresh-vipm-lock:
     runs-on: ubuntu-latest

@@ -33,10 +33,6 @@ on:
       VIPM_EMAIL:
         required: false
 
-permissions:
-  contents: write
-  pull-requests: write
-
 jobs:
   update-vipm-dependencies:
     runs-on: ubuntu-latest

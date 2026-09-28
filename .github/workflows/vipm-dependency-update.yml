@@ -13,6 +13,9 @@ on:
 
 jobs:
   update-vipm-dependencies:
+    permissions:
+      contents: write
+      pull-requests: write
     uses: ./.github/workflows/reusable-vipm-update.yml
     with:
       working_directory: scripts/apply-vipc
