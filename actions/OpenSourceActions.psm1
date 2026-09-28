@@ -780,7 +780,7 @@ function Invoke-SetupNipm {
 # WorkingDirectory: Path (relative to the repo root) containing vipm.toml.
 # LabVIEWVersion: LabVIEW version (YYYY) matching the [project] section of vipm.toml.
 # LabVIEWBitness: "32" or "64" bitness matching the [project] section of vipm.toml.
-# CheckOnly: If set, runs `vipm lock --check` instead of writing vipm.lock.
+# CheckOnly: If set, checks an existing vipm.lock or generates the initial lock when absent.
 # VipmSerialNumber: VIPM Pro serial number (omit to skip activation).
 # VipmFullName: Name used for VIPM Pro activation.
 # VipmEmail: Email used for VIPM Pro activation.

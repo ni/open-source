@@ -16,10 +16,14 @@ on:
         required: true
         type: string
       check_only:
-        description: 'If true, verifies vipm.lock is in sync instead of writing it.'
+        description: 'If true, verifies an existing vipm.lock or generates the initial lock when absent.'
         required: false
         type: boolean
         default: false
+      base_branch:
+        description: 'Target branch for the generated pull request.'
+        required: true
+        type: string
       pr_branch:
         description: 'Branch name to push vipm.lock updates to.'
         required: false
@@ -52,6 +56,13 @@ jobs:
           vipm_serial_number: ${{ secrets.VIPM_SERIAL_NUMBER }}
           vipm_full_name: ${{ secrets.VIPM_FULL_NAME }}
           vipm_email: ${{ secrets.VIPM_EMAIL }}
+      - name: Upload vipm.lock artifact
+        if: ${{ inputs.check_only }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: vipm-lock
+          path: ${{ inputs.working_directory }}/vipm.lock
+          if-no-files-found: error
       # Opens/updates a PR only when vipm.lock actually changed; no-ops otherwise. Skipped for --check runs, which never write.
       - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         if: ${{ !inputs.check_only }}
@@ -63,6 +74,7 @@ jobs:
             `reusable-vipm-lock.yml` workflow.
 
             Review the `vipm.lock` diff before merging.
+          base: ${{ inputs.base_branch }}
           branch: ${{ inputs.pr_branch }}
           add-paths: ${{ inputs.working_directory }}/vipm.lock
           labels: ${{ inputs.pr_labels }}

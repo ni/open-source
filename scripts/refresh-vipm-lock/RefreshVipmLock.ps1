@@ -17,7 +17,7 @@
     "32" or "64" bitness matching the [project] section of vipm.toml.
 
 .PARAMETER CheckOnly
-    If set, runs `vipm lock --check` instead of writing vipm.lock.
+    If set, checks an existing vipm.lock or generates the initial lock when absent.
 
 .PARAMETER VipmSerialNumber
     VIPM Pro serial number. Omit to skip activation (Free edition).

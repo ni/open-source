@@ -15,6 +15,10 @@ on:
         description: '"32" or "64" bitness matching the [project] section of vipm.toml.'
         required: true
         type: string
+      base_branch:
+        description: 'Target branch for the generated pull request.'
+        required: true
+        type: string
       pr_branch:
         description: 'Branch name to push dependency updates to.'
         required: false
@@ -56,6 +60,7 @@ jobs:
             `reusable-vipm-update.yml` workflow.
 
             Review the `vipm.toml` / `vipm.lock` diff before merging.
+          base: ${{ inputs.base_branch }}
           branch: ${{ inputs.pr_branch }}
           add-paths: |
             ${{ inputs.working_directory }}/vipm.toml

@@ -67,16 +67,24 @@ vipm refresh --labview-version "$LABVIEW_VERSION" --labview-bitness "$LABVIEW_BI
 
 if [ "$CHECK_ONLY" = "true" ]; then
   if [ ! -f vipm.lock ]; then
-    echo "error: vipm.lock does not exist yet; cannot run 'vipm lock --check'. Generate and commit an initial vipm.lock first." >&2
-    exit 1
-  fi
-  if vipm lock --check; then
-    :
+    echo "vipm.lock does not exist; generating the initial lock file."
+    if vipm lock; then
+      echo "Initial vipm.lock generated successfully."
+    else
+      ec=$?
+      echo "error: initial 'vipm lock' generation failed with exit code $ec" >&2
+      dump_vipm_logs
+      exit "$ec"
+    fi
   else
-    ec=$?
-    echo "error: 'vipm lock --check' failed with exit code $ec" >&2
-    dump_vipm_logs
-    exit "$ec"
+    if vipm lock --check; then
+      :
+    else
+      ec=$?
+      echo "error: 'vipm lock --check' failed with exit code $ec" >&2
+      dump_vipm_logs
+      exit "$ec"
+    fi
   fi
 else
   if vipm lock; then

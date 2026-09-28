@@ -729,12 +729,12 @@
     }
   },
   "Invoke-RefreshVipmLock": {
-    "description": "Generates or checks vipm.lock from vipm.toml using the VIPM CLI in a Linux Docker container. WorkingDirectory: Path (relative to the repo root) containing vipm.toml. LabVIEWVersion: LabVIEW version (YYYY) matching the [project] section of vipm.toml. LabVIEWBitness: \"32\" or \"64\" bitness matching the [project] section of vipm.toml. CheckOnly: If set, runs `vipm lock --check` instead of writing vipm.lock. VipmSerialNumber: VIPM Pro serial number (omit to skip activation). VipmFullName: Name used for VIPM Pro activation. VipmEmail: Email used for VIPM Pro activation. VipmDebUrl: URL for the VIPM Linux .deb package. DockerImage: Docker image name (default: \"nationalinstruments/labview\"). ImageTag: Docker image tag (default: \"latest-linux\"). DryRun: If set, prints the command instead of executing it.",
+    "description": "Generates or checks vipm.lock from vipm.toml using the VIPM CLI in a Linux Docker container. WorkingDirectory: Path (relative to the repo root) containing vipm.toml. LabVIEWVersion: LabVIEW version (YYYY) matching the [project] section of vipm.toml. LabVIEWBitness: \"32\" or \"64\" bitness matching the [project] section of vipm.toml. CheckOnly: If set, checks an existing vipm.lock or generates the initial lock when absent. VipmSerialNumber: VIPM Pro serial number (omit to skip activation). VipmFullName: Name used for VIPM Pro activation. VipmEmail: Email used for VIPM Pro activation. VipmDebUrl: URL for the VIPM Linux .deb package. DockerImage: Docker image name (default: \"nationalinstruments/labview\"). ImageTag: Docker image tag (default: \"latest-linux\"). DryRun: If set, prints the command instead of executing it.",
     "parameters": {
       "CheckOnly": {
         "type": "boolean",
         "required": false,
-        "description": "If set, runs `vipm lock --check` instead of writing vipm"
+        "description": "If set, checks an existing vipm"
       },
       "DockerImage": {
         "type": "string",

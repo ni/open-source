@@ -11,7 +11,7 @@ inputs:
     description: '"32" or "64" bitness matching the [project] section of vipm.toml.'
     required: true
   check_only:
-    description: 'If true, runs `vipm lock --check` instead of writing vipm.lock.'
+    description: 'If true, checks an existing vipm.lock or generates the initial lock when absent.'
     default: 'false'
     required: false
   vipm_serial_number:

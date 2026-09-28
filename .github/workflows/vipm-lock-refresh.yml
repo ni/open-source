@@ -8,6 +8,7 @@ on:
       - .github/workflows/vipm-lock-refresh.yml
       - .github/workflows/reusable-vipm-lock.yml
       - refresh-vipm-lock/action.yml
+      - scripts/refresh-vipm-lock/**
   push:
     branches: [actions]
     paths:
@@ -25,6 +26,7 @@ jobs:
       working_directory: scripts/apply-vipc
       labview_version: '2021'
       labview_bitness: '64'
+      base_branch: actions
       check_only: true
     secrets:
       VIPM_SERIAL_NUMBER: ${{ secrets.VIPM_SERIAL_NUMBER }}
@@ -42,6 +44,7 @@ jobs:
       working_directory: scripts/apply-vipc
       labview_version: '2021'
       labview_bitness: '64'
+      base_branch: actions
     secrets:
       VIPM_SERIAL_NUMBER: ${{ secrets.VIPM_SERIAL_NUMBER }}
       VIPM_FULL_NAME: ${{ secrets.VIPM_FULL_NAME }}
