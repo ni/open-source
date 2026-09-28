@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
-      - uses: ./refresh-vipm-lock
+      - uses: ni/open-source/refresh-vipm-lock@users/amrutha/vipm-lock-refresh-and-dependency-update
         with:
           working_directory: ${{ inputs.working_directory }}
           labview_version: ${{ inputs.labview_version }}
@@ -63,8 +63,7 @@ jobs:
           name: vipm-lock
           path: ${{ inputs.working_directory }}/vipm.lock
           if-no-files-found: error
-      # Opens/updates a PR only when vipm.lock actually changed; no-ops otherwise. Skipped for --check runs, which never write.
-      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1
         if: ${{ !inputs.check_only }}
         with:
           commit-message: 'chore(deps): refresh vipm.lock'

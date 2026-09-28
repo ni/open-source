@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
-      - uses: ./update-vipm-dependencies
+      - uses: ni/open-source/update-vipm-dependencies@users/amrutha/vipm-lock-refresh-and-dependency-update
         with:
           working_directory: ${{ inputs.working_directory }}
           labview_version: ${{ inputs.labview_version }}
@@ -50,8 +50,7 @@ jobs:
           vipm_serial_number: ${{ secrets.VIPM_SERIAL_NUMBER }}
           vipm_full_name: ${{ secrets.VIPM_FULL_NAME }}
           vipm_email: ${{ secrets.VIPM_EMAIL }}
-      # Opens/updates a PR only when vipm.toml or vipm.lock actually changed; no-ops otherwise.
-      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1
         with:
           commit-message: 'chore(deps): update VIPM package dependencies'
           title: 'chore(deps): update VIPM package dependencies'
