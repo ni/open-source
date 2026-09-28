@@ -21,6 +21,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [ -z "${VIPM_SERIAL_NUMBER:-}" ] || [ -z "${VIPM_FULL_NAME:-}" ] || [ -z "${VIPM_EMAIL:-}" ]; then
+  echo "error: VIPM Pro activation requires VIPM_SERIAL_NUMBER, VIPM_FULL_NAME, and VIPM_EMAIL secrets." >&2
+  exit 2
+fi
+
 apt-get update
 apt-get install -y wget ca-certificates xvfb
 
@@ -44,18 +49,14 @@ dump_vipm_logs() {
   echo "----- end VIPM error logs -----"
 }
 
-if [ -n "${VIPM_SERIAL_NUMBER:-}" ]; then
-  echo "VIPM serial is configured; attempting Pro activation."
-  if vipm activate --serial-number "$VIPM_SERIAL_NUMBER" --name "$VIPM_FULL_NAME" --email "$VIPM_EMAIL"; then
-    echo "VIPM Pro activation succeeded."
-  else
-    ec=$?
-    echo "error: VIPM Pro activation failed with exit code $ec" >&2
-    dump_vipm_logs
-    exit "$ec"
-  fi
+echo "VIPM Pro credentials are configured; attempting activation."
+if vipm activate --serial-number "$VIPM_SERIAL_NUMBER" --name "$VIPM_FULL_NAME" --email "$VIPM_EMAIL"; then
+  echo "VIPM Pro activation succeeded."
 else
-  echo "VIPM_SERIAL_NUMBER is unset; skipping Pro activation."
+  ec=$?
+  echo "error: VIPM Pro activation failed with exit code $ec" >&2
+  dump_vipm_logs
+  exit "$ec"
 fi
 
 cd "$WORKING_DIRECTORY"

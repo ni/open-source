@@ -755,12 +755,12 @@
       },
       "LabVIEWBitness": {
         "type": "string",
-        "required": true,
+        "required": false,
         "description": "\"32\" or \"64\" bitness matching the [project] section of vipm"
       },
       "LabVIEWVersion": {
         "type": "string",
-        "required": true,
+        "required": false,
         "description": "LabVIEW version (YYYY) matching the [project] section of vipm"
       },
       "VipmDebUrl": {
@@ -1051,12 +1051,12 @@
       },
       "LabVIEWBitness": {
         "type": "string",
-        "required": true,
+        "required": false,
         "description": "\"32\" or \"64\" bitness matching the [project] section of vipm"
       },
       "LabVIEWVersion": {
         "type": "string",
-        "required": true,
+        "required": false,
         "description": "LabVIEW version (YYYY) matching the [project] section of vipm"
       },
       "VipmDebUrl": {
