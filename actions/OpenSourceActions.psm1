@@ -792,8 +792,8 @@ function Invoke-RefreshVipmLock {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] [string] $WorkingDirectory,
-        [Parameter(Mandatory)] [string] $LabVIEWVersion,
-        [Parameter(Mandatory)] [string] $LabVIEWBitness,
+        [string] $LabVIEWVersion,
+        [string] $LabVIEWBitness,
         [switch] $CheckOnly,
         [Parameter()] [string] $VipmSerialNumber = "",
         [Parameter()] [string] $VipmFullName = "",
@@ -804,6 +804,15 @@ function Invoke-RefreshVipmLock {
         [switch] $DryRun
     )
     Write-Information "Invoking RefreshVipmLock" -InformationAction Continue
+
+    if (-not $DryRun) {
+        if ([string]::IsNullOrWhiteSpace($LabVIEWVersion) -or [string]::IsNullOrWhiteSpace($LabVIEWBitness)) {
+            throw 'LabVIEWVersion and LabVIEWBitness are required unless -DryRun is specified.'
+        }
+        if ($LabVIEWBitness -notin @('32', '64')) {
+            throw "Unsupported LabVIEW bitness: $LabVIEWBitness"
+        }
+    }
 
     $result = Invoke-OpenSourceActionScript `
         -ScriptSegments @('refresh-vipm-lock', 'RefreshVipmLock.ps1') `
@@ -839,8 +848,8 @@ function Invoke-UpdateVipmDependencies {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)] [string] $WorkingDirectory,
-        [Parameter(Mandatory)] [string] $LabVIEWVersion,
-        [Parameter(Mandatory)] [string] $LabVIEWBitness,
+        [string] $LabVIEWVersion,
+        [string] $LabVIEWBitness,
         [Parameter()] [string] $VipmSerialNumber = "",
         [Parameter()] [string] $VipmFullName = "",
         [Parameter()] [string] $VipmEmail = "",
@@ -850,6 +859,15 @@ function Invoke-UpdateVipmDependencies {
         [switch] $DryRun
     )
     Write-Information "Invoking UpdateVipmDependencies" -InformationAction Continue
+
+    if (-not $DryRun) {
+        if ([string]::IsNullOrWhiteSpace($LabVIEWVersion) -or [string]::IsNullOrWhiteSpace($LabVIEWBitness)) {
+            throw 'LabVIEWVersion and LabVIEWBitness are required unless -DryRun is specified.'
+        }
+        if ($LabVIEWBitness -notin @('32', '64')) {
+            throw "Unsupported LabVIEW bitness: $LabVIEWBitness"
+        }
+    }
 
     $result = Invoke-OpenSourceActionScript `
         -ScriptSegments @('update-vipm-dependencies', 'UpdateVipmDependencies.ps1') `

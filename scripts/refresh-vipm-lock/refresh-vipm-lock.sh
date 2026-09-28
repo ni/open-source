@@ -35,8 +35,27 @@ Xvfb "$DISPLAY" -screen 0 1280x720x24 -ac +extension GLX +render -noreset >/tmp/
 
 vipm --version
 
+# VIPM writes detailed failures to its error-log dirs, not stdout.
+dump_vipm_logs() {
+  echo "----- VIPM error logs -----"
+  for d in /usr/local/jki/vipm/VIPM-CLI/error /usr/local/jki/vipm/error; do
+    [ -d "$d" ] && find "$d" -type f -print -exec cat {} \; 2>/dev/null || true
+  done
+  echo "----- end VIPM error logs -----"
+}
+
 if [ -n "${VIPM_SERIAL_NUMBER:-}" ]; then
-  vipm activate --serial-number "$VIPM_SERIAL_NUMBER" --name "$VIPM_FULL_NAME" --email "$VIPM_EMAIL"
+  echo "VIPM serial is configured; attempting Pro activation."
+  if vipm activate --serial-number "$VIPM_SERIAL_NUMBER" --name "$VIPM_FULL_NAME" --email "$VIPM_EMAIL"; then
+    echo "VIPM Pro activation succeeded."
+  else
+    ec=$?
+    echo "error: VIPM Pro activation failed with exit code $ec" >&2
+    dump_vipm_logs
+    exit "$ec"
+  fi
+else
+  echo "VIPM_SERIAL_NUMBER is unset; skipping Pro activation."
 fi
 
 cd "$WORKING_DIRECTORY"
@@ -46,7 +65,25 @@ cd "$WORKING_DIRECTORY"
 vipm refresh --labview-version "$LABVIEW_VERSION" --labview-bitness "$LABVIEW_BITNESS"
 
 if [ "$CHECK_ONLY" = "true" ]; then
-  vipm lock --check
+  if [ ! -f vipm.lock ]; then
+    echo "error: vipm.lock does not exist yet; cannot run 'vipm lock --check'. Generate and commit an initial vipm.lock first." >&2
+    exit 1
+  fi
+  if vipm lock --check; then
+    :
+  else
+    ec=$?
+    echo "error: 'vipm lock --check' failed with exit code $ec" >&2
+    dump_vipm_logs
+    exit "$ec"
+  fi
 else
-  vipm lock
+  if vipm lock; then
+    :
+  else
+    ec=$?
+    echo "error: 'vipm lock' failed with exit code $ec" >&2
+    dump_vipm_logs
+    exit "$ec"
+  fi
 fi
