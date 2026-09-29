@@ -776,6 +776,117 @@ function Invoke-SetupNipm {
     return $result
 }
 
+# Generates or checks vipm.lock from vipm.toml using the VIPM CLI in a Linux Docker container.
+# WorkingDirectory: Path (relative to the repo root) containing vipm.toml.
+# LabVIEWVersion: LabVIEW version (YYYY) matching the [project] section of vipm.toml.
+# LabVIEWBitness: "32" or "64" bitness matching the [project] section of vipm.toml.
+# CheckOnly: If set, checks an existing vipm.lock or generates the initial lock when absent.
+# VipmSerialNumber: VIPM Pro serial number (omit to skip activation).
+# VipmFullName: Name used for VIPM Pro activation.
+# VipmEmail: Email used for VIPM Pro activation.
+# VipmDebUrl: URL for the VIPM Linux .deb package.
+# DockerImage: Docker image name (default: "nationalinstruments/labview").
+# ImageTag: Docker image tag (default: "latest-linux").
+# DryRun: If set, prints the command instead of executing it.
+function Invoke-RefreshVipmLock {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [string] $WorkingDirectory,
+        [string] $LabVIEWVersion,
+        [string] $LabVIEWBitness,
+        [switch] $CheckOnly,
+        [Parameter()] [string] $VipmSerialNumber = "",
+        [Parameter()] [string] $VipmFullName = "",
+        [Parameter()] [string] $VipmEmail = "",
+        [Parameter()] [string] $VipmDebUrl = "https://traffic.libsyn.com/secure/jkinc/vipm_26.3.1-4025_amd64.deb",
+        [Parameter()] [string] $DockerImage = "nationalinstruments/labview",
+        [Parameter()] [string] $ImageTag = "latest-linux",
+        [switch] $DryRun
+    )
+    Write-Information "Invoking RefreshVipmLock" -InformationAction Continue
+
+    if (-not $DryRun) {
+        if ([string]::IsNullOrWhiteSpace($LabVIEWVersion) -or [string]::IsNullOrWhiteSpace($LabVIEWBitness)) {
+            throw 'LabVIEWVersion and LabVIEWBitness are required unless -DryRun is specified.'
+        }
+        if ($LabVIEWBitness -notin @('32', '64')) {
+            throw "Unsupported LabVIEW bitness: $LabVIEWBitness"
+        }
+    }
+
+    $result = Invoke-OpenSourceActionScript `
+        -ScriptSegments @('refresh-vipm-lock', 'RefreshVipmLock.ps1') `
+        -Arguments @{
+            WorkingDirectory = $WorkingDirectory
+            LabVIEWVersion   = $LabVIEWVersion
+            LabVIEWBitness   = $LabVIEWBitness
+            CheckOnly        = $CheckOnly
+            VipmSerialNumber = $VipmSerialNumber
+            VipmFullName     = $VipmFullName
+            VipmEmail        = $VipmEmail
+            VipmDebUrl       = $VipmDebUrl
+            DockerImage      = $DockerImage
+            ImageTag         = $ImageTag
+        } `
+        -DryRun:$DryRun
+
+    return $result
+}
+
+# Bumps every dependency in vipm.toml to its latest available version and regenerates vipm.lock.
+# WorkingDirectory: Path (relative to the repo root) containing vipm.toml.
+# LabVIEWVersion: LabVIEW version (YYYY) matching the [project] section of vipm.toml.
+# LabVIEWBitness: "32" or "64" bitness matching the [project] section of vipm.toml.
+# VipmSerialNumber: VIPM Pro serial number (`vipm add` requires Community or Professional edition).
+# VipmFullName: Name used for VIPM Pro activation.
+# VipmEmail: Email used for VIPM Pro activation.
+# VipmDebUrl: URL for the VIPM Linux .deb package.
+# DockerImage: Docker image name (default: "nationalinstruments/labview").
+# ImageTag: Docker image tag (default: "latest-linux").
+# DryRun: If set, prints the command instead of executing it.
+function Invoke-UpdateVipmDependencies {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [string] $WorkingDirectory,
+        [string] $LabVIEWVersion,
+        [string] $LabVIEWBitness,
+        [Parameter()] [string] $VipmSerialNumber = "",
+        [Parameter()] [string] $VipmFullName = "",
+        [Parameter()] [string] $VipmEmail = "",
+        [Parameter()] [string] $VipmDebUrl = "https://traffic.libsyn.com/secure/jkinc/vipm_26.3.1-4025_amd64.deb",
+        [Parameter()] [string] $DockerImage = "nationalinstruments/labview",
+        [Parameter()] [string] $ImageTag = "latest-linux",
+        [switch] $DryRun
+    )
+    Write-Information "Invoking UpdateVipmDependencies" -InformationAction Continue
+
+    if (-not $DryRun) {
+        if ([string]::IsNullOrWhiteSpace($LabVIEWVersion) -or [string]::IsNullOrWhiteSpace($LabVIEWBitness)) {
+            throw 'LabVIEWVersion and LabVIEWBitness are required unless -DryRun is specified.'
+        }
+        if ($LabVIEWBitness -notin @('32', '64')) {
+            throw "Unsupported LabVIEW bitness: $LabVIEWBitness"
+        }
+    }
+
+    $result = Invoke-OpenSourceActionScript `
+        -ScriptSegments @('update-vipm-dependencies', 'UpdateVipmDependencies.ps1') `
+        -Arguments @{
+            WorkingDirectory = $WorkingDirectory
+            LabVIEWVersion   = $LabVIEWVersion
+            LabVIEWBitness   = $LabVIEWBitness
+            VipmSerialNumber = $VipmSerialNumber
+            VipmFullName     = $VipmFullName
+            VipmEmail        = $VipmEmail
+            VipmDebUrl       = $VipmDebUrl
+            DockerImage      = $DockerImage
+            ImageTag         = $ImageTag
+        } `
+        -DryRun:$DryRun
+
+    return $result
+}
+
 # Runs VI Analyzer tests using LabVIEW Docker container.
 # ConfigPath: Path to VI Analyzer configuration file (.viancfg) or LabVIEW files (.vi, .ctl, .llb). If empty, generates from changed files.
 # TemplatePath: Path to .viancfg template (required when generating config dynamically).

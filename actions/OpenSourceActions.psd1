@@ -1,6 +1,6 @@
 @{
   RootModule            = 'OpenSourceActions.psm1'
-  ModuleVersion         = '1.0.0'
+  ModuleVersion         = '1.1.1'
   GUID                  = '8c0a64c5-6a52-4d7e-9f74-8f79f21f1b2c'
   Author                = 'LabVIEW Community CI/CD'
   CompanyName           = 'LabVIEW Community'
@@ -25,6 +25,7 @@
     'Invoke-MissingInProject'
     'Invoke-ModifyVIPBDisplayInfo'
     'Invoke-PrepareLabVIEWSource'
+    'Invoke-RefreshVipmLock'
     'Invoke-RenameFile'
     'Invoke-RestoreSetupLVSource'
     'Invoke-RevertDevelopmentMode'
@@ -34,6 +35,7 @@
     'Invoke-SetupLabview'
     'Invoke-SetupLunit'
     'Invoke-SetupNipm'
+    'Invoke-UpdateVipmDependencies'
     'Invoke-ViaLvDocker'
   )
 
@@ -41,6 +43,7 @@
     PSData = @{
       ReleaseNotes = @(
         '1.0.0 - Initial release: adapters for apply-vipc, build-lvlibp, missing-in-project, run-unit-tests; Format-UnitTestReport helper; discovery flags; DryRun; cross-platform g-cli support.'
+        '1.1.1 - Fix: update-vipm-dependencies now fails the job (instead of warning and continuing) when any package cannot be resolved/updated, so a partial dependency bump never reaches vipm.lock or a PR.'
       )
     }
   }
