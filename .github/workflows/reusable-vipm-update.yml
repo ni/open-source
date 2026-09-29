@@ -16,7 +16,7 @@ on:
         required: true
         type: string
       base_branch:
-        description: 'Target branch for the generated pull request.'
+        description: 'Target branch for the generated pull request in the caller repository.'
         required: true
         type: string
       pr_branch:
@@ -52,8 +52,8 @@ on:
         required: true
         type: string
       base_branch:
-        description: 'Target branch for the generated pull request.'
-        required: true
+        description: "Optional target branch; defaults to this repository's default branch."
+        required: false
         type: string
       pr_branch:
         description: 'Branch name to push dependency updates to.'
@@ -66,14 +66,6 @@ on:
         type: string
         default: 'dependencies'
 
-  pull_request:
-    branches: [actions]
-    paths:
-      - scripts/apply-vipc/vipm.toml
-      - scripts/update-vipm-dependencies/**
-      - update-vipm-dependencies/action.yml
-      - .github/workflows/reusable-vipm-update.yml
-
 permissions:
   contents: write
   pull-requests: write
@@ -85,14 +77,13 @@ jobs:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
       - uses: ni/open-source/update-vipm-dependencies@users/amrutha/vipm-lock-refresh-and-dependency-update
         with:
-          working_directory: ${{ inputs.working_directory || 'scripts/apply-vipc' }}
-          labview_version: ${{ inputs.labview_version || '2021' }}
-          labview_bitness: ${{ inputs.labview_bitness || '64' }}
+          working_directory: ${{ inputs.working_directory }}
+          labview_version: ${{ inputs.labview_version }}
+          labview_bitness: ${{ inputs.labview_bitness }}
           vipm_serial_number: ${{ secrets.VIPM_SERIAL_NUMBER }}
           vipm_full_name: ${{ secrets.VIPM_FULL_NAME }}
           vipm_email: ${{ secrets.VIPM_EMAIL }}
       - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1
-        if: ${{ github.event_name != 'pull_request' }}
         with:
           commit-message: 'chore(deps): update VIPM package dependencies'
           title: 'chore(deps): update VIPM package dependencies'
@@ -101,7 +92,7 @@ jobs:
             `reusable-vipm-update.yml` workflow.
 
             Review the `vipm.toml` / `vipm.lock` diff before merging.
-          base: ${{ inputs.base_branch || github.base_ref }}
+          base: ${{ inputs.base_branch || github.event.repository.default_branch }}
           branch: ${{ inputs.pr_branch }}
           add-paths: |
             ${{ inputs.working_directory }}/vipm.toml
