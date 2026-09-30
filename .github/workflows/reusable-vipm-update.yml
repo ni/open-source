@@ -105,7 +105,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
-      - uses: ni/open-source/update-vipm-dependencies@actions
+      - uses: ni/open-source/update-vipm-dependencies@users/amrutha/vipm-custom-manifest-support # TODO: revert to @actions before merging
         with:
           working_directory: ${{ inputs.working_directory }}
           labview_version: ${{ inputs.labview_version }}
