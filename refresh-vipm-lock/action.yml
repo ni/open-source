@@ -14,6 +14,14 @@ inputs:
     description: 'If true, checks an existing vipm.lock or generates the initial lock when absent.'
     default: 'false'
     required: false
+  manifest_filename:
+    description: 'Manifest filename (relative to working_directory) to read, e.g. "runner_dependencies.toml".'
+    default: 'vipm.toml'
+    required: false
+  lock_filename:
+    description: 'Lock filename (relative to working_directory) to generate/check, e.g. "runner_dependencies.lock".'
+    default: 'vipm.lock'
+    required: false
   vipm_serial_number:
     description: 'VIPM Pro serial number (pass from a secret in the caller).'
     required: false
@@ -60,6 +68,8 @@ runs:
           VipmDebUrl       = '${{ inputs.vipm_deb_url }}'
           DockerImage      = '${{ inputs.docker_image }}'
           ImageTag         = '${{ inputs.image_tag }}'
+          ManifestFilename = '${{ inputs.manifest_filename }}'
+          LockFilename     = '${{ inputs.lock_filename }}'
         }
         if ('${{ inputs.check_only }}' -eq 'true') { $args['CheckOnly'] = $true }
         $params = @{

@@ -787,6 +787,8 @@ function Invoke-SetupNipm {
 # VipmDebUrl: URL for the VIPM Linux .deb package.
 # DockerImage: Docker image name (default: "nationalinstruments/labview").
 # ImageTag: Docker image tag (default: "latest-linux").
+# ManifestFilename: Manifest filename relative to WorkingDirectory (default: "vipm.toml").
+# LockFilename: Lock filename relative to WorkingDirectory (default: "vipm.lock").
 # DryRun: If set, prints the command instead of executing it.
 function Invoke-RefreshVipmLock {
     [CmdletBinding()]
@@ -801,6 +803,8 @@ function Invoke-RefreshVipmLock {
         [Parameter()] [string] $VipmDebUrl = "https://traffic.libsyn.com/secure/jkinc/vipm_26.3.1-4025_amd64.deb",
         [Parameter()] [string] $DockerImage = "nationalinstruments/labview",
         [Parameter()] [string] $ImageTag = "latest-linux",
+        [Parameter()] [string] $ManifestFilename = "vipm.toml",
+        [Parameter()] [string] $LockFilename = "vipm.lock",
         [switch] $DryRun
     )
     Write-Information "Invoking RefreshVipmLock" -InformationAction Continue
@@ -827,6 +831,8 @@ function Invoke-RefreshVipmLock {
             VipmDebUrl       = $VipmDebUrl
             DockerImage      = $DockerImage
             ImageTag         = $ImageTag
+            ManifestFilename = $ManifestFilename
+            LockFilename     = $LockFilename
         } `
         -DryRun:$DryRun
 
@@ -843,6 +849,9 @@ function Invoke-RefreshVipmLock {
 # VipmDebUrl: URL for the VIPM Linux .deb package.
 # DockerImage: Docker image name (default: "nationalinstruments/labview").
 # ImageTag: Docker image tag (default: "latest-linux").
+# ManifestFilename: Manifest filename relative to WorkingDirectory (default: "vipm.toml").
+# LockFilename: Lock filename relative to WorkingDirectory (default: "vipm.lock").
+# IncludeDevDependencies: If set, also bumps packages declared under [dev-dependencies].
 # DryRun: If set, prints the command instead of executing it.
 function Invoke-UpdateVipmDependencies {
     [CmdletBinding()]
@@ -856,6 +865,9 @@ function Invoke-UpdateVipmDependencies {
         [Parameter()] [string] $VipmDebUrl = "https://traffic.libsyn.com/secure/jkinc/vipm_26.3.1-4025_amd64.deb",
         [Parameter()] [string] $DockerImage = "nationalinstruments/labview",
         [Parameter()] [string] $ImageTag = "latest-linux",
+        [Parameter()] [string] $ManifestFilename = "vipm.toml",
+        [Parameter()] [string] $LockFilename = "vipm.lock",
+        [switch] $IncludeDevDependencies,
         [switch] $DryRun
     )
     Write-Information "Invoking UpdateVipmDependencies" -InformationAction Continue
@@ -881,6 +893,9 @@ function Invoke-UpdateVipmDependencies {
             VipmDebUrl       = $VipmDebUrl
             DockerImage      = $DockerImage
             ImageTag         = $ImageTag
+            ManifestFilename = $ManifestFilename
+            LockFilename     = $LockFilename
+            IncludeDevDependencies = $IncludeDevDependencies
         } `
         -DryRun:$DryRun
 

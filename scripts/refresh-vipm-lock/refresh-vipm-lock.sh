@@ -9,6 +9,8 @@ LABVIEW_VERSION=""
 LABVIEW_BITNESS=""
 CHECK_ONLY="false"
 VIPM_DEB_URL=""
+MANIFEST_FILENAME="vipm.toml"
+LOCK_FILENAME="vipm.lock"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -17,6 +19,8 @@ while [[ $# -gt 0 ]]; do
     --labview-bitness) LABVIEW_BITNESS="$2"; shift 2 ;;
     --check-only) CHECK_ONLY="$2"; shift 2 ;;
     --vipm-deb-url) VIPM_DEB_URL="$2"; shift 2 ;;
+    --manifest-filename) MANIFEST_FILENAME="$2"; shift 2 ;;
+    --lock-filename) LOCK_FILENAME="$2"; shift 2 ;;
     *) echo "error: unknown argument '$1'" >&2; exit 2 ;;
   esac
 done
@@ -60,6 +64,25 @@ else
 fi
 
 cd "$WORKING_DIRECTORY"
+
+# vipm's CLI only recognizes vipm.toml/vipm.lock in the CWD; stage custom
+# filenames under those names for the duration of the vipm calls.
+restore_filenames() {
+  if [ "$MANIFEST_FILENAME" != "vipm.toml" ] && [ -f vipm.toml ]; then
+    mv vipm.toml "$MANIFEST_FILENAME"
+  fi
+  if [ "$LOCK_FILENAME" != "vipm.lock" ] && [ -f vipm.lock ]; then
+    mv vipm.lock "$LOCK_FILENAME"
+  fi
+  return 0
+}
+trap restore_filenames EXIT
+if [ "$MANIFEST_FILENAME" != "vipm.toml" ] && [ -f "$MANIFEST_FILENAME" ]; then
+  mv "$MANIFEST_FILENAME" vipm.toml
+fi
+if [ "$LOCK_FILENAME" != "vipm.lock" ] && [ -f "$LOCK_FILENAME" ]; then
+  mv "$LOCK_FILENAME" vipm.lock
+fi
 
 # Clean runner has no repository cache; populate it for this project's LabVIEW
 # target before lock resolution (see docs.vipm.io/cli/command-reference#vipm-refresh).
