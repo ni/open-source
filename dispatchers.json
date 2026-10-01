@@ -729,7 +729,7 @@
     }
   },
   "Invoke-RefreshVipmLock": {
-    "description": "Generates or checks vipm.lock from vipm.toml using the VIPM CLI in a Linux Docker container. WorkingDirectory: Path (relative to the repo root) containing vipm.toml. LabVIEWVersion: LabVIEW version (YYYY) matching the [project] section of vipm.toml. LabVIEWBitness: \"32\" or \"64\" bitness matching the [project] section of vipm.toml. CheckOnly: If set, checks an existing vipm.lock or generates the initial lock when absent. VipmSerialNumber: VIPM Pro serial number (omit to skip activation). VipmFullName: Name used for VIPM Pro activation. VipmEmail: Email used for VIPM Pro activation. VipmDebUrl: URL for the VIPM Linux .deb package. DockerImage: Docker image name (default: \"nationalinstruments/labview\"). ImageTag: Docker image tag (default: \"latest-linux\"). DryRun: If set, prints the command instead of executing it.",
+    "description": "Generates or checks vipm.lock from vipm.toml using the VIPM CLI in a Linux Docker container. WorkingDirectory: Path (relative to the repo root) containing vipm.toml. LabVIEWVersion: LabVIEW version (YYYY) matching the [project] section of vipm.toml. LabVIEWBitness: \"32\" or \"64\" bitness matching the [project] section of vipm.toml. CheckOnly: If set, checks an existing vipm.lock or generates the initial lock when absent. VipmSerialNumber: VIPM Pro serial number (omit to skip activation). VipmFullName: Name used for VIPM Pro activation. VipmEmail: Email used for VIPM Pro activation. VipmDebUrl: URL for the VIPM Linux .deb package. DockerImage: Docker image name (default: \"nationalinstruments/labview\"). ImageTag: Docker image tag (default: \"latest-linux\"). ManifestFilename: Manifest filename relative to WorkingDirectory (default: \"vipm.toml\"). LockFilename: Lock filename relative to WorkingDirectory (default: \"vipm.lock\"). DryRun: If set, prints the command instead of executing it.",
     "parameters": {
       "CheckOnly": {
         "type": "boolean",
@@ -762,6 +762,18 @@
         "type": "string",
         "required": false,
         "description": "LabVIEW version (YYYY) matching the [project] section of vipm"
+      },
+      "LockFilename": {
+        "type": "string",
+        "required": false,
+        "default": "vipm.lock",
+        "description": "Lock filename relative to WorkingDirectory (default: \"vipm"
+      },
+      "ManifestFilename": {
+        "type": "string",
+        "required": false,
+        "default": "vipm.toml",
+        "description": "Manifest filename relative to WorkingDirectory (default: \"vipm"
       },
       "VipmDebUrl": {
         "type": "string",
@@ -1030,7 +1042,7 @@
     }
   },
   "Invoke-UpdateVipmDependencies": {
-    "description": "Bumps every dependency in vipm.toml to its latest available version and regenerates vipm.lock. WorkingDirectory: Path (relative to the repo root) containing vipm.toml. LabVIEWVersion: LabVIEW version (YYYY) matching the [project] section of vipm.toml. LabVIEWBitness: \"32\" or \"64\" bitness matching the [project] section of vipm.toml. VipmSerialNumber: VIPM Pro serial number (`vipm add` requires Community or Professional edition). VipmFullName: Name used for VIPM Pro activation. VipmEmail: Email used for VIPM Pro activation. VipmDebUrl: URL for the VIPM Linux .deb package. DockerImage: Docker image name (default: \"nationalinstruments/labview\"). ImageTag: Docker image tag (default: \"latest-linux\"). DryRun: If set, prints the command instead of executing it.",
+    "description": "Bumps every dependency in vipm.toml to its latest available version and regenerates vipm.lock. WorkingDirectory: Path (relative to the repo root) containing vipm.toml. LabVIEWVersion: LabVIEW version (YYYY) matching the [project] section of vipm.toml. LabVIEWBitness: \"32\" or \"64\" bitness matching the [project] section of vipm.toml. VipmSerialNumber: VIPM Pro serial number (`vipm add` requires Community or Professional edition). VipmFullName: Name used for VIPM Pro activation. VipmEmail: Email used for VIPM Pro activation. VipmDebUrl: URL for the VIPM Linux .deb package. DockerImage: Docker image name (default: \"nationalinstruments/labview\"). ImageTag: Docker image tag (default: \"latest-linux\"). ManifestFilename: Manifest filename relative to WorkingDirectory (default: \"vipm.toml\"). LockFilename: Lock filename relative to WorkingDirectory (default: \"vipm.lock\"). IncludeDevDependencies: If set, also bumps packages declared under [dev-dependencies]. DryRun: If set, prints the command instead of executing it.",
     "parameters": {
       "DockerImage": {
         "type": "string",
@@ -1049,6 +1061,11 @@
         "default": "latest-linux",
         "description": "Docker image tag (default: \"latest-linux\")"
       },
+      "IncludeDevDependencies": {
+        "type": "boolean",
+        "required": false,
+        "description": "If set, also bumps packages declared under [dev-dependencies]"
+      },
       "LabVIEWBitness": {
         "type": "string",
         "required": false,
@@ -1058,6 +1075,18 @@
         "type": "string",
         "required": false,
         "description": "LabVIEW version (YYYY) matching the [project] section of vipm"
+      },
+      "LockFilename": {
+        "type": "string",
+        "required": false,
+        "default": "vipm.lock",
+        "description": "Lock filename relative to WorkingDirectory (default: \"vipm"
+      },
+      "ManifestFilename": {
+        "type": "string",
+        "required": false,
+        "default": "vipm.toml",
+        "description": "Manifest filename relative to WorkingDirectory (default: \"vipm"
       },
       "VipmDebUrl": {
         "type": "string",

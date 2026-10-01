@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
-# Bumps every dependency declared in vipm.toml's [dependencies] table to its
-# latest available version (vipm add <pkg> with no version suffix resolves to
-# latest per docs.vipm.io/cli/command-reference#vipm-add), then regenerates
-# vipm.lock. Executed inside the VIPM Linux container by
-# UpdateVipmDependencies.ps1.
+# Bumps every dependency declared in vipm.toml's [dependencies] table (and,
+# when requested, [dev-dependencies]) to its latest available version
+# (vipm add <pkg> with no version suffix resolves to latest per
+# docs.vipm.io/cli/command-reference#vipm-add), then regenerates vipm.lock.
+# Executed inside the VIPM Linux container by UpdateVipmDependencies.ps1.
 set -euo pipefail
 
 WORKING_DIRECTORY=""
 LABVIEW_VERSION=""
 LABVIEW_BITNESS=""
 VIPM_DEB_URL=""
+MANIFEST_FILENAME="vipm.toml"
+LOCK_FILENAME="vipm.lock"
+INCLUDE_DEV_DEPENDENCIES="false"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -17,6 +20,9 @@ while [[ $# -gt 0 ]]; do
     --labview-version) LABVIEW_VERSION="$2"; shift 2 ;;
     --labview-bitness) LABVIEW_BITNESS="$2"; shift 2 ;;
     --vipm-deb-url) VIPM_DEB_URL="$2"; shift 2 ;;
+    --manifest-filename) MANIFEST_FILENAME="$2"; shift 2 ;;
+    --lock-filename) LOCK_FILENAME="$2"; shift 2 ;;
+    --include-dev-dependencies) INCLUDE_DEV_DEPENDENCIES="$2"; shift 2 ;;
     *) echo "error: unknown argument '$1'" >&2; exit 2 ;;
   esac
 done
@@ -61,12 +67,36 @@ fi
 
 cd "$WORKING_DIRECTORY"
 
+# vipm's CLI only recognizes vipm.toml/vipm.lock in the CWD; stage custom
+# filenames under those names for the duration of the vipm calls.
+restore_filenames() {
+  if [ "$MANIFEST_FILENAME" != "vipm.toml" ] && [ -f vipm.toml ]; then
+    mv vipm.toml "$MANIFEST_FILENAME"
+  fi
+  if [ "$LOCK_FILENAME" != "vipm.lock" ] && [ -f vipm.lock ]; then
+    mv vipm.lock "$LOCK_FILENAME"
+  fi
+  return 0
+}
+trap restore_filenames EXIT
+if [ "$MANIFEST_FILENAME" != "vipm.toml" ] && [ -f "$MANIFEST_FILENAME" ]; then
+  mv "$MANIFEST_FILENAME" vipm.toml
+fi
+if [ "$LOCK_FILENAME" != "vipm.lock" ] && [ -f "$LOCK_FILENAME" ]; then
+  mv "$LOCK_FILENAME" vipm.lock
+fi
+
 vipm refresh --labview-version "$LABVIEW_VERSION" --labview-bitness "$LABVIEW_BITNESS"
 
-# Extract dependency names from the [dependencies] table (stops at the next [section]).
-mapfile -t deps < <(awk '
-  /^\[dependencies\]/ { in_section=1; next }
-  /^\[/ { in_section=0 }
+# Extract dependency names from [dependencies] (and, when requested,
+# [dev-dependencies]); stops each section at the next [section].
+wanted_sections="dependencies"
+if [ "$INCLUDE_DEV_DEPENDENCIES" = "true" ]; then
+  wanted_sections="dependencies dev-dependencies"
+fi
+mapfile -t deps < <(awk -v sections="$wanted_sections" '
+  BEGIN { n = split(sections, arr, " "); for (i = 1; i <= n; i++) wanted["[" arr[i] "]"] = 1 }
+  /^\[/ { in_section = ($0 in wanted); next }
   in_section && NF { split($0, parts, "="); gsub(/[ \t"]/, "", parts[1]); if (parts[1] != "") print parts[1] }
 ' vipm.toml)
 

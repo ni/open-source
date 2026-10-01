@@ -16,6 +16,7 @@ List of available GitHub Actions.
 - [missing-in-project](./missing-in-project.md): Check that all files in a LabVIEW project are present by scanning for items missing from the `.lvproj`.
 - [modify-vipb-display-info](./modify-vipb-display-info.md): Update display information in a VIPB file and rebuild the VI package.
 - [prepare-labview-source](./prepare-labview-source.md): Run PrepareIESource.vi via g-cli to unzip components and configure LabVIEW for building.
+- [refresh-vipm-lock](./refresh-vipm-lock.md): Generate or verify a VIPM lock file from a VIPM manifest using the VIPM CLI.
 - [rename-file](./rename-file.md): Rename a file if it exists.
 - [restore-setup-lv-source](./restore-setup-lv-source.md): Restore the LabVIEW source setup by unzipping the LabVIEW Icon API and removing the INI token.
 - [revert-development-mode](./revert-development-mode.md): Restore the repository from development mode by restoring packaged sources and closing LabVIEW.
@@ -26,6 +27,7 @@ List of available GitHub Actions.
 - [setup-lunit](./setup-lunit.md): Installs VI Package Manager (VIPM) and the LUnit for G-CLI package for LabVIEW automation testing.
 - [setup-mkdocs](./setup-mkdocs.md): Install a pinned MkDocs with caching.
 - [setup-nipm](./setup-nipm.md): Installs and configures NI Package Manager (NIPM) for LabVIEW package management in CI/CD environments.
+- [update-vipm-dependencies](./update-vipm-dependencies.md): Bump every dependency in a VIPM manifest to its latest available version and regenerate the lock file.
 - [via-lv-docker](via-lv-docker.md): Execute LabVIEW VI Analyzer tests using a Docker container and parse results.
 
 ## See also
