@@ -24,6 +24,17 @@ Describe 'GenerateSbom.Workflow' {
         Test-Path $scriptPath | Should -Be $true
     }
 
+    It 'uses the tested Linux LabVIEW container flow [REQ-042]' -Tag 'REQ-042' {
+        $workflowPath = Join-Path $repoRoot '.github' 'workflows' 'reusable-generate-sbom.yml'
+        $workflow = Get-Content $workflowPath -Raw
+
+        $workflow | Should -Match 'runs-on:\s*ubuntu-latest'
+        $workflow | Should -Match 'vipm_26\.3\.1-4025_amd64\.deb'
+        $workflow | Should -Match 'dpkg -i /tmp/vipm\.deb'
+        $workflow | Should -Match 'timeout 300 xvfb-run -a vipm sbom'
+        $workflow | Should -Match 'actions/upload-artifact@'
+    }
+
     It 'executes dry-run with only required parameters [REQ-042]' -Tag 'REQ-042' {
         $result = & "$repoRoot/actions/Invoke-OSAction.ps1" `
             -ActionName 'generate-sbom' `

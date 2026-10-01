@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Generate a CycloneDX Software Bill of Materials (SBOM) for a LabVIEW build specification using `vipm sbom`. Minimal implementation ported from [ni/labview-icon-editor#540](https://github.com/ni/labview-icon-editor/pull/540): requires VIPM CLI to be available on the runner and LabVIEW to be available for the target project. The reusable workflow installs VIPM itself, and additional execution modes (Docker-based builds, headless LabVIEW/VI Server warm-up) can be added later if a real consumer requires them.
+Generate a CycloneDX Software Bill of Materials (SBOM) for a LabVIEW build specification using `vipm sbom`. The reusable workflow runs on `ubuntu-latest` and invokes VIPM inside the matching `nationalinstruments/labview:<version>-linux` container, following the Linux flow validated in [ni/labview-icon-editor#540](https://github.com/ni/labview-icon-editor/pull/540). The standalone composite action remains available for callers that already have VIPM and LabVIEW configured.
 
 ## Parameters
 
@@ -43,7 +43,7 @@ Common parameters are described in [Common parameters](../common-parameters.md).
 
 ## Prerequisites
 
-This action does **not** install or activate VIPM, and does not set up LabVIEW. The caller's workflow (or the reusable workflow below) must ensure `vipm` is on `PATH` and LabVIEW is available before this step runs.
+The standalone composite action does **not** install or activate VIPM, and does not set up LabVIEW. The reusable Linux workflow is self-contained: it checks out the caller repository, starts the LabVIEW Linux container, installs VIPM from its Debian package, and generates the SBOM there. Its `labview_version` input is the container release (`YYYYq1` or `YYYYq3`, minimum `2025q3`); the workflow derives the year passed to VIPM.
 
 ## Examples
 
@@ -78,9 +78,9 @@ pwsh -File actions/Invoke-OSAction.ps1 -ActionName generate-sbom -ArgsJson '{
     output_path: 'builds/lv_icon_editor_Editor Packed Library.cdx.sbom.json'
 ```
 
-### Example consumer workflow (reusable workflow)
+### Reusable workflow (Linux container)
 
-The reusable workflow is self-contained (it installs VIPM CLI itself, since `workflow_call` runs in its own fresh job) and also uploads the SBOM as an artifact:
+Actor Framework, Icon Editor, and other consumer repositories can call the reusable workflow. It uploads the generated SBOM as an artifact retained for 90 days:
 
 ```yaml
 name: Generate SBOM
@@ -95,7 +95,7 @@ jobs:
     uses: ni/open-source/.github/workflows/reusable-generate-sbom.yml@v1
     with:
       lvproj_path: lv_icon_editor.lvproj
-      labview_version: '2026'
+      labview_version: '2026q1'
       labview_bitness: '64'
       build_spec_name: 'Editor Packed Library'
       product_name: 'Icon Editor Packed Library'
