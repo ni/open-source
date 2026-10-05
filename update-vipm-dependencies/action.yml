@@ -19,6 +19,18 @@ inputs:
   vipm_email:
     description: 'Email used for VIPM Pro activation.'
     required: false
+  manifest_filename:
+    description: 'Manifest filename (relative to working_directory) to read/update, e.g. "runner_dependencies.toml".'
+    default: 'vipm.toml'
+    required: false
+  lock_filename:
+    description: 'Lock filename (relative to working_directory) to regenerate, e.g. "runner_dependencies.lock".'
+    default: 'vipm.lock'
+    required: false
+  include_dev_dependencies:
+    description: 'If true, also bumps packages declared under [dev-dependencies] in addition to [dependencies].'
+    default: true
+    required: false
   vipm_deb_url:
     description: 'Override URL for the VIPM Linux .deb package.'
     default: 'https://traffic.libsyn.com/secure/jkinc/vipm_26.3.1-4025_amd64.deb'
@@ -56,7 +68,10 @@ runs:
           VipmDebUrl       = '${{ inputs.vipm_deb_url }}'
           DockerImage      = '${{ inputs.docker_image }}'
           ImageTag         = '${{ inputs.image_tag }}'
+          ManifestFilename = '${{ inputs.manifest_filename }}'
+          LockFilename     = '${{ inputs.lock_filename }}'
         }
+        if ('${{ inputs.include_dev_dependencies }}' -eq 'true') { $args['IncludeDevDependencies'] = $true }
         $params = @{
           ActionName = 'update-vipm-dependencies'
           Args       = $args

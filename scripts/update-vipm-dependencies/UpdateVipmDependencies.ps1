@@ -36,6 +36,15 @@
 .PARAMETER ImageTag
     Docker image tag.
 
+.PARAMETER ManifestFilename
+    Manifest filename (relative to WorkingDirectory) to read/update. Defaults to "vipm.toml".
+
+.PARAMETER LockFilename
+    Lock filename (relative to WorkingDirectory) to regenerate. Defaults to "vipm.lock".
+
+.PARAMETER IncludeDevDependencies
+    If set, also bumps packages declared under [dev-dependencies] in addition to [dependencies].
+
 .NOTES
     Leaf script for the 'update-vipm-dependencies' dispatcher action.
 #>
@@ -67,7 +76,16 @@ param(
     [string]$DockerImage = "nationalinstruments/labview",
 
     [Parameter(Mandatory = $false)]
-    [string]$ImageTag = "latest-linux"
+    [string]$ImageTag = "latest-linux",
+
+    [Parameter(Mandatory = $false)]
+    [string]$ManifestFilename = "vipm.toml",
+
+    [Parameter(Mandatory = $false)]
+    [string]$LockFilename = "vipm.lock",
+
+    [Parameter(Mandatory = $false)]
+    [switch]$IncludeDevDependencies
 )
 
 Set-StrictMode -Version Latest
@@ -89,6 +107,9 @@ try {
         "--labview-version", "'$LabVIEWVersion'"
         "--labview-bitness", "'$LabVIEWBitness'"
         "--vipm-deb-url", "'$VipmDebUrl'"
+        "--manifest-filename", "'$ManifestFilename'"
+        "--lock-filename", "'$LockFilename'"
+        "--include-dev-dependencies", "'$(if ($IncludeDevDependencies) { 'true' } else { 'false' })'"
     )
     $bashCommand = "chmod +x $containerScriptPath && $containerScriptPath $($bashArgs -join ' ')"
 

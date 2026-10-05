@@ -37,6 +37,12 @@
 .PARAMETER ImageTag
     Docker image tag.
 
+.PARAMETER ManifestFilename
+    Manifest filename (relative to WorkingDirectory) to read. Defaults to "vipm.toml".
+
+.PARAMETER LockFilename
+    Lock filename (relative to WorkingDirectory) to generate/check. Defaults to "vipm.lock".
+
 .NOTES
     Leaf script for the 'refresh-vipm-lock' dispatcher action.
 #>
@@ -71,7 +77,13 @@ param(
     [string]$DockerImage = "nationalinstruments/labview",
 
     [Parameter(Mandatory = $false)]
-    [string]$ImageTag = "latest-linux"
+    [string]$ImageTag = "latest-linux",
+
+    [Parameter(Mandatory = $false)]
+    [string]$ManifestFilename = "vipm.toml",
+
+    [Parameter(Mandatory = $false)]
+    [string]$LockFilename = "vipm.lock"
 )
 
 Set-StrictMode -Version Latest
@@ -96,6 +108,8 @@ try {
         "--labview-bitness", "'$LabVIEWBitness'"
         "--check-only", "'$checkOnlyValue'"
         "--vipm-deb-url", "'$VipmDebUrl'"
+        "--manifest-filename", "'$ManifestFilename'"
+        "--lock-filename", "'$LockFilename'"
     )
     $bashCommand = "chmod +x $containerScriptPath && $containerScriptPath $($bashArgs -join ' ')"
 
@@ -119,9 +133,9 @@ try {
     }
 
     if (-not $CheckOnly) {
-        $lockPath = Join-Path $WorkingDirectory 'vipm.lock'
+        $lockPath = Join-Path $WorkingDirectory $LockFilename
         if (-not (Test-Path $lockPath)) {
-            throw "vipm.lock was not created at $lockPath"
+            throw "$LockFilename was not created at $lockPath"
         }
     }
 
