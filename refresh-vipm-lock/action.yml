@@ -1,0 +1,83 @@
+name: 'Refresh VIPM Lock'
+description: 'Generates or checks vipm.lock from vipm.toml using the VIPM CLI inside a Linux Docker container.'
+inputs:
+  working_directory:
+    description: 'Path (relative to the caller repo root) containing vipm.toml.'
+    required: true
+  labview_version:
+    description: 'LabVIEW version (YYYY) matching the [project] section of vipm.toml.'
+    required: true
+  labview_bitness:
+    description: '"32" or "64" bitness matching the [project] section of vipm.toml.'
+    required: true
+  check_only:
+    description: 'If true, checks an existing vipm.lock or generates the initial lock when absent.'
+    default: 'false'
+    required: false
+  manifest_filename:
+    description: 'Manifest filename (relative to working_directory) to read, e.g. "runner_dependencies.toml".'
+    default: 'vipm.toml'
+    required: false
+  lock_filename:
+    description: 'Lock filename (relative to working_directory) to generate/check, e.g. "runner_dependencies.lock".'
+    default: 'vipm.lock'
+    required: false
+  vipm_serial_number:
+    description: 'VIPM Pro serial number (pass from a secret in the caller).'
+    required: false
+  vipm_full_name:
+    description: 'Name used for VIPM Pro activation.'
+    required: false
+  vipm_email:
+    description: 'Email used for VIPM Pro activation.'
+    required: false
+  vipm_deb_url:
+    description: 'Override URL for the VIPM Linux .deb package.'
+    default: 'https://traffic.libsyn.com/secure/jkinc/vipm_26.3.1-4025_amd64.deb'
+    required: false
+  docker_image:
+    description: 'Docker image name.'
+    default: 'nationalinstruments/labview'
+    required: false
+  image_tag:
+    description: 'Docker image tag.'
+    default: 'latest-linux'
+    required: false
+  log_level:
+    description: 'Verbosity level (ERROR|WARN|INFO|DEBUG).'
+    default: 'INFO'
+    required: false
+  dry_run:
+    description: 'If true, simulate the action without side effects.'
+    default: false
+    required: false
+runs:
+  using: 'composite'
+  steps:
+    - name: Dispatch refresh-vipm-lock
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $args = @{
+          WorkingDirectory = '${{ inputs.working_directory }}'
+          LabVIEWVersion   = '${{ inputs.labview_version }}'
+          LabVIEWBitness   = '${{ inputs.labview_bitness }}'
+          VipmSerialNumber = '${{ inputs.vipm_serial_number }}'
+          VipmFullName     = '${{ inputs.vipm_full_name }}'
+          VipmEmail        = '${{ inputs.vipm_email }}'
+          VipmDebUrl       = '${{ inputs.vipm_deb_url }}'
+          DockerImage      = '${{ inputs.docker_image }}'
+          ImageTag         = '${{ inputs.image_tag }}'
+          ManifestFilename = '${{ inputs.manifest_filename }}'
+          LockFilename     = '${{ inputs.lock_filename }}'
+        }
+        if ('${{ inputs.check_only }}' -eq 'true') { $args['CheckOnly'] = $true }
+        $params = @{
+          ActionName = 'refresh-vipm-lock'
+          Args       = $args
+          LogLevel   = '${{ inputs.log_level }}'
+        }
+        if ('${{ inputs.dry_run }}' -eq 'true') { $params['DryRun'] = $true }
+        $script = Join-Path $env:GITHUB_ACTION_PATH '..' 'actions' 'common-dispatch.ps1'
+        & $script @params
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

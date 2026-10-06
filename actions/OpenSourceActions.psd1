@@ -26,6 +26,7 @@
     'Invoke-MissingInProject'
     'Invoke-ModifyVIPBDisplayInfo'
     'Invoke-PrepareLabVIEWSource'
+    'Invoke-RefreshVipmLock'
     'Invoke-RenameFile'
     'Invoke-RestoreSetupLVSource'
     'Invoke-RevertDevelopmentMode'
@@ -35,6 +36,7 @@
     'Invoke-SetupLabview'
     'Invoke-SetupLunit'
     'Invoke-SetupNipm'
+    'Invoke-UpdateVipmDependencies'
     'Invoke-ViaLvDocker'
   )
 
@@ -43,7 +45,7 @@
       ReleaseNotes = @(
         '1.0.0 - Initial release: adapters for apply-vipc, build-lvlibp, missing-in-project, run-unit-tests; Format-UnitTestReport helper; discovery flags; DryRun; cross-platform g-cli support.'
         '1.1.0 - Add generate-sbom adapter: minimal CycloneDX SBOM generation via vipm sbom, assuming VIPM is already installed/activated on the runner.'
-        '1.1.1 - Fix Invoke-GenerateSbom dispatcher DryRun compatibility: added LVVersion/MinimumSupportedLVVersion, LVBitness/SupportedBitness, and Build_Spec aliases; relaxed ProductName/ProductVersion to optional (no repo-wide dispatcher payload equivalent) to unblock the shared Dispatcher.DryRun.Tests.ps1 payload.'
+  '1.1.1 - Fix Invoke-GenerateSbom dispatcher DryRun compatibility with aliases and optional product metadata; make update-vipm-dependencies fail when a package cannot be resolved or updated.'
       )
     }
   }
