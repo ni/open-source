@@ -59,6 +59,65 @@ Enable debug logging and perform a dry run:
 
 For a full workflow example that chains multiple actions to build the LabVIEW Icon Editor, see [docs/quickstart.md#build-icon-editor](docs/quickstart.md#build-icon-editor).
 
+### Automatic VIPM dependency merges
+
+The reusable dependency-update workflow opens a PR containing only the configured
+manifest and lock files in the caller repository. These default to `vipm.toml`
+and `vipm.lock`. The caller must pass `base_branch`, as shown below for its
+default branch. Auto-merge is opt-in.
+
+```yaml
+name: Update VIPM dependencies
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  update:
+    uses: ni/open-source/.github/workflows/reusable-vipm-update.yml@actions
+    with:
+      working_directory: scripts/apply-vipc
+      labview_version: '2021'
+      labview_bitness: '64'
+      base_branch: ${{ github.event.repository.default_branch }}
+      manifest_filename: vipm.toml
+      lock_filename: vipm.lock
+      include_dev_dependencies: true
+      auto_merge: true
+```
+
+Use `@actions` for this reusable workflow and the `ni/open-source` actions it
+calls. Set the directory, LabVIEW target, and filenames for your repository.
+Both the update commit and the squash merge commit use the fixed message
+`chore(deps): update VIPM package dependencies`.
+
+The caller must enable **Allow auto-merge** and **Allow squash merging** in its
+repository settings. Protect the target branch with required checks and any
+required approvals: without these gates, GitHub may merge immediately. The
+workflow does not bypass branch protection and fails if GitHub rejects the
+auto-merge request.
+
+PR creation and auto-merge use the built-in `GITHUB_TOKEN`, subject to repository
+permissions. No additional GitHub token secret is needed.
+Current GitHub behavior allows PR workflows triggered by `GITHUB_TOKEN` for
+opened, synchronize, and reopened events, but requires a user with write access
+to approve those runs. Push workflows are not triggered by `GITHUB_TOKEN`.
+See [GitHub's workflow-triggering reference](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow).
+Pass the optional VIPM activation secrets separately if your setup needs them.
+
+Repeated runs update the same open dependency PR. A new auto-merge request is
+made only when the workflow creates a PR, not when it updates an existing PR or
+makes no changes. Existing auto-merge settings are not disabled by this workflow;
+an already enabled PR may still merge after updates satisfy its branch rules.
+Setting `auto_merge: false` does not revoke an earlier auto-merge request.
+
+The workflow tests assert configuration strings and dry-run dispatcher behavior;
+they do not exercise GitHub PR creation, updates, or merging end to end.
+
 ## CLI/dispatcher usage
 
 If you prefer or need to run tasks directly, serialize arguments as JSON and call the dispatcher script [actions/Invoke-OSAction.ps1](actions/Invoke-OSAction.ps1) yourself:
