@@ -17,7 +17,7 @@ See [Environment Setup](docs/environment-setup.md) for installation steps and co
 
 ```yaml
 - name: Run tests
-  uses: LabVIEW-Community-CI-CD/open-source/run-unit-tests@v1
+  uses: LabVIEW-Community-CI-CD/open-source/run-unit-tests@actions
   with:
     minimum_supported_lv_version: '2021'
     supported_bitness: '64'
@@ -39,7 +39,7 @@ Common optional inputs available on all wrappers:
 Run tests from a subfolder:
 
 ```yaml
-- uses: LabVIEW-Community-CI-CD/open-source/run-unit-tests@v1
+- uses: LabVIEW-Community-CI-CD/open-source/run-unit-tests@actions
   with:
     minimum_supported_lv_version: '2021'
     supported_bitness: '64'
@@ -49,7 +49,7 @@ Run tests from a subfolder:
 Enable debug logging and perform a dry run:
 
 ```yaml
-- uses: LabVIEW-Community-CI-CD/open-source/run-unit-tests@v1
+- uses: LabVIEW-Community-CI-CD/open-source/run-unit-tests@actions
   with:
     minimum_supported_lv_version: '2021'
     supported_bitness: '64'
@@ -58,6 +58,70 @@ Enable debug logging and perform a dry run:
   ```
 
 For a full workflow example that chains multiple actions to build the LabVIEW Icon Editor, see [docs/quickstart.md#build-icon-editor](docs/quickstart.md#build-icon-editor).
+
+### Automatic VIPM dependency merges
+
+The reusable dependency-update workflow opens a PR containing only the configured
+manifest and lock files in the caller repository. These default to `vipm.toml`
+and `vipm.lock`. The caller must pass `base_branch`, as shown below for its
+default branch. Auto-merge is opt-in.
+
+```yaml
+name: Update VIPM dependencies
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  update:
+    uses: ni/open-source/.github/workflows/reusable-vipm-update.yml@actions
+    with:
+      working_directory: scripts/apply-vipc
+      labview_version: '2021'
+      labview_bitness: '64'
+      base_branch: ${{ github.event.repository.default_branch }}
+      manifest_filename: vipm.toml
+      lock_filename: vipm.lock
+      include_dev_dependencies: true
+      auto_merge: true
+      commit_message: 'chore(deps): update VIPM package dependencies [REQ-044]'
+    secrets:
+      PR_TOKEN: ${{ secrets.DEPENDENCY_PR_TOKEN }}
+```
+
+Use `@actions` for this reusable workflow and the `ni/open-source` actions it
+calls. Set the directory, LabVIEW target, filenames, and commit message for your
+repository; use your own requirement ID if required. The configured message is
+used for both the update commit and the squash merge commit.
+
+The caller must enable **Allow auto-merge** and **Allow squash merging** in its
+repository settings. Protect the target branch with required checks and any
+required approvals: without these gates, GitHub may merge immediately. The
+workflow does not bypass branch protection and fails if GitHub rejects the
+auto-merge request.
+
+For unattended downstream CI, store a GitHub App token or PAT in
+`DEPENDENCY_PR_TOKEN` with contents and pull-request write access to the caller
+repository, and pass it as `PR_TOKEN`. This secret is optional: both PR creation
+and auto-merge fall back to `GITHUB_TOKEN`, subject to repository permissions.
+Current GitHub behavior allows PR workflows triggered by `GITHUB_TOKEN` for
+opened, synchronize, and reopened events, but requires a user with write access
+to approve those runs. Push workflows are not triggered by `GITHUB_TOKEN`.
+See [GitHub's workflow-triggering reference](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow).
+Pass the optional VIPM activation secrets separately if your setup needs them.
+
+Repeated runs update the same open dependency PR. A new auto-merge request is
+made only when the workflow creates a PR, not when it updates an existing PR or
+makes no changes. Existing auto-merge settings are not disabled by this workflow;
+an already enabled PR may still merge after updates satisfy its branch rules.
+Setting `auto_merge: false` does not revoke an earlier auto-merge request.
+
+The workflow tests assert configuration strings and dry-run dispatcher behavior;
+they do not exercise GitHub PR creation, updates, or merging end to end.
 
 ## CLI/dispatcher usage
 

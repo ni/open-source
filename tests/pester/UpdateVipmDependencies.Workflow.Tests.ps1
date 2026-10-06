@@ -24,6 +24,36 @@ Describe 'UpdateVipmDependencies.Workflow' {
         Test-Path $scriptPath | Should -Be $true
     }
 
+    It 'declares a required caller-supplied base branch in workflow configuration [REQ-044]' -Tag 'REQ-044' {
+        $workflow = Get-Content (Join-Path $repoRoot '.github' 'workflows' 'reusable-vipm-update.yml') -Raw
+        $target = '${{ inputs.base_branch || github.event.repository.default_branch }}'
+        $workflow | Should -Match ([regex]::Escape("ref: $target"))
+        $workflow | Should -Match ([regex]::Escape("base: $target"))
+        $workflow | Should -Match 'base_branch:\s+description: [^\r\n]+\s+required: true'
+    }
+
+    It 'declares opt-in auto-merge only for newly created PRs in workflow configuration [REQ-044]' -Tag 'REQ-044' {
+        $workflow = Get-Content (Join-Path $repoRoot '.github' 'workflows' 'reusable-vipm-update.yml') -Raw
+        $workflow | Should -Match 'auto_merge:\s+description: [^\r\n]+\s+required: false\s+type: boolean\s+default: false'
+        $workflow | Should -Match ([regex]::Escape('if: ${{ inputs.auto_merge && steps.dependency-pr.outputs.pull-request-number && steps.dependency-pr.outputs.pull-request-operation == ''created'' }}'))
+        $workflow | Should -Match ([regex]::Escape('GH_TOKEN: ${{ secrets.PR_TOKEN || github.token }}'))
+        $workflow | Should -Match ([regex]::Escape('gh pr merge "$PR_URL" --auto --squash'))
+        $workflow | Should -Match ([regex]::Escape('--match-head-commit "$PR_HEAD_SHA"'))
+        $workflow | Should -Not -Match '--admin'
+    }
+
+    It 'declares custom dependency-only paths and a configurable squash subject in workflow configuration [REQ-044]' -Tag 'REQ-044' {
+        $workflow = Get-Content (Join-Path $repoRoot '.github' 'workflows' 'reusable-vipm-update.yml') -Raw
+        $workflow | Should -Match ([regex]::Escape('commit-message: ${{ inputs.commit_message }}'))
+        $workflow | Should -Match ([regex]::Escape('COMMIT_MESSAGE: ${{ inputs.commit_message }}'))
+        $workflow | Should -Match ([regex]::Escape('--subject "$COMMIT_MESSAGE"'))
+        $workflow | Should -Match ([regex]::Escape('manifest_filename: ${{ inputs.manifest_filename }}'))
+        $workflow | Should -Match ([regex]::Escape('lock_filename: ${{ inputs.lock_filename }}'))
+        $workflow | Should -Match ([regex]::Escape('include_dev_dependencies: ${{ inputs.include_dev_dependencies }}'))
+        $paths = 'add-paths:\s+\|\s+' + [regex]::Escape('${{ inputs.working_directory }}/${{ inputs.manifest_filename }}') + '\s+' + [regex]::Escape('${{ inputs.working_directory }}/${{ inputs.lock_filename }}') + '\s+labels:'
+        $workflow | Should -Match $paths
+    }
+
     It 'executes dry-run with only required parameters [REQ-044]' -Tag 'REQ-044' {
         $result = & "$repoRoot/actions/Invoke-OSAction.ps1" `
             -ActionName 'update-vipm-dependencies' `
