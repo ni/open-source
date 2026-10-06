@@ -318,6 +318,14 @@
       ]
     },
     {
+      "id": "REQ-042",
+      "description": "Workflow tests the composite action defined in generate-sbom/action.yml on the GitHub-hosted Ubuntu runner labeled ubuntu-latest.",
+      "runner": "ubuntu-latest",
+      "tests": [
+        "GenerateSbom.Workflow.Tests"
+      ]
+    },
+    {
       "id": "REQ-043",
       "description": "Workflow tests the composite action defined in refresh-vipm-lock/action.yml on the GitHub-hosted Ubuntu runner labeled ubuntu-latest.",
       "runner": "ubuntu-latest",

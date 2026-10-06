@@ -1,0 +1,148 @@
+name: Reusable - Generate SBOM
+
+on:
+  workflow_call:
+    inputs:
+      lvproj_path:
+        description: 'Path to the .lvproj file, relative to the caller repository.'
+        required: true
+        type: string
+      labview_version:
+        description: 'Linux container release (YYYYq1 or YYYYq3; minimum 2025q3).'
+        required: false
+        type: string
+        default: '2026q1'
+      labview_bitness:
+        required: true
+        type: string
+      build_spec_name:
+        required: true
+        type: string
+      target_name:
+        required: false
+        type: string
+        default: 'My Computer'
+      product_name:
+        required: true
+        type: string
+      product_version:
+        required: true
+        type: string
+      output_path:
+        description: 'SBOM output path, relative to the caller repository.'
+        required: true
+        type: string
+      format:
+        required: false
+        type: string
+        default: 'cyclonedx'
+      schema_version:
+        required: false
+        type: string
+        default: '1.5'
+      artifact_name:
+        description: 'Name for the uploaded SBOM artifact.'
+        required: false
+        type: string
+        default: 'sbom'
+
+permissions:
+  contents: read
+
+jobs:
+  generate-sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+      - name: Validate LabVIEW Version for Linux Docker
+        id: validate-version
+        shell: pwsh
+        env:
+          LABVIEW_VERSION_INPUT: ${{ inputs.labview_version }}
+        run: |
+          $lvVersion = $env:LABVIEW_VERSION_INPUT
+          if ($lvVersion -match '^(\d{4})q([13])$') {
+            $year = [int]$Matches[1]
+            $quarter = [int]$Matches[2]
+          } else {
+            throw "Invalid LabVIEW version format: $lvVersion. Expected YYYYq1 or YYYYq3 (for example, 2026q1)."
+          }
+
+          $isValid = ($year -gt 2025) -or (($year -eq 2025) -and ($quarter -ge 3))
+          if (-not $isValid) {
+            throw "LabVIEW version $lvVersion is not available in Linux Docker. Minimum supported version is 2025q3."
+          }
+
+          "year=$year" >> $env:GITHUB_OUTPUT
+      - name: Generate SBOM in LabVIEW Linux container
+        shell: pwsh
+        env:
+          LABVIEW_CONTAINER_VERSION: ${{ inputs.labview_version }}
+          LABVIEW_YEAR: ${{ steps.validate-version.outputs.year }}
+          LVPROJ_PATH: ${{ inputs.lvproj_path }}
+          LABVIEW_BITNESS: ${{ inputs.labview_bitness }}
+          BUILD_SPEC_NAME: ${{ inputs.build_spec_name }}
+          TARGET_NAME: ${{ inputs.target_name }}
+          PRODUCT_NAME: ${{ inputs.product_name }}
+          PRODUCT_VERSION: ${{ inputs.product_version }}
+          OUTPUT_PATH: ${{ inputs.output_path }}
+          SBOM_FORMAT: ${{ inputs.format }}
+          SBOM_SCHEMA_VERSION: ${{ inputs.schema_version }}
+        run: |
+          $containerScript = @'
+          set -e
+          apt-get update && apt-get install -y wget
+          wget --no-check-certificate -O /tmp/vipm.deb https://traffic.libsyn.com/secure/jkinc/vipm_26.3.1-4025_amd64.deb
+          dpkg -i /tmp/vipm.deb
+          vipm --version
+          output_file="/workspace/$OUTPUT_PATH"
+          mkdir -p "$(dirname "$output_file")"
+          timeout 300 xvfb-run -a vipm sbom "/workspace/$LVPROJ_PATH" \
+            --format "$SBOM_FORMAT" \
+            --schema-version "$SBOM_SCHEMA_VERSION" \
+            --labview-version "$LABVIEW_YEAR" \
+            --labview-bitness "$LABVIEW_BITNESS" \
+            --lvproj-build-spec "$BUILD_SPEC_NAME" \
+            --lvproj-target "$TARGET_NAME" \
+            --product-name "$PRODUCT_NAME" \
+            --product-version "$PRODUCT_VERSION" \
+            --output "$output_file"
+          '@
+
+          $workspacePath = $env:GITHUB_WORKSPACE
+          $labviewImage = "nationalinstruments/labview:$($env:LABVIEW_CONTAINER_VERSION)-linux"
+          docker run --rm `
+            --volume "${workspacePath}:/workspace" `
+            --env LVPROJ_PATH `
+            --env LABVIEW_YEAR `
+            --env LABVIEW_BITNESS `
+            --env BUILD_SPEC_NAME `
+            --env TARGET_NAME `
+            --env PRODUCT_NAME `
+            --env PRODUCT_VERSION `
+            --env OUTPUT_PATH `
+            --env SBOM_FORMAT `
+            --env SBOM_SCHEMA_VERSION `
+            $labviewImage `
+            bash -c $containerScript
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "SBOM generation inside the LabVIEW Linux container failed with exit code $LASTEXITCODE"
+          }
+      - name: Verify SBOM exists
+        shell: pwsh
+        env:
+          OUTPUT_PATH: ${{ inputs.output_path }}
+        run: |
+          $sbomPath = Join-Path $env:GITHUB_WORKSPACE $env:OUTPUT_PATH
+          if (-not (Test-Path -Path $sbomPath -PathType Leaf)) {
+            throw "No SBOM file found at '$sbomPath'. Ensure vipm sbom completed successfully."
+          }
+          Write-Host "SBOM verified: $sbomPath"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: success()
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: ${{ inputs.output_path }}
+          retention-days: 90
+          if-no-files-found: error

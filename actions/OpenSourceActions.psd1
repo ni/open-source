@@ -22,6 +22,7 @@
     'Invoke-CloseLabVIEW'
     'Invoke-ConfigureLabview'
     'Invoke-GenerateReleaseNotes'
+    'Invoke-GenerateSbom'
     'Invoke-MissingInProject'
     'Invoke-ModifyVIPBDisplayInfo'
     'Invoke-PrepareLabVIEWSource'
@@ -43,7 +44,8 @@
     PSData = @{
       ReleaseNotes = @(
         '1.0.0 - Initial release: adapters for apply-vipc, build-lvlibp, missing-in-project, run-unit-tests; Format-UnitTestReport helper; discovery flags; DryRun; cross-platform g-cli support.'
-        '1.1.1 - Fix: update-vipm-dependencies now fails the job (instead of warning and continuing) when any package cannot be resolved/updated, so a partial dependency bump never reaches vipm.lock or a PR.'
+        '1.1.0 - Add generate-sbom adapter: minimal CycloneDX SBOM generation via vipm sbom, assuming VIPM is already installed/activated on the runner.'
+  '1.1.1 - Fix Invoke-GenerateSbom dispatcher DryRun compatibility with aliases and optional product metadata; make update-vipm-dependencies fail when a package cannot be resolved or updated.'
       )
     }
   }
