@@ -36,16 +36,18 @@ Describe 'UpdateVipmDependencies.Workflow' {
         $workflow = Get-Content (Join-Path $repoRoot '.github' 'workflows' 'reusable-vipm-update.yml') -Raw
         $workflow | Should -Match 'auto_merge:\s+description: [^\r\n]+\s+required: false\s+type: boolean\s+default: false'
         $workflow | Should -Match ([regex]::Escape('if: ${{ inputs.auto_merge && steps.dependency-pr.outputs.pull-request-number && steps.dependency-pr.outputs.pull-request-operation == ''created'' }}'))
-        $workflow | Should -Match ([regex]::Escape('GH_TOKEN: ${{ secrets.PR_TOKEN || github.token }}'))
+        $workflow | Should -Match ([regex]::Escape('GH_TOKEN: ${{ github.token }}'))
         $workflow | Should -Match ([regex]::Escape('gh pr merge "$PR_URL" --auto --squash'))
         $workflow | Should -Match ([regex]::Escape('--match-head-commit "$PR_HEAD_SHA"'))
         $workflow | Should -Not -Match '--admin'
     }
 
-    It 'declares custom dependency-only paths and a configurable squash subject in workflow configuration [REQ-044]' -Tag 'REQ-044' {
+    It 'declares custom dependency-only paths and a fixed commit subject in workflow configuration [REQ-044]' -Tag 'REQ-044' {
         $workflow = Get-Content (Join-Path $repoRoot '.github' 'workflows' 'reusable-vipm-update.yml') -Raw
-        $workflow | Should -Match ([regex]::Escape('commit-message: ${{ inputs.commit_message }}'))
-        $workflow | Should -Match ([regex]::Escape('COMMIT_MESSAGE: ${{ inputs.commit_message }}'))
+        $workflow | Should -Match ([regex]::Escape("COMMIT_MESSAGE: 'chore(deps): update VIPM package dependencies'"))
+        $workflow | Should -Match ([regex]::Escape('commit-message: ${{ env.COMMIT_MESSAGE }}'))
+        $workflow | Should -Match ([regex]::Escape('token: ${{ github.token }}'))
+        $workflow | Should -Not -Match '(?m)^\s+(commit_message|PR_TOKEN):'
         $workflow | Should -Match ([regex]::Escape('--subject "$COMMIT_MESSAGE"'))
         $workflow | Should -Match ([regex]::Escape('manifest_filename: ${{ inputs.manifest_filename }}'))
         $workflow | Should -Match ([regex]::Escape('lock_filename: ${{ inputs.lock_filename }}'))

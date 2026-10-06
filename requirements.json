@@ -327,7 +327,7 @@
     },
     {
       "id": "REQ-044",
-      "description": "Workflow tests the composite action defined in update-vipm-dependencies/action.yml on the GitHub-hosted Ubuntu runner labeled ubuntu-latest and statically checks the reusable workflow configuration for a caller-supplied PR target, configurable manifest/lock paths and dev-dependency forwarding, configurable commit subject, and opt-in protected squash auto-merge requests only for newly created PRs.",
+      "description": "Workflow tests the composite action defined in update-vipm-dependencies/action.yml on the GitHub-hosted Ubuntu runner labeled ubuntu-latest and statically checks the reusable workflow configuration for a caller-supplied PR target, configurable manifest/lock paths and dev-dependency forwarding, a fixed commit subject, built-in GitHub token authentication, and opt-in protected squash auto-merge requests only for newly created PRs.",
       "runner": "ubuntu-latest",
       "tests": [
         "UpdateVipmDependencies.Workflow.Tests"

@@ -88,15 +88,12 @@ jobs:
       lock_filename: vipm.lock
       include_dev_dependencies: true
       auto_merge: true
-      commit_message: 'chore(deps): update VIPM package dependencies [REQ-044]'
-    secrets:
-      PR_TOKEN: ${{ secrets.DEPENDENCY_PR_TOKEN }}
 ```
 
 Use `@actions` for this reusable workflow and the `ni/open-source` actions it
-calls. Set the directory, LabVIEW target, filenames, and commit message for your
-repository; use your own requirement ID if required. The configured message is
-used for both the update commit and the squash merge commit.
+calls. Set the directory, LabVIEW target, and filenames for your repository.
+Both the update commit and the squash merge commit use the fixed message
+`chore(deps): update VIPM package dependencies`.
 
 The caller must enable **Allow auto-merge** and **Allow squash merging** in its
 repository settings. Protect the target branch with required checks and any
@@ -104,10 +101,8 @@ required approvals: without these gates, GitHub may merge immediately. The
 workflow does not bypass branch protection and fails if GitHub rejects the
 auto-merge request.
 
-For unattended downstream CI, store a GitHub App token or PAT in
-`DEPENDENCY_PR_TOKEN` with contents and pull-request write access to the caller
-repository, and pass it as `PR_TOKEN`. This secret is optional: both PR creation
-and auto-merge fall back to `GITHUB_TOKEN`, subject to repository permissions.
+PR creation and auto-merge use the built-in `GITHUB_TOKEN`, subject to repository
+permissions. No additional GitHub token secret is needed.
 Current GitHub behavior allows PR workflows triggered by `GITHUB_TOKEN` for
 opened, synchronize, and reopened events, but requires a user with write access
 to approve those runs. Push workflows are not triggered by `GITHUB_TOKEN`.
