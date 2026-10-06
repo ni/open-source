@@ -47,7 +47,7 @@ Describe 'UpdateVipmDependencies.Workflow' {
         $workflow | Should -Match ([regex]::Escape("COMMIT_MESSAGE: 'chore(deps): update VIPM package dependencies'"))
         $workflow | Should -Match ([regex]::Escape('commit-message: ${{ env.COMMIT_MESSAGE }}'))
         $workflow | Should -Match ([regex]::Escape('token: ${{ github.token }}'))
-        $workflow | Should -Not -Match '(?m)^\s+(commit_message|PR_TOKEN):'
+        $workflow | Should -Not -MatchExactly '(?m)^\s+(commit_message|PR_TOKEN):'
         $workflow | Should -Match ([regex]::Escape('--subject "$COMMIT_MESSAGE"'))
         $workflow | Should -Match ([regex]::Escape('manifest_filename: ${{ inputs.manifest_filename }}'))
         $workflow | Should -Match ([regex]::Escape('lock_filename: ${{ inputs.lock_filename }}'))
