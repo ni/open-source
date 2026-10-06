@@ -17,7 +17,7 @@ See [Environment Setup](docs/environment-setup.md) for installation steps and co
 
 ```yaml
 - name: Run tests
-  uses: LabVIEW-Community-CI-CD/open-source/run-unit-tests@actions
+  uses: LabVIEW-Community-CI-CD/open-source/run-unit-tests@v1
   with:
     minimum_supported_lv_version: '2021'
     supported_bitness: '64'
@@ -39,7 +39,7 @@ Common optional inputs available on all wrappers:
 Run tests from a subfolder:
 
 ```yaml
-- uses: LabVIEW-Community-CI-CD/open-source/run-unit-tests@actions
+- uses: LabVIEW-Community-CI-CD/open-source/run-unit-tests@v1
   with:
     minimum_supported_lv_version: '2021'
     supported_bitness: '64'
@@ -49,7 +49,7 @@ Run tests from a subfolder:
 Enable debug logging and perform a dry run:
 
 ```yaml
-- uses: LabVIEW-Community-CI-CD/open-source/run-unit-tests@actions
+- uses: LabVIEW-Community-CI-CD/open-source/run-unit-tests@v1
   with:
     minimum_supported_lv_version: '2021'
     supported_bitness: '64'
