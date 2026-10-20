@@ -9,6 +9,7 @@ List of available GitHub Actions.
 - [build-spec-docker-windows](./build-spec-docker-windows.md) – Build LabVIEW build specification using Windows Docker container
 - [build-spec-github-hosted-windows](./build-spec-github-hosted-windows.md) – Build LabVIEW build specification using Windows GitHub-hosted runner
 - [build-vi-package](./build-vi-package.md): Update VIPB display information and build a VI package using g-cli.
+- [build-vip-docker-linux](./build-vip-docker-linux.md): Build a VI package with the VIPM CLI inside the NI LabVIEW Linux Docker container.
 - [build](./build.md): Automate building the LabVIEW Icon Editor project, including cleaning, building libraries, and packaging.
 - [close-labview](./close-labview.md): Gracefully close a running LabVIEW instance via g-cli.
 - [configure-labview](./configure-labview.md): Configures LabVIEW settings by updating the `LabVIEW.ini` file so that TCP/IP is enabled.

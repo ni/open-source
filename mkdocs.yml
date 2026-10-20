@@ -55,6 +55,7 @@ nav:
           - Build: actions/build.md
           - Build LVLibp: actions/build-lvlibp.md
           - Build VI Package: actions/build-vi-package.md
+          - Build VIP Docker Linux: actions/build-vip-docker-linux.md
           - Close LabVIEW: actions/close-labview.md
           - Generate Release Notes: actions/generate-release-notes.md
           - Missing in Project: actions/missing-in-project.md

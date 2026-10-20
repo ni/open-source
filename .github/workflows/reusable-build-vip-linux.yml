@@ -1,0 +1,163 @@
+name: Reusable - Build VIP Linux
+
+on:
+  workflow_call:
+    inputs:
+      vipb_path:
+        description: 'Path to the .vipb file, relative to the caller repository. May be created by pre_build_script.'
+        required: true
+        type: string
+      labview_version:
+        description: 'Linux container release (YYYYq1 or YYYYq3).'
+        required: false
+        type: string
+        default: '2026q1'
+      source_directory:
+        description: 'VIPB source folder. Relative to the caller repository, or an absolute container path.'
+        required: false
+        type: string
+        default: '.'
+      output_directory:
+        description: 'Directory, relative to the caller repository, that receives the built .vip files.'
+        required: false
+        type: string
+        default: 'builds/vip'
+      log_directory:
+        description: 'Directory, relative to the caller repository, that receives build logs.'
+        required: false
+        type: string
+        default: 'builds/logs/vip-linux'
+      pre_build_script:
+        description: 'Optional bash script, relative to the caller repository, run inside the container after VIPM activation.'
+        required: false
+        type: string
+        default: ''
+      desktop_liveliness_timeout:
+        description: 'VIPM desktop liveliness timeout in seconds.'
+        required: false
+        type: string
+        default: '300'
+      build_timeout_seconds:
+        description: 'Timeout in seconds passed to vipm build.'
+        required: false
+        type: string
+        default: '900'
+      vipm_deb_sha256:
+        description: 'Expected SHA256 of the VIPM .deb package. Verification is skipped when empty.'
+        required: false
+        type: string
+        default: ''
+      download_artifact_name:
+        description: 'Artifact from the calling run to download before the build (for example, a distribution or PPL).'
+        required: false
+        type: string
+        default: ''
+      download_artifact_pattern:
+        description: 'Artifact name pattern to download and merge before the build. Used when download_artifact_name is empty.'
+        required: false
+        type: string
+        default: ''
+      download_path:
+        description: 'Directory, relative to the caller repository, that receives the downloaded artifact.'
+        required: false
+        type: string
+        default: 'builds/vip-inputs'
+      vip_artifact_name:
+        description: 'Name for the uploaded VIP artifact. Defaults to vip-<package_version>.'
+        required: false
+        type: string
+        default: ''
+      logs_artifact_name:
+        description: 'Name for the uploaded log artifact. Defaults to vip-linux-logs-<run_id>.'
+        required: false
+        type: string
+        default: ''
+    secrets:
+      VIPM_SERIAL_NUMBER:
+        required: true
+      VIPM_FULL_NAME:
+        required: true
+      VIPM_EMAIL:
+        required: true
+    outputs:
+      package_version:
+        description: 'Package version read from the VIPB.'
+        value: ${{ jobs.build-vip.outputs.package_version }}
+      vip_artifact_name:
+        description: 'Name of the uploaded VIP artifact.'
+        value: ${{ jobs.build-vip.outputs.vip_artifact_name }}
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  build-vip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    outputs:
+      package_version: ${{ steps.build.outputs.package_version }}
+      vip_artifact_name: ${{ steps.names.outputs.vip_artifact_name }}
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+        with:
+          persist-credentials: false
+
+      - name: Download build input artifact
+        if: ${{ inputs.download_artifact_name != '' || inputs.download_artifact_pattern != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ${{ inputs.download_artifact_name }}
+          pattern: ${{ inputs.download_artifact_pattern }}
+          merge-multiple: ${{ inputs.download_artifact_name == '' }}
+          path: ${{ inputs.download_path }}
+
+      - name: Build VIP in LabVIEW Linux container
+        id: build
+        uses: ni/open-source/build-vip-docker-linux@actions
+        with:
+          vipb_path: ${{ inputs.vipb_path }}
+          labview_version: ${{ inputs.labview_version }}
+          source_directory: ${{ inputs.source_directory }}
+          output_directory: ${{ inputs.output_directory }}
+          log_directory: ${{ inputs.log_directory }}
+          pre_build_script: ${{ inputs.pre_build_script }}
+          desktop_liveliness_timeout: ${{ inputs.desktop_liveliness_timeout }}
+          build_timeout_seconds: ${{ inputs.build_timeout_seconds }}
+          vipm_deb_sha256: ${{ inputs.vipm_deb_sha256 }}
+          vipm_serial_number: ${{ secrets.VIPM_SERIAL_NUMBER }}
+          vipm_full_name: ${{ secrets.VIPM_FULL_NAME }}
+          vipm_email: ${{ secrets.VIPM_EMAIL }}
+
+      - name: Resolve artifact names
+        id: names
+        if: always()
+        shell: pwsh
+        env:
+          VIP_ARTIFACT_NAME: ${{ inputs.vip_artifact_name }}
+          LOGS_ARTIFACT_NAME: ${{ inputs.logs_artifact_name }}
+          PACKAGE_VERSION: ${{ steps.build.outputs.package_version }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          $vipName = if ($env:VIP_ARTIFACT_NAME) { $env:VIP_ARTIFACT_NAME } else { "vip-$($env:PACKAGE_VERSION)" }
+          $logsName = if ($env:LOGS_ARTIFACT_NAME) { $env:LOGS_ARTIFACT_NAME } else { "vip-linux-logs-$($env:RUN_ID)" }
+          "vip_artifact_name=$vipName" >> $env:GITHUB_OUTPUT
+          "logs_artifact_name=$logsName" >> $env:GITHUB_OUTPUT
+
+      - name: Upload VIP
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ steps.names.outputs.vip_artifact_name }}
+          path: ${{ inputs.output_directory }}/*.vip
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ steps.names.outputs.logs_artifact_name }}
+          path: ${{ inputs.log_directory }}/**
+          if-no-files-found: warn
+          retention-days: 14
