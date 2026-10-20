@@ -214,7 +214,8 @@ fi
 # ---------------------------------------------------------- prepare VIPB
 vipb_source="$WORKSPACE/$BVD_VIPB_PATH"
 [[ -f "$vipb_source" ]] || { echo "VIPB not found: $vipb_source" >&2; exit 1; }
-vipb_output="$LOG_DIR/$(basename "$vipb_source" .vipb).build.vipb"
+# VIPM resolves relative VIPB paths (e.g. custom action VIs) against the VIPB's own directory.
+vipb_output="$(dirname "$vipb_source")/$(basename "$vipb_source" .vipb).build.vipb"
 vipb_log="$LOG_DIR/vipb-preparation.log"
 if ! python3 - "$vipb_source" "$vipb_output" "$SOURCE_DIR" "$OUTPUT_DIR" "$LOG_DIR/package-version.txt" > "$vipb_log" 2>&1 <<'PY'
 import sys
@@ -257,6 +258,7 @@ then
     exit 1
 fi
 cat "$vipb_log"
+cp -f -- "$vipb_output" "$LOG_DIR/" || true
 
 # ------------------------------------------------------------------- build
 run_logged vipm-build "$((BUILD_TIMEOUT_SECONDS + 900))" vipm build "$vipb_output" --labview-version "$LV_YEAR" --labview-bitness 64 --timeout "$BUILD_TIMEOUT_SECONDS" --verbose
