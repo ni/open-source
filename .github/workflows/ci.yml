@@ -2,8 +2,7 @@ name: CI
 
 on:
   push:
-    # TEMP: remove users/amrutha/build-vip-docker-linux before merging.
-    branches: [actions, users/amrutha/build-vip-docker-linux]
+    branches: [actions]
   pull_request:
     branches: [actions]
 

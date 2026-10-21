@@ -114,8 +114,7 @@ jobs:
 
       - name: Build VIP in LabVIEW Linux container
         id: build
-        # TEMP: revert to @actions before merging.
-        uses: ni/open-source/build-vip-docker-linux@users/amrutha/build-vip-docker-linux
+        uses: ni/open-source/build-vip-docker-linux@actions
         with:
           vipb_path: ${{ inputs.vipb_path }}
           labview_version: ${{ inputs.labview_version }}
