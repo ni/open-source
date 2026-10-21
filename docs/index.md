@@ -30,6 +30,7 @@ Open Source LabVIEW Actions unifies LabVIEW [CI/CD](glossary.md#ci-cd) scripts b
 | [build-vi-package](actions/build-vi-package.md) | Update VIPB display information and build a VI package using g-cli. |
 | [close-labview](actions/close-labview.md) | Gracefully close a running LabVIEW instance via g-cli. |
 | [generate-release-notes](actions/generate-release-notes.md) | Generate release notes from the git history and write them to a markdown file. |
+| [generate-sbom](actions/generate-sbom.md) | Generate a CycloneDX SBOM for a LabVIEW build spec using `vipm sbom`. |
 | [missing-in-project](actions/missing-in-project.md) | Check that all files in a LabVIEW project are present by scanning for items missing from the `.lvproj`. |
 | [modify-vipb-display-info](actions/modify-vipb-display-info.md) | Update display information in a VIPB file and rebuild the VI package. |
 | [prepare-labview-source](actions/prepare-labview-source.md) | Run PrepareIESource.vi via g-cli to unzip components and configure LabVIEW for building. |
