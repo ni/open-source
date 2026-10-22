@@ -1,0 +1,140 @@
+name: 'Build VIP Docker Linux'
+description: 'Builds a VI Package from a VIPB with the VIPM CLI inside the NI LabVIEW Linux Docker container.'
+inputs:
+  vipb_path:
+    description: 'Path to the .vipb file, relative to the workspace. May be a file created by pre_build_script.'
+    required: true
+  labview_version:
+    description: 'LabVIEW container release (YYYYq1 or YYYYq3).'
+    default: '2026q1'
+    required: false
+  docker_image:
+    description: 'Docker image name.'
+    default: 'nationalinstruments/labview'
+    required: false
+  image_tag:
+    description: 'Docker image tag. Defaults to "{labview_version}-linux".'
+    default: ''
+    required: false
+  source_directory:
+    description: 'VIPB source folder. Relative to the workspace, or an absolute container path.'
+    default: '.'
+    required: false
+  output_directory:
+    description: 'Directory, relative to the workspace, that receives the built .vip files.'
+    default: 'builds/vip'
+    required: false
+  log_directory:
+    description: 'Directory, relative to the workspace, that receives build logs and the prepared VIPB.'
+    default: 'builds/logs/vip-linux'
+    required: false
+  pre_build_script:
+    description: 'Optional bash script, relative to the workspace, run inside the container after VIPM activation and before vipm build.'
+    default: ''
+    required: false
+  vipm_serial_number:
+    description: 'VIPM Pro serial number (pass from a secret in the caller).'
+    required: true
+  vipm_full_name:
+    description: 'Name used for VIPM Pro activation.'
+    required: true
+  vipm_email:
+    description: 'Email used for VIPM Pro activation.'
+    required: true
+  vipm_deb_url:
+    description: 'Override URL for the VIPM Linux .deb package.'
+    default: 'https://traffic.libsyn.com/secure/jkinc/vipm_26.3.1-4025_amd64.deb'
+    required: false
+  vipm_deb_sha256:
+    description: 'Expected SHA256 of the VIPM .deb package. Verification is skipped when empty.'
+    default: ''
+    required: false
+  build_timeout_seconds:
+    description: 'Timeout in seconds passed to vipm build.'
+    default: '900'
+    required: false
+  desktop_liveliness_timeout:
+    description: 'VIPM desktop liveliness timeout in seconds.'
+    default: '300'
+    required: false
+  working_directory:
+    description: 'Working directory mounted as the container workspace.'
+    required: false
+  log_level:
+    description: 'Verbosity level (ERROR|WARN|INFO|DEBUG).'
+    default: 'INFO'
+    required: false
+  dry_run:
+    description: 'If true, simulate the action without side effects.'
+    default: 'false'
+    required: false
+outputs:
+  vip_path:
+    description: 'Absolute path of the first built .vip file.'
+    value: ${{ steps.dispatch.outputs.vip_path }}
+  vip_paths:
+    description: 'JSON array of absolute paths of all built .vip files.'
+    value: ${{ steps.dispatch.outputs.vip_paths }}
+  package_version:
+    description: 'Package version read from the VIPB.'
+    value: ${{ steps.dispatch.outputs.package_version }}
+  output_directory:
+    description: 'Absolute path of the directory containing the built .vip files.'
+    value: ${{ steps.dispatch.outputs.output_directory }}
+  log_directory:
+    description: 'Absolute path of the build log directory.'
+    value: ${{ steps.dispatch.outputs.log_directory }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Dispatch build-vip-docker-linux
+      id: dispatch
+      shell: pwsh
+      env:
+        INPUT_VIPB_PATH: ${{ inputs.vipb_path }}
+        INPUT_LABVIEW_VERSION: ${{ inputs.labview_version }}
+        INPUT_DOCKER_IMAGE: ${{ inputs.docker_image }}
+        INPUT_IMAGE_TAG: ${{ inputs.image_tag }}
+        INPUT_SOURCE_DIRECTORY: ${{ inputs.source_directory }}
+        INPUT_OUTPUT_DIRECTORY: ${{ inputs.output_directory }}
+        INPUT_LOG_DIRECTORY: ${{ inputs.log_directory }}
+        INPUT_PRE_BUILD_SCRIPT: ${{ inputs.pre_build_script }}
+        INPUT_VIPM_SERIAL_NUMBER: ${{ inputs.vipm_serial_number }}
+        INPUT_VIPM_FULL_NAME: ${{ inputs.vipm_full_name }}
+        INPUT_VIPM_EMAIL: ${{ inputs.vipm_email }}
+        INPUT_VIPM_DEB_URL: ${{ inputs.vipm_deb_url }}
+        INPUT_VIPM_DEB_SHA256: ${{ inputs.vipm_deb_sha256 }}
+        INPUT_BUILD_TIMEOUT_SECONDS: ${{ inputs.build_timeout_seconds }}
+        INPUT_DESKTOP_LIVELINESS_TIMEOUT: ${{ inputs.desktop_liveliness_timeout }}
+        INPUT_WORKING_DIRECTORY: ${{ inputs.working_directory }}
+        INPUT_LOG_LEVEL: ${{ inputs.log_level }}
+        INPUT_DRY_RUN: ${{ inputs.dry_run }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $args = @{
+          VipbPath                 = $env:INPUT_VIPB_PATH
+          LabVIEWVersion           = $env:INPUT_LABVIEW_VERSION
+          DockerImage              = $env:INPUT_DOCKER_IMAGE
+          ImageTag                 = $env:INPUT_IMAGE_TAG
+          SourceDirectory          = $env:INPUT_SOURCE_DIRECTORY
+          OutputDirectory          = $env:INPUT_OUTPUT_DIRECTORY
+          LogDirectory             = $env:INPUT_LOG_DIRECTORY
+          PreBuildScript           = $env:INPUT_PRE_BUILD_SCRIPT
+          VipmSerialNumber         = $env:INPUT_VIPM_SERIAL_NUMBER
+          VipmFullName             = $env:INPUT_VIPM_FULL_NAME
+          VipmEmail                = $env:INPUT_VIPM_EMAIL
+          VipmDebUrl               = $env:INPUT_VIPM_DEB_URL
+          VipmDebSha256            = $env:INPUT_VIPM_DEB_SHA256
+          BuildTimeoutSeconds      = $env:INPUT_BUILD_TIMEOUT_SECONDS
+          DesktopLivelinessTimeout = $env:INPUT_DESKTOP_LIVELINESS_TIMEOUT
+        }
+        $params = @{
+          ActionName = 'build-vip-docker-linux'
+          Args       = $args
+          LogLevel   = $env:INPUT_LOG_LEVEL
+        }
+        if ($env:INPUT_DRY_RUN -eq 'true') { $params['DryRun'] = $true }
+        if ($env:INPUT_WORKING_DIRECTORY) { $params['WorkingDirectory'] = $env:INPUT_WORKING_DIRECTORY }
+        $script = Join-Path $env:GITHUB_ACTION_PATH '..' 'actions' 'common-dispatch.ps1'
+        & $script @params
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

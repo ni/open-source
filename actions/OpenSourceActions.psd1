@@ -1,6 +1,6 @@
 @{
   RootModule            = 'OpenSourceActions.psm1'
-  ModuleVersion         = '1.1.1'
+  ModuleVersion         = '1.2.0'
   GUID                  = '8c0a64c5-6a52-4d7e-9f74-8f79f21f1b2c'
   Author                = 'LabVIEW Community CI/CD'
   CompanyName           = 'LabVIEW Community'
@@ -19,6 +19,7 @@
     'Invoke-BuildSpecDockerWindows'
     'Invoke-BuildSpecGithubHostedWindows'
     'Invoke-BuildViPackage'
+    'Invoke-BuildVipDockerLinux'
     'Invoke-CloseLabVIEW'
     'Invoke-ConfigureLabview'
     'Invoke-GenerateReleaseNotes'

@@ -509,6 +509,105 @@
       }
     }
   },
+  "Invoke-BuildVipDockerLinux": {
+    "description": "Builds a VI Package from a VIPB inside the NI LabVIEW Linux Docker container using the VIPM CLI. VipbPath: Path to the VIPB file relative to the workspace (may be created by PreBuildScript). LabVIEWVersion: LabVIEW container release in YYYYq1 or YYYYq3 form (default: \"2026q1\"). DockerImage: Docker image name (default: \"nationalinstruments/labview\"). ImageTag: Docker image tag (default: \"<LabVIEWVersion>-linux\"). SourceDirectory: VIPB source folder; relative to the workspace or an absolute container path (default: workspace root). OutputDirectory: Directory relative to the workspace that receives the built packages (default: \"builds/vip\"). LogDirectory: Directory relative to the workspace that receives build logs (default: \"builds/logs/vip-linux\"). PreBuildScript: Optional bash script relative to the workspace, run in the container after VIPM activation. VipmSerialNumber: VIPM Pro serial number. VipmFullName: Name used for VIPM Pro activation. VipmEmail: Email used for VIPM Pro activation. VipmDebUrl: URL for the VIPM Linux package. VipmDebSha256: Expected SHA256 of the VIPM Linux package; skipped when empty. BuildTimeoutSeconds: Timeout passed to vipm build (default: \"900\"). DesktopLivelinessTimeout: VIPM desktop liveliness timeout in seconds (default: \"300\"). DryRun: If set, prints the command instead of executing it.",
+    "parameters": {
+      "BuildTimeoutSeconds": {
+        "type": "string",
+        "required": false,
+        "default": "900",
+        "description": "Timeout passed to vipm build (default: \"900\")"
+      },
+      "DesktopLivelinessTimeout": {
+        "type": "string",
+        "required": false,
+        "default": "300",
+        "description": "VIPM desktop liveliness timeout in seconds (default: \"300\")"
+      },
+      "DockerImage": {
+        "type": "string",
+        "required": false,
+        "default": "nationalinstruments/labview",
+        "description": "Docker image name (default: \"nationalinstruments/labview\")"
+      },
+      "DryRun": {
+        "type": "boolean",
+        "required": false,
+        "description": "If set, prints the command instead of executing it"
+      },
+      "ImageTag": {
+        "type": "string",
+        "required": false,
+        "default": "",
+        "description": "Docker image tag (default: \"<LabVIEWVersion>-linux\")"
+      },
+      "LabVIEWVersion": {
+        "type": "string",
+        "required": false,
+        "default": "2026q1",
+        "description": "LabVIEW container release in YYYYq1 or YYYYq3 form (default: \"2026q1\")"
+      },
+      "LogDirectory": {
+        "type": "string",
+        "required": false,
+        "default": "builds/logs/vip-linux",
+        "description": "Directory relative to the workspace that receives build logs (default: \"builds/logs/vip-linux\")"
+      },
+      "OutputDirectory": {
+        "type": "string",
+        "required": false,
+        "default": "builds/vip",
+        "description": "Directory relative to the workspace that receives the built packages (default: \"builds/vip\")"
+      },
+      "PreBuildScript": {
+        "type": "string",
+        "required": false,
+        "default": "",
+        "description": "Optional bash script relative to the workspace, run in the container after VIPM activation"
+      },
+      "SourceDirectory": {
+        "type": "string",
+        "required": false,
+        "default": ".",
+        "description": "VIPB source folder; relative to the workspace or an absolute container path (default: workspace root)"
+      },
+      "VipbPath": {
+        "type": "string",
+        "required": true,
+        "description": "Path to the VIPB file relative to the workspace (may be created by PreBuildScript)"
+      },
+      "VipmDebSha256": {
+        "type": "string",
+        "required": false,
+        "default": "",
+        "description": "Expected SHA256 of the VIPM Linux package; skipped when empty"
+      },
+      "VipmDebUrl": {
+        "type": "string",
+        "required": false,
+        "default": "https://traffic.libsyn.com/secure/jkinc/vipm_26.3.1-4025_amd64.deb",
+        "description": "URL for the VIPM Linux package"
+      },
+      "VipmEmail": {
+        "type": "string",
+        "required": false,
+        "default": "",
+        "description": "Email used for VIPM Pro activation"
+      },
+      "VipmFullName": {
+        "type": "string",
+        "required": false,
+        "default": "",
+        "description": "Name used for VIPM Pro activation"
+      },
+      "VipmSerialNumber": {
+        "type": "string",
+        "required": false,
+        "default": "",
+        "description": "VIPM Pro serial number"
+      }
+    }
+  },
   "Invoke-CloseLabVIEW": {
     "description": "Closes any running instance of LabVIEW. MinimumSupportedLVVersion: Minimum LabVIEW version that the project supports. SupportedBitness: Target LabVIEW bitness (32- or 64-bit). DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
     "parameters": {

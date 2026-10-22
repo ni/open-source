@@ -284,7 +284,68 @@ function Invoke-BuildSpecDockerLinux {
     
     return $result
 }
+# Builds a VI Package from a VIPB inside the NI LabVIEW Linux Docker container using the VIPM CLI.
+# VipbPath: Path to the VIPB file relative to the workspace (may be created by PreBuildScript).
+# LabVIEWVersion: LabVIEW container release in YYYYq1 or YYYYq3 form (default: "2026q1").
+# DockerImage: Docker image name (default: "nationalinstruments/labview").
+# ImageTag: Docker image tag (default: "<LabVIEWVersion>-linux").
+# SourceDirectory: VIPB source folder; relative to the workspace or an absolute container path (default: workspace root).
+# OutputDirectory: Directory relative to the workspace that receives the built packages (default: "builds/vip").
+# LogDirectory: Directory relative to the workspace that receives build logs (default: "builds/logs/vip-linux").
+# PreBuildScript: Optional bash script relative to the workspace, run in the container after VIPM activation.
+# VipmSerialNumber: VIPM Pro serial number.
+# VipmFullName: Name used for VIPM Pro activation.
+# VipmEmail: Email used for VIPM Pro activation.
+# VipmDebUrl: URL for the VIPM Linux package.
+# VipmDebSha256: Expected SHA256 of the VIPM Linux package; skipped when empty.
+# BuildTimeoutSeconds: Timeout passed to vipm build (default: "900").
+# DesktopLivelinessTimeout: VIPM desktop liveliness timeout in seconds (default: "300").
+# DryRun: If set, prints the command instead of executing it.
+function Invoke-BuildVipDockerLinux {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [string] $VipbPath,
+        [Parameter()] [string] $LabVIEWVersion = "2026q1",
+        [Parameter()] [string] $DockerImage = "nationalinstruments/labview",
+        [Parameter()] [string] $ImageTag = "",
+        [Parameter()] [string] $SourceDirectory = ".",
+        [Parameter()] [string] $OutputDirectory = "builds/vip",
+        [Parameter()] [string] $LogDirectory = "builds/logs/vip-linux",
+        [Parameter()] [string] $PreBuildScript = "",
+        [Parameter()] [string] $VipmSerialNumber = "",
+        [Parameter()] [string] $VipmFullName = "",
+        [Parameter()] [string] $VipmEmail = "",
+        [Parameter()] [string] $VipmDebUrl = "https://traffic.libsyn.com/secure/jkinc/vipm_26.3.1-4025_amd64.deb",
+        [Parameter()] [string] $VipmDebSha256 = "",
+        [Parameter()] [string] $BuildTimeoutSeconds = "900",
+        [Parameter()] [string] $DesktopLivelinessTimeout = "300",
+        [switch] $DryRun
+    )
+    Write-Information "Invoking BuildVipDockerLinux" -InformationAction Continue
 
+    $result = Invoke-OpenSourceActionScript `
+        -ScriptSegments @('build-vip-docker-linux', 'BuildVipDockerLinux.ps1') `
+        -Arguments @{
+            VipbPath                 = $VipbPath
+            LabVIEWVersion           = $LabVIEWVersion
+            DockerImage              = $DockerImage
+            ImageTag                 = $ImageTag
+            SourceDirectory          = $SourceDirectory
+            OutputDirectory          = $OutputDirectory
+            LogDirectory             = $LogDirectory
+            PreBuildScript           = $PreBuildScript
+            VipmSerialNumber         = $VipmSerialNumber
+            VipmFullName             = $VipmFullName
+            VipmEmail                = $VipmEmail
+            VipmDebUrl               = $VipmDebUrl
+            VipmDebSha256            = $VipmDebSha256
+            BuildTimeoutSeconds      = $BuildTimeoutSeconds
+            DesktopLivelinessTimeout = $DesktopLivelinessTimeout
+        } `
+        -DryRun:$DryRun
+
+    return $result
+}
 # Builds LabVIEW build specification using Windows Docker container.
 # MinimumSupportedLVVersion: LabVIEW version for the build (e.g., "2021", "2026").
 # SupportedBitness: Bitness of the LabVIEW environment ("32" or "64").

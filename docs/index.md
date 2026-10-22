@@ -28,6 +28,7 @@ Open Source LabVIEW Actions unifies LabVIEW [CI/CD](glossary.md#ci-cd) scripts b
 | [build-lvlibp-docker-windows](actions/build-lvlibp-docker-windows.md) | Build LVLIBP with Windows Docker. |
 | [build-lvlibp-github-hosted-windows](actions/build-lvlibp-github-hosted-windows.md) | Build LVLIBP with Windows runner. |
 | [build-vi-package](actions/build-vi-package.md) | Update VIPB display information and build a VI package using g-cli. |
+| [build-vip-docker-linux](actions/build-vip-docker-linux.md) | Build a VI package with the VIPM CLI inside the NI LabVIEW Linux Docker container. |
 | [close-labview](actions/close-labview.md) | Gracefully close a running LabVIEW instance via g-cli. |
 | [generate-release-notes](actions/generate-release-notes.md) | Generate release notes from the git history and write them to a markdown file. |
 | [generate-sbom](actions/generate-sbom.md) | Generate a CycloneDX SBOM for a LabVIEW build spec using `vipm sbom`. |
