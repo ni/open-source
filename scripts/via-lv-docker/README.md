@@ -25,6 +25,7 @@ A GitHub Action that runs LabVIEW VI Analyzer tests in a Docker container and pa
 | `base-branch` | Branch to compare against for changed files (used when generating config) | No | `origin/develop` |
 | `labview-version` | LabVIEW Docker image version tag | No | `2026q1-linux` |
 | `docker-image` | Full Docker image name | No | `nationalinstruments/labview` |
+| `dependency_file` | TOML file listing VIPM packages to install in the analyzer container before VI Analyzer runs (Linux images only). See [LabVIEW dependencies](../../docs/actions/via-lv-docker.md#labview-dependencies). | No | `''` |
 
 ## Outputs
 
@@ -164,6 +165,7 @@ Test with a specific LabVIEW version:
 3. **Docker Execution**:
    - Pulls specified LabVIEW Docker image
    - Mounts workspace and scripts
+   - If `dependency_file` is set: installs VIPM Free and the declared packages in the same container, and stops if any install fails
    - Runs `LabVIEWCLI` with VI Analyzer operation
    - Generates HTML report
 

@@ -1219,7 +1219,7 @@
     }
   },
   "Invoke-ViaLvDocker": {
-    "description": "Runs VI Analyzer tests using LabVIEW Docker container. ConfigPath: Path to VI Analyzer configuration file (.viancfg) or LabVIEW files (.vi, .ctl, .llb). If empty, generates from changed files. TemplatePath: Path to .viancfg template (required when generating config dynamically). BaseBranch: Branch to compare against for changed files (used when generating config). LabviewVersion: LabVIEW Docker image version tag. DockerImage: Full Docker image name. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
+    "description": "Runs VI Analyzer tests using LabVIEW Docker container. ConfigPath: Path to VI Analyzer configuration file (.viancfg) or LabVIEW files (.vi, .ctl, .llb). If empty, generates from changed files. TemplatePath: Path to .viancfg template (required when generating config dynamically). BaseBranch: Branch to compare against for changed files (used when generating config). LabviewVersion: LabVIEW Docker image version tag. DockerImage: Full Docker image name. DependencyFile: Optional TOML file (relative to the workspace) listing VIPM packages to install before analysis; Linux images only. DryRun: If set, prints the command instead of executing it. gcliPath: Optional path prepended to PATH for locating the g CLI.",
     "parameters": {
       "BaseBranch": {
         "type": "string",
@@ -1232,6 +1232,12 @@
         "required": false,
         "default": "",
         "description": "Path to VI Analyzer configuration file ("
+      },
+      "DependencyFile": {
+        "type": "string",
+        "required": false,
+        "default": "",
+        "description": "Optional TOML file (relative to the workspace) listing VIPM packages to install before analysis; Linux images only"
       },
       "DockerImage": {
         "type": "string",
