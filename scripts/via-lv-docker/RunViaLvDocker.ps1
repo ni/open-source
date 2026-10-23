@@ -221,7 +221,11 @@ $dockerArgs += @(
 Write-Information "Running VI Analyzer in Docker container..." -InformationAction Continue
 
 try {
-    docker @dockerArgs
+    if ($statusDir) {
+        docker @dockerArgs 2>&1 | ForEach-Object { Write-Host $_ }
+    } else {
+        docker @dockerArgs
+    }
     $viaExitCode = $LASTEXITCODE
     if ($statusDir -and -not (Test-Path -LiteralPath (Join-Path $statusDir 'dependencies-installed'))) {
         throw "LabVIEW dependency installation from '$DependencyFile' failed (container exit code: $viaExitCode). VI Analyzer was not run; see the container log above."

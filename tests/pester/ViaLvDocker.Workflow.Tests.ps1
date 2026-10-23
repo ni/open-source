@@ -128,6 +128,7 @@ astemes_lib_lunit_cli = "latest"  # newest
             $run.Count | Should -Be 1
             $run[0] | Should -Contain 'VIA_PACKAGES=astemes_lib_lunit@1.10.7.3 astemes_lib_lunit_cli'
             ($run[0] -join ' ') | Should -Match "/tmp/run-via.sh 'cfg.viancfg'"
+            Get-Content -Raw $runVia | Should -Match 'docker @dockerArgs 2>&1 \| ForEach-Object \{ Write-Host \$_ \}'
             $global:ViaBashCalls | Should -Be 1
         }
 
@@ -171,8 +172,11 @@ astemes_lib_lunit_cli = "latest"  # newest
             $sh = Get-Content -Raw $runViaSh
             $sh | Should -Not -Match 'vipm activate'
             $sh | Should -Match 'if \[ -n "\$\{VIA_PACKAGES:-\}" \]'
-            $sh | Should -Match 'vipm install --labview-version "\$LV_YEAR" --labview-bitness 64'
+            $sh | Should -Match 'DEBIAN_FRONTEND=noninteractive'
+            $sh | Should -Match 'vipm install --color-mode never --labview-version "\$LV_YEAR" --labview-bitness 64'
             $sh.IndexOf('vipm list --installed') | Should -BeGreaterThan $sh.IndexOf('vipm install')
+            $sh | Should -Match 'grep -Fqi -- "\$name"'
+            $sh | Should -Match 'grep -Fq -- "\$version"'
             $sh.IndexOf('/tmp/via-status/dependencies-installed') | Should -BeGreaterThan $sh.IndexOf('vipm list --installed')
             $sh.IndexOf('LabVIEWCLI \') | Should -BeGreaterThan $sh.IndexOf('/tmp/via-status/dependencies-installed')
         }

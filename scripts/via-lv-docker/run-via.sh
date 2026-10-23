@@ -48,33 +48,39 @@ if [ -n "${VIA_PACKAGES:-}" ]; then
   read -r -a packages <<< "$VIA_PACKAGES"
   echo "Installing LabVIEW dependencies into LabVIEW $LV_YEAR (64-bit): ${packages[*]}"
 
-  install_step "apt-get update" apt-get update
-  install_step "install prerequisites" apt-get install -y --no-install-recommends ca-certificates wget xvfb xauth
+  export DEBIAN_FRONTEND=noninteractive
+  install_step "apt-get update" apt-get -qq update
+  install_step "install prerequisites" apt-get -qq install -y --no-install-recommends ca-certificates wget xvfb xauth
   install_step "download VIPM" wget -q -O /tmp/vipm.deb "$VIPM_DEB_URL"
-  install_step "install VIPM" apt-get install -y /tmp/vipm.deb
+  install_step "install VIPM" apt-get -qq install -y /tmp/vipm.deb
   install_step "vipm --version" vipm --version
 
   # VIPM Free: no activation. VIPM needs a display, which the container lacks.
   export VIPM_NONINTERACTIVE=1
-  install_step "vipm refresh" timeout 600 xvfb-run -a vipm refresh --labview-version "$LV_YEAR" --labview-bitness 64
+  install_step "vipm refresh" timeout 600 xvfb-run -a vipm refresh --color-mode never --labview-version "$LV_YEAR" --labview-bitness 64
 
   echo "==> vipm install"
   status=0
-  timeout 1800 xvfb-run -a vipm install --labview-version "$LV_YEAR" --labview-bitness 64 "${packages[@]}" || status=$?
+  timeout 1800 xvfb-run -a vipm install --color-mode never --labview-version "$LV_YEAR" --labview-bitness 64 "${packages[@]}" || status=$?
   # 9 = PACKAGE_ALREADY_INSTALLED; the check below still verifies every package.
   if [ "$status" -ne 0 ] && [ "$status" -ne 9 ]; then
     fail_dependencies "'vipm install' exited with code $status" "$status"
   fi
 
   echo "==> vipm list --installed"
-  installed="$(timeout 300 xvfb-run -a vipm list --installed --labview-version "$LV_YEAR" --labview-bitness 64)" \
+  installed="$(timeout 300 xvfb-run -a vipm list --color-mode never --installed --labview-version "$LV_YEAR" --labview-bitness 64)" \
     || fail_dependencies "'vipm list --installed' failed"
-  echo "$installed"
+  printf '%s\n' "$installed"
   for spec in "${packages[@]}"; do
     name="${spec%%@*}"
-    if [[ "$spec" == *@* ]]; then expected="(${name} v${spec#*@})"; else expected="(${name} v"; fi
-    if ! grep -qF -- "$expected" <<< "$installed"; then
-      fail_dependencies "package '$spec' is not installed in LabVIEW $LV_YEAR (64-bit)"
+    if ! grep -Fqi -- "$name" <<< "$installed"; then
+      fail_dependencies "package '$name' is not installed in LabVIEW $LV_YEAR (64-bit); see 'vipm list --installed' output above"
+    fi
+    if [[ "$spec" == *@* ]]; then
+      version="${spec#*@}"
+      if ! grep -Fq -- "$version" <<< "$installed"; then
+        fail_dependencies "package '$name' is installed, but version '$version' was not found in LabVIEW $LV_YEAR (64-bit); see 'vipm list --installed' output above"
+      fi
     fi
   done
 
