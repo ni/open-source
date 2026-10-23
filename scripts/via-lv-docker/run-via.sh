@@ -48,6 +48,15 @@ if [ -n "${VIA_PACKAGES:-}" ]; then
   read -r -a packages <<< "$VIA_PACKAGES"
   echo "Installing LabVIEW dependencies into LabVIEW $LV_YEAR (64-bit): ${packages[*]}"
 
+  lv_config_dir="/root/natinst/.config/LabVIEW-$LV_YEAR"
+  mkdir -p "$lv_config_dir"
+  for config_name in labviewprofull.conf labview.conf labview64.conf; do
+    config_file="$lv_config_dir/$config_name"
+    if ! grep -qxF 'server.tcp.enabled=True' "$config_file" 2>/dev/null; then
+      printf '%s\n' 'server.tcp.enabled=True' >> "$config_file"
+    fi
+  done
+
   export DEBIAN_FRONTEND=noninteractive
   install_step "apt-get update" apt-get -qq update
   install_step "install prerequisites" apt-get -qq install -y --no-install-recommends ca-certificates wget xvfb xauth

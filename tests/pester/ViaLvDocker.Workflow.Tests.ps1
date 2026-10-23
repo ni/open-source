@@ -172,6 +172,9 @@ astemes_lib_lunit_cli = "latest"  # newest
             $sh = Get-Content -Raw $runViaSh
             $sh | Should -Not -Match 'vipm activate'
             $sh | Should -Match 'if \[ -n "\$\{VIA_PACKAGES:-\}" \]'
+            $sh | Should -Match 'lv_config_dir="/root/natinst/\.config/LabVIEW-\$LV_YEAR"'
+            $sh | Should -Match 'server\.tcp\.enabled=True'
+            $sh.IndexOf('server.tcp.enabled=True') | Should -BeLessThan $sh.IndexOf('vipm install')
             $sh | Should -Match 'DEBIAN_FRONTEND=noninteractive'
             $sh | Should -Match 'vipm install --color-mode never --labview-version "\$LV_YEAR" --labview-bitness 64'
             $sh.IndexOf('vipm list --installed') | Should -BeGreaterThan $sh.IndexOf('vipm install')
