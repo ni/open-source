@@ -173,6 +173,9 @@ astemes_lib_lunit_cli = "latest"  # newest
             $sh | Should -Not -Match 'vipm activate'
             $sh | Should -Match 'if \[ -n "\$\{VIA_PACKAGES:-\}" \]'
             $sh | Should -Match 'DEBIAN_FRONTEND=noninteractive'
+            $sh | Should -Not -Match 'xvfb-run'
+            $sh.IndexOf('Xvfb :99') | Should -BeLessThan $sh.IndexOf('vipm refresh')
+            $sh.IndexOf('kill "$xvfb_pid"') | Should -BeGreaterThan $sh.IndexOf('kill -9 $pids')
             $sh | Should -Match 'vipm install --color-mode never --labview-version "\$LV_YEAR" --labview-bitness 64'
             $sh.IndexOf('vipm list --installed') | Should -BeGreaterThan $sh.IndexOf('vipm install')
             $sh | Should -Match 'grep -Fqi -- "\$name"'

@@ -50,27 +50,43 @@ if [ -n "${VIA_PACKAGES:-}" ]; then
 
   export DEBIAN_FRONTEND=noninteractive
   install_step "apt-get update" apt-get -qq update
-  install_step "install prerequisites" apt-get -qq install -y --no-install-recommends ca-certificates wget xvfb xauth
+  install_step "install prerequisites" apt-get -qq install -y --no-install-recommends ca-certificates wget xvfb
   install_step "download VIPM" wget -q -O /tmp/vipm.deb "$VIPM_DEB_URL"
   install_step "install VIPM" apt-get -qq install -y /tmp/vipm.deb
   install_step "vipm --version" vipm --version
 
-  # VIPM Free: no activation. VIPM needs a display, which the container lacks.
+  # One display for all VIPM commands: LabVIEW started by VIPM must keep its display until it is closed.
+  Xvfb :99 -screen 0 1280x720x24 -ac +extension GLX +render -noreset > /tmp/xvfb.log 2>&1 &
+  xvfb_pid=$!
+  for _ in $(seq 1 30); do
+    [ -S /tmp/.X11-unix/X99 ] && break
+    sleep 1
+  done
+  if [ ! -S /tmp/.X11-unix/X99 ]; then
+    cat /tmp/xvfb.log >&2 || true
+    fail_dependencies "Xvfb did not start"
+  fi
+  export DISPLAY=:99
+
+  # VIPM Free: no activation.
   export VIPM_NONINTERACTIVE=1
-  install_step "vipm refresh" timeout 600 xvfb-run -a vipm refresh --color-mode never --labview-version "$LV_YEAR" --labview-bitness 64
+  install_step "vipm refresh" timeout 600 vipm refresh --color-mode never --labview-version "$LV_YEAR" --labview-bitness 64
 
   echo "==> vipm install"
   status=0
-  timeout 1800 xvfb-run -a vipm install --color-mode never --labview-version "$LV_YEAR" --labview-bitness 64 "${packages[@]}" || status=$?
+  timeout 1800 vipm install --color-mode never --labview-version "$LV_YEAR" --labview-bitness 64 "${packages[@]}" || status=$?
   # 9 = PACKAGE_ALREADY_INSTALLED; the check below still verifies every package.
   if [ "$status" -ne 0 ] && [ "$status" -ne 9 ]; then
     fail_dependencies "'vipm install' exited with code $status" "$status"
   fi
 
   echo "==> vipm list --installed"
-  installed="$(timeout 300 xvfb-run -a vipm list --color-mode never --installed --labview-version "$LV_YEAR" --labview-bitness 64)" \
-    || fail_dependencies "'vipm list --installed' failed"
+  status=0
+  installed="$(timeout 300 vipm list --color-mode never --installed --labview-version "$LV_YEAR" --labview-bitness 64 2>&1)" || status=$?
   printf '%s\n' "$installed"
+  if [ "$status" -ne 0 ]; then
+    fail_dependencies "'vipm list --installed' exited with code $status" "$status"
+  fi
   for spec in "${packages[@]}"; do
     name="${spec%%@*}"
     if ! grep -Fqi -- "$name" <<< "$installed"; then
@@ -109,6 +125,8 @@ if [ -n "${VIA_PACKAGES:-}" ]; then
       fail_dependencies "LabVIEW started by VIPM is still running (PIDs: $(echo $(labview_pids)))"
     fi
   fi
+  kill "$xvfb_pid" 2>/dev/null || true
+  unset DISPLAY
   echo "==> LabVIEW VI Server settings"
   grep -Hs '^server\.tcp' /root/natinst/.config/LabVIEW-"$LV_YEAR"/*.conf "${lv_dirs[0]}"/*.conf || echo "(no server.tcp entries found)"
   mkdir -p /tmp/via-status
@@ -124,10 +142,20 @@ echo "LabVIEWPath: $LABVIEW_PATH"
 echo ""
 
 # Run VI Analyzer
+via_status=0
 LabVIEWCLI \
   -OperationName RunVIAnalyzer \
   -ConfigPath "$ABSOLUTE_CONFIG" \
   -ReportPath "$ABSOLUTE_REPORT" \
   -ReportSaveType HTML \
   -LabVIEWPath "$LABVIEW_PATH" \
-  -Headless
+  -Headless || via_status=$?
+
+if [ "$via_status" -ne 0 ] && [ -n "${VIA_PACKAGES:-}" ]; then
+  for log in /tmp/lvtemporary_*.log; do
+    [ -f "$log" ] || continue
+    echo "----- $log -----"
+    tail -n 200 "$log"
+  done
+fi
+exit "$via_status"
