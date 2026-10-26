@@ -48,15 +48,6 @@ if [ -n "${VIA_PACKAGES:-}" ]; then
   read -r -a packages <<< "$VIA_PACKAGES"
   echo "Installing LabVIEW dependencies into LabVIEW $LV_YEAR (64-bit): ${packages[*]}"
 
-  lv_config_dir="/root/natinst/.config/LabVIEW-$LV_YEAR"
-  mkdir -p "$lv_config_dir"
-  for config_name in labviewprofull.conf labview.conf labview64.conf; do
-    config_file="$lv_config_dir/$config_name"
-    if ! grep -qxF 'server.tcp.enabled=True' "$config_file" 2>/dev/null; then
-      printf '%s\n' 'server.tcp.enabled=True' >> "$config_file"
-    fi
-  done
-
   export DEBIAN_FRONTEND=noninteractive
   install_step "apt-get update" apt-get -qq update
   install_step "install prerequisites" apt-get -qq install -y --no-install-recommends ca-certificates wget xvfb xauth
@@ -93,8 +84,33 @@ if [ -n "${VIA_PACKAGES:-}" ]; then
     fi
   done
 
-  # Release any LabVIEW instance VIPM started so LabVIEWCLI launches a fresh one.
-  pkill -f "$LABVIEW_PATH" 2>/dev/null || true
+  # VIPM leaves its LabVIEW running on VI Server port 3363; LabVIEWCLI needs that port. Uses /proc because procps may be absent.
+  labview_pids() {
+    local p exe
+    for p in /proc/[0-9]*; do
+      exe="$(readlink "$p/exe" 2>/dev/null)" || continue
+      case "$exe" in /usr/local/natinst/LabVIEW-*/labview*) echo "${p#/proc/}" ;; esac
+    done
+  }
+  pids="$(labview_pids)"
+  if [ -n "$pids" ]; then
+    echo "==> stopping LabVIEW started by VIPM (PIDs: $(echo $pids))"
+    kill $pids 2>/dev/null || true
+    for _ in $(seq 1 30); do
+      [ -z "$(labview_pids)" ] && break
+      sleep 1
+    done
+    pids="$(labview_pids)"
+    if [ -n "$pids" ]; then
+      kill -9 $pids 2>/dev/null || true
+      sleep 2
+    fi
+    if [ -n "$(labview_pids)" ]; then
+      fail_dependencies "LabVIEW started by VIPM is still running (PIDs: $(echo $(labview_pids)))"
+    fi
+  fi
+  echo "==> LabVIEW VI Server settings"
+  grep -Hs '^server\.tcp' /root/natinst/.config/LabVIEW-"$LV_YEAR"/*.conf "${lv_dirs[0]}"/*.conf || echo "(no server.tcp entries found)"
   mkdir -p /tmp/via-status
   touch /tmp/via-status/dependencies-installed
   echo "LabVIEW dependencies installed."
