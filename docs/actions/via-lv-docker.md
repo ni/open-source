@@ -119,7 +119,6 @@ Workflow:
 - name: Run VI Analyzer
   uses: ni/open-source/via-lv-docker@v1
   with:
-    labview_version: '2026q1patch1-linux'
     config_path: '.github/via-config.viancfg'
     dependency_file: '.github/labview-dependencies.toml'
 ```
