@@ -190,48 +190,55 @@ if ($LASTEXITCODE -ne 0) {
     throw "Failed to pull Docker image (exit code: $LASTEXITCODE)"
 }
 
-$dockerArgs = @(
-    'run', '--rm',
-    '-v', "${PWD}:/workspace",
-    '-v', "${runViaScript}:/tmp/run-via.sh"
-)
-$statusDir = $null
-if ($dependencyPackages.Count -gt 0) {
-    $imageOs = docker image inspect --format '{{.Os}}' "${DockerImage}:${LabviewVersion}"
+$image = "${DockerImage}:${LabviewVersion}"
+
+if ($dependencyPackages.Count -eq 0) {
+    Write-Information "Running VI Analyzer in Docker container..." -InformationAction Continue
+
+    docker run --rm `
+        -v "${PWD}:/workspace" `
+        -v "${runViaScript}:/tmp/run-via.sh" `
+        $image `
+        bash -c "chmod +x /tmp/run-via.sh && /tmp/run-via.sh '$configToUse'"
+
+    $viaExitCode = $LASTEXITCODE
+} else {
+    $imageOs = docker image inspect --format '{{.Os}}' $image
     if ($LASTEXITCODE -ne 0) {
-        throw "Failed to inspect Docker image ${DockerImage}:${LabviewVersion} (exit code: $LASTEXITCODE)"
+        throw "Failed to inspect Docker image $image (exit code: $LASTEXITCODE)"
     }
     if ("$imageOs".Trim() -ne 'linux') {
-        throw "dependency_file is supported only for Linux LabVIEW images; ${DockerImage}:${LabviewVersion} is '$("$imageOs".Trim())'."
+        throw "dependency_file is supported only for Linux LabVIEW images; $image is '$("$imageOs".Trim())'."
     }
-    # run-via.sh writes a marker here only after all packages install successfully.
-    $statusDir = Join-Path ([System.IO.Path]::GetTempPath()) "via-status-$([guid]::NewGuid().ToString('N'))"
-    New-Item -ItemType Directory -Path $statusDir | Out-Null
-    $dockerArgs += @(
-        '-v', "${statusDir}:/tmp/via-status",
-        '-e', "VIA_PACKAGES=$($dependencyPackages -join ' ')"
-    )
-}
-$dockerArgs += @(
-    "${DockerImage}:${LabviewVersion}",
-    'bash', '-c', "chmod +x /tmp/run-via.sh && /tmp/run-via.sh '$configToUse'"
-)
 
-# Run VI Analyzer in container
-Write-Information "Running VI Analyzer in Docker container..." -InformationAction Continue
+    $container = "via-lv-docker-$([guid]::NewGuid().ToString('N').Substring(0, 12))"
+    try {
+        docker create --name $container --user root --entrypoint /bin/bash `
+            -v "${PWD}:/workspace" `
+            -v "${runViaScript}:/tmp/run-via.sh" `
+            $image -c 'sleep infinity' | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Failed to create container from $image (exit code: $LASTEXITCODE)" }
+        docker start $container | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Failed to start container $container (exit code: $LASTEXITCODE)" }
 
-try {
-    if ($statusDir) {
-        docker @dockerArgs 2>&1 | ForEach-Object { Write-Host $_ }
-    } else {
-        docker @dockerArgs
+        Write-Information "Installing LabVIEW dependencies in Docker container..." -InformationAction Continue
+        docker exec -e "VIA_PACKAGES=$($dependencyPackages -join ' ')" $container bash /tmp/run-via.sh $configToUse 2>&1 |
+            ForEach-Object { Write-Host $_ }
+        if ($LASTEXITCODE -ne 0) {
+            throw "LabVIEW dependency installation from '$DependencyFile' failed (exit code: $LASTEXITCODE). VI Analyzer was not run; see the log above."
+        }
+
+        # Restarting stops VIPM, LabVIEW and Xvfb from the install; the installed packages stay in this container.
+        docker restart -t 5 $container | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Failed to restart container $container (exit code: $LASTEXITCODE)" }
+
+        Write-Information "Running VI Analyzer in Docker container..." -InformationAction Continue
+        docker exec -e 'VIA_DEPENDENCIES_INSTALLED=1' $container bash /tmp/run-via.sh $configToUse 2>&1 |
+            ForEach-Object { Write-Host $_ }
+        $viaExitCode = $LASTEXITCODE
+    } finally {
+        docker rm -f $container 2>&1 | Out-Null
     }
-    $viaExitCode = $LASTEXITCODE
-    if ($statusDir -and -not (Test-Path -LiteralPath (Join-Path $statusDir 'dependencies-installed'))) {
-        throw "LabVIEW dependency installation from '$DependencyFile' failed (container exit code: $viaExitCode). VI Analyzer was not run; see the container log above."
-    }
-} finally {
-    if ($statusDir) { Remove-Item -LiteralPath $statusDir -Recurse -Force -ErrorAction SilentlyContinue }
 }
 Write-Information "VI Analyzer exit code: $viaExitCode" -InformationAction Continue
 

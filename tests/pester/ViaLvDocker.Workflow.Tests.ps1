@@ -45,15 +45,9 @@ Describe 'ViaLvDocker.Workflow' {
                 $global:ViaDockerCalls.Add(@($args))
                 $global:LASTEXITCODE = 0
                 if ($args[0] -eq 'image') { return $global:ViaImageOs }
-                if ($args[0] -eq 'run') {
-                    $global:LASTEXITCODE = $global:ViaRunExitCode
-                    if ($global:ViaInstallSucceeds) {
-                        foreach ($a in $args) {
-                            if ("$a" -match '^(.+):/tmp/via-status$') {
-                                New-Item -ItemType File -Path (Join-Path $Matches[1] 'dependencies-installed') -Force | Out-Null
-                            }
-                        }
-                    }
+                if ($args[0] -eq 'run') { $global:LASTEXITCODE = $global:ViaRunExitCode }
+                if ($args[0] -eq 'exec') {
+                    $global:LASTEXITCODE = if (($args -join ' ') -match 'VIA_PACKAGES=') { $global:ViaInstallExitCode } else { $global:ViaRunExitCode }
                 }
             }
             function global:bash {
@@ -71,7 +65,7 @@ Describe 'ViaLvDocker.Workflow' {
             $global:ViaBashCalls = 0
             $global:ViaImageOs = 'linux'
             $global:ViaRunExitCode = 0
-            $global:ViaInstallSucceeds = $true
+            $global:ViaInstallExitCode = 0
             Push-Location $TestDrive
             Set-Content -Path 'cfg.viancfg' -Value '<VIAnalyzerConfig/>'
         }
@@ -101,16 +95,15 @@ Describe 'ViaLvDocker.Workflow' {
             & $runVia -ConfigPath 'cfg.viancfg' 6>$null
             $LASTEXITCODE | Should -Be 0
 
-            $global:ViaDockerCalls | Where-Object { $_[0] -eq 'image' } | Should -BeNullOrEmpty
+            $global:ViaDockerCalls | Where-Object { $_[0] -in @('image', 'create', 'exec', 'restart') } | Should -BeNullOrEmpty
             $run = @($global:ViaDockerCalls | Where-Object { $_[0] -eq 'run' })
             $run.Count | Should -Be 1
             $runLine = $run[0] -join ' '
             $runLine | Should -Not -Match 'VIA_PACKAGES'
-            $runLine | Should -Not -Match '/tmp/via-status'
             $runLine | Should -Match "/tmp/run-via.sh 'cfg.viancfg'"
         }
 
-        It 'installs declared packages in the same container that runs VI Analyzer [REQ-034]' -Tag 'REQ-034' {
+        It 'installs, restarts, then runs VI Analyzer in the same container [REQ-034]' -Tag 'REQ-034' {
             Set-Content -Path 'deps.toml' -Value @'
 # LUnit test VIs
 [project]
@@ -124,11 +117,19 @@ astemes_lib_lunit_cli = "latest"  # newest
             & $runVia -ConfigPath 'cfg.viancfg' -DependencyFile 'deps.toml' 6>$null
             $LASTEXITCODE | Should -Be 0
 
-            $run = @($global:ViaDockerCalls | Where-Object { $_[0] -eq 'run' })
-            $run.Count | Should -Be 1
-            $run[0] | Should -Contain 'VIA_PACKAGES=astemes_lib_lunit@1.10.7.3 astemes_lib_lunit_cli'
-            ($run[0] -join ' ') | Should -Match "/tmp/run-via.sh 'cfg.viancfg'"
-            Get-Content -Raw $runVia | Should -Match 'docker @dockerArgs 2>&1 \| ForEach-Object \{ Write-Host \$_ \}'
+            $global:ViaDockerCalls | Where-Object { $_[0] -eq 'run' } | Should -BeNullOrEmpty
+            $steps = @($global:ViaDockerCalls | Where-Object { $_[0] -in @('create', 'start', 'exec', 'restart', 'rm') } | ForEach-Object { $_[0] })
+            ($steps -join ',') | Should -Be 'create,start,exec,restart,exec,rm'
+
+            $container = @($global:ViaDockerCalls | Where-Object { $_[0] -eq 'create' })[0][2]
+            $execs = @($global:ViaDockerCalls | Where-Object { $_[0] -eq 'exec' })
+            $execs[0] | Should -Contain 'VIA_PACKAGES=astemes_lib_lunit@1.10.7.3 astemes_lib_lunit_cli'
+            $execs[0] | Should -Contain $container
+            $execs[1] | Should -Contain 'VIA_DEPENDENCIES_INSTALLED=1'
+            $execs[1] | Should -Contain $container
+            ($execs[1] -join ' ') | Should -Not -Match 'VIA_PACKAGES'
+            @($global:ViaDockerCalls | Where-Object { $_[0] -eq 'restart' })[0] | Should -Contain $container
+            @($global:ViaDockerCalls | Where-Object { $_[0] -eq 'rm' })[0] | Should -Contain $container
             $global:ViaBashCalls | Should -Be 1
         }
 
@@ -149,13 +150,15 @@ astemes_lib_lunit_cli = "latest"  # newest
             $global:ViaDockerCalls.Count | Should -Be 0
         }
 
-        It 'fails without parsing a report when installation fails [REQ-034]' -Tag 'REQ-034' {
+        It 'fails without running VI Analyzer when installation fails [REQ-034]' -Tag 'REQ-034' {
             Set-Content -Path 'deps.toml' -Value "[dependencies]`nastemes_lib_lunit = `"latest`""
-            $global:ViaInstallSucceeds = $false
-            $global:ViaRunExitCode = 3
+            $global:ViaInstallExitCode = 3
 
             { & $runVia -ConfigPath 'cfg.viancfg' -DependencyFile 'deps.toml' 6>$null } |
                 Should -Throw '*dependency installation*failed*VI Analyzer was not run*'
+            @($global:ViaDockerCalls | Where-Object { $_[0] -eq 'exec' }).Count | Should -Be 1
+            $global:ViaDockerCalls | Where-Object { $_[0] -eq 'restart' } | Should -BeNullOrEmpty
+            $global:ViaDockerCalls | Where-Object { $_[0] -eq 'rm' } | Should -Not -BeNullOrEmpty
             $global:ViaBashCalls | Should -Be 0
         }
 
@@ -165,24 +168,22 @@ astemes_lib_lunit_cli = "latest"  # newest
 
             { & $runVia -ConfigPath 'cfg.viancfg' -LabviewVersion '2026q1-windows' -DependencyFile 'deps.toml' 6>$null } |
                 Should -Throw '*supported only for Linux*'
-            $global:ViaDockerCalls | Where-Object { $_[0] -eq 'run' } | Should -BeNullOrEmpty
+            $global:ViaDockerCalls | Where-Object { $_[0] -in @('run', 'create') } | Should -BeNullOrEmpty
         }
 
-        It 'installs with VIPM Free before LabVIEWCLI and only when VIA_PACKAGES is set [REQ-034]' -Tag 'REQ-034' {
+        It 'installs with VIPM Free through a headless LabVIEW and exits before LabVIEWCLI [REQ-034]' -Tag 'REQ-034' {
             $sh = Get-Content -Raw $runViaSh
             $sh | Should -Not -Match 'vipm activate'
+            $sh | Should -Not -Match 'xvfb-run'
             $sh | Should -Match 'if \[ -n "\$\{VIA_PACKAGES:-\}" \]'
             $sh | Should -Match 'DEBIAN_FRONTEND=noninteractive'
-            $sh | Should -Not -Match 'xvfb-run'
+            $sh | Should -Match 'vipm install -y --labview-version "\$LV_YEAR" --labview-bitness 64'
             $sh.IndexOf('Xvfb :99') | Should -BeLessThan $sh.IndexOf('vipm refresh')
-            $sh.IndexOf('kill "$xvfb_pid"') | Should -BeGreaterThan $sh.IndexOf('kill -9 $pids')
-            $sh | Should -Match 'vipm install --color-mode never --labview-version "\$LV_YEAR" --labview-bitness 64'
-            $sh.IndexOf('vipm list --installed') | Should -BeGreaterThan $sh.IndexOf('vipm install')
-            $sh | Should -Match 'grep -Fqi -- "\$name"'
-            $sh | Should -Match 'grep -Fq -- "\$version"'
-            $sh.IndexOf('kill -9 $pids') | Should -BeGreaterThan $sh.IndexOf('vipm list --installed')
-            $sh.IndexOf('/tmp/via-status/dependencies-installed') | Should -BeGreaterThan $sh.IndexOf('kill -9 $pids')
-            $sh.IndexOf('LabVIEWCLI \') | Should -BeGreaterThan $sh.IndexOf('/tmp/via-status/dependencies-installed')
+            $sh.IndexOf('--headless') | Should -BeLessThan $sh.IndexOf('vipm install -y')
+            $sh.IndexOf('/dev/tcp/127.0.0.1/3363') | Should -BeLessThan $sh.IndexOf('vipm install -y')
+            $sh.IndexOf('vipm list --installed') | Should -BeGreaterThan $sh.IndexOf('vipm install -y')
+            $sh.IndexOf('exit 0') | Should -BeGreaterThan $sh.IndexOf('vipm list --installed')
+            $sh.IndexOf('LabVIEWCLI \') | Should -BeGreaterThan $sh.IndexOf('exit 0')
         }
     }
 }

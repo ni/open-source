@@ -75,7 +75,7 @@ This is useful to have for PR checks.
 VIs that depend on add-ons that the LabVIEW image does not include (for example LUnit test VIs) are reported as broken. Set `dependency_file` to install those packages in the analyzer container before VI Analyzer runs.
 
 - **Omitted (default):** nothing changes. VIPM is not installed and no packages are installed.
-- **Set:** inside the same container that runs VI Analyzer, the action installs VIPM Free (no activation, no secrets), runs `vipm refresh`, runs `vipm install` for the declared packages, and checks with `vipm list --installed` that each one is present. Packages target the LabVIEW found in the image (`/usr/local/natinst/LabVIEW-<year>-64`), 64-bit.
+- **Set:** the action creates one container from the LabVIEW image. In it, it installs VIPM Free (no activation, no secrets), starts a headless LabVIEW, runs `vipm refresh` and `vipm install` for the declared packages, and logs `vipm list --installed`. It then restarts that container, which stops VIPM and LabVIEW but keeps the installed packages, and runs VI Analyzer in it. Packages target the LabVIEW found in the image (`/usr/local/natinst/LabVIEW-<year>-64`), 64-bit. LabVIEW 2026 or later is required.
 - **Supported platforms:** Linux LabVIEW images only (for example `2026q1-linux`). The action fails with a clear error if the image OS is not `linux`.
 - **Failures:** an invalid or missing file fails before the container starts. Any VIPM install failure fails the action with the VIPM output in the log, and VI Analyzer is not run.
 
