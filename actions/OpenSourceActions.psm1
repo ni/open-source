@@ -969,6 +969,7 @@ function Invoke-UpdateVipmDependencies {
 # BaseBranch: Branch to compare against for changed files (used when generating config).
 # LabviewVersion: LabVIEW Docker image version tag.
 # DockerImage: Full Docker image name.
+# DependencyFile: Optional TOML file (relative to the workspace) listing VIPM packages to install before analysis; Linux images only.
 # DryRun: If set, prints the command instead of executing it.
 # gcliPath: Optional path prepended to PATH for locating the g CLI.
 function Invoke-ViaLvDocker {
@@ -979,6 +980,7 @@ function Invoke-ViaLvDocker {
         [Parameter()] [string] $BaseBranch = 'origin/develop',
         [Parameter()] [string] $LabviewVersion = '2026q1-linux',
         [Parameter()] [string] $DockerImage = 'nationalinstruments/labview',
+        [Parameter()] [string] $DependencyFile = '',
         [Parameter()] [switch] $DryRun,
         [Parameter()] [string] $gcliPath
     )
@@ -989,6 +991,7 @@ function Invoke-ViaLvDocker {
         BaseBranch      = $BaseBranch
         LabviewVersion  = $LabviewVersion
         DockerImage     = $DockerImage
+        DependencyFile  = $DependencyFile
     }
     return Invoke-OpenSourceActionScript -ScriptSegments @('via-lv-docker','RunViaLvDocker.ps1') -Arguments $args -DryRun:$DryRun -gcliPath $gcliPath
 }

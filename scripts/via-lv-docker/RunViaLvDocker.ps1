@@ -21,6 +21,10 @@
 .PARAMETER DockerImage
     Full Docker image name.
 
+.PARAMETER DependencyFile
+    Optional TOML file, relative to the workspace, listing VIPM packages to install in the
+    analyzer container before VI Analyzer runs. Linux images only. When omitted, nothing is installed.
+
 .NOTES
     Requires Docker and bash. The LabVIEW Docker container does not include PowerShell.
 #>
@@ -44,11 +48,86 @@ param(
 
     [Parameter(Mandatory=$false)]
     [string]
-    $DockerImage = 'nationalinstruments/labview'
+    $DockerImage = 'nationalinstruments/labview',
+
+    [Parameter(Mandatory=$false)]
+    [string]
+    $DependencyFile = ''
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# Returns 'name' or 'name@version' entries from the [dependencies] table of a vipm.toml-style file.
+function Get-ViaDependencyPackages {
+    param([string] $Path)
+
+    if ([System.IO.Path]::IsPathRooted($Path) -or ($Path -split '[\\/]') -contains '..') {
+        throw "dependency_file must be a path relative to the workspace without '..': $Path"
+    }
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "dependency_file not found: $Path"
+    }
+
+    $packages = [System.Collections.Generic.List[string]]::new()
+    $seen = @{}
+    $section = ''
+    $lineNumber = 0
+    foreach ($rawLine in Get-Content -LiteralPath $Path) {
+        $lineNumber++
+        $line = ($rawLine -replace '(^|\s)#.*$', '').Trim()
+        if (-not $line) { continue }
+
+        if ($line -match '^\[\s*([A-Za-z0-9_.-]+)\s*\]$') {
+            $section = $Matches[1]
+            if ($section -notin @('project', 'dependencies')) {
+                throw "${Path}:${lineNumber}: unsupported table [$section]; only [project] and [dependencies] are allowed."
+            }
+            continue
+        }
+        if ($line -notmatch '^([A-Za-z0-9_-]+)\s*=\s*(.+)$') {
+            throw "${Path}:${lineNumber}: invalid TOML line: $rawLine"
+        }
+        $key = $Matches[1]
+        $value = $Matches[2].Trim()
+        if (-not $section) {
+            throw "${Path}:${lineNumber}: key '$key' must be inside a [project] or [dependencies] table."
+        }
+        if ($section -eq 'project') { continue }
+
+        if ($value -match '^"([^"]*)"$' -or $value -match "^'([^']*)'$") {
+            $version = $Matches[1]
+        } else {
+            throw "${Path}:${lineNumber}: version for '$key' must be a quoted string, e.g. $key = `"1.0.0.1`" or $key = `"latest`"."
+        }
+        if ($key -notmatch '^[a-z0-9_]+$') {
+            throw "${Path}:${lineNumber}: invalid package name '$key'; expected lowercase letters, digits and underscores."
+        }
+        if ($seen.ContainsKey($key)) {
+            throw "${Path}:${lineNumber}: package '$key' is declared more than once."
+        }
+        $seen[$key] = $true
+
+        if ($version -in @('latest', '*')) {
+            $packages.Add($key)
+        } elseif ($version -match '^[0-9A-Za-z][0-9A-Za-z.-]*$') {
+            $packages.Add("$key@$version")
+        } else {
+            throw "${Path}:${lineNumber}: invalid version '$version' for '$key'; use a version such as 1.10.7.3, or 'latest'."
+        }
+    }
+
+    if ($packages.Count -eq 0) {
+        throw "dependency_file '$Path' does not declare any packages in a [dependencies] table."
+    }
+    return ,$packages.ToArray()
+}
+
+$dependencyPackages = @()
+if (-not [string]::IsNullOrWhiteSpace($DependencyFile)) {
+    $dependencyPackages = Get-ViaDependencyPackages -Path $DependencyFile
+    Write-Information "LabVIEW dependencies from ${DependencyFile}: $($dependencyPackages -join ', ')" -InformationAction Continue
+}
 
 # Get the path to the bash scripts
 $viaDockerPath = $PSScriptRoot
@@ -111,19 +190,56 @@ if ($LASTEXITCODE -ne 0) {
     throw "Failed to pull Docker image (exit code: $LASTEXITCODE)"
 }
 
-# Run VI Analyzer in container
-Write-Information "Running VI Analyzer in Docker container..." -InformationAction Continue
+$image = "${DockerImage}:${LabviewVersion}"
 
-$workspaceMount = "${PWD}:/workspace"
-$scriptMount = "${runViaScript}:/tmp/run-via.sh"
+if ($dependencyPackages.Count -eq 0) {
+    Write-Information "Running VI Analyzer in Docker container..." -InformationAction Continue
 
-docker run --rm `
-    -v $workspaceMount `
-    -v $scriptMount `
-    "${DockerImage}:${LabviewVersion}" `
-    bash -c "chmod +x /tmp/run-via.sh && /tmp/run-via.sh '$configToUse'"
+    docker run --rm `
+        -v "${PWD}:/workspace" `
+        -v "${runViaScript}:/tmp/run-via.sh" `
+        $image `
+        bash -c "chmod +x /tmp/run-via.sh && /tmp/run-via.sh '$configToUse'"
 
-$viaExitCode = $LASTEXITCODE
+    $viaExitCode = $LASTEXITCODE
+} else {
+    $imageOs = docker image inspect --format '{{.Os}}' $image
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to inspect Docker image $image (exit code: $LASTEXITCODE)"
+    }
+    if ("$imageOs".Trim() -ne 'linux') {
+        throw "dependency_file is supported only for Linux LabVIEW images; $image is '$("$imageOs".Trim())'."
+    }
+
+    $container = "via-lv-docker-$([guid]::NewGuid().ToString('N').Substring(0, 12))"
+    try {
+        docker create --name $container --user root --entrypoint /bin/bash `
+            -v "${PWD}:/workspace" `
+            -v "${runViaScript}:/tmp/run-via.sh" `
+            $image -c 'sleep infinity' | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Failed to create container from $image (exit code: $LASTEXITCODE)" }
+        docker start $container | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Failed to start container $container (exit code: $LASTEXITCODE)" }
+
+        Write-Information "Installing LabVIEW dependencies in Docker container..." -InformationAction Continue
+        docker exec -e "VIA_PACKAGES=$($dependencyPackages -join ' ')" $container bash /tmp/run-via.sh $configToUse 2>&1 |
+            ForEach-Object { Write-Host $_ }
+        if ($LASTEXITCODE -ne 0) {
+            throw "LabVIEW dependency installation from '$DependencyFile' failed (exit code: $LASTEXITCODE). VI Analyzer was not run; see the log above."
+        }
+
+        # Restarting stops VIPM, LabVIEW and Xvfb from the install; the installed packages stay in this container.
+        docker restart -t 5 $container | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Failed to restart container $container (exit code: $LASTEXITCODE)" }
+
+        Write-Information "Running VI Analyzer in Docker container..." -InformationAction Continue
+        docker exec -e 'VIA_DEPENDENCIES_INSTALLED=1' $container bash /tmp/run-via.sh $configToUse 2>&1 |
+            ForEach-Object { Write-Host $_ }
+        $viaExitCode = $LASTEXITCODE
+    } finally {
+        docker rm -f $container 2>&1 | Out-Null
+    }
+}
 Write-Information "VI Analyzer exit code: $viaExitCode" -InformationAction Continue
 
 # Parse VI Analyzer report
