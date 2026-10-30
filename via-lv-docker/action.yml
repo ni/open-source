@@ -22,6 +22,10 @@ inputs:
     description: 'Full Docker image name'
     required: false
     default: 'nationalinstruments/labview'
+  dependency_file:
+    description: 'Optional TOML file (relative to the workspace) listing VIPM packages to install in the analyzer container before VI Analyzer runs. Linux images only.'
+    required: false
+    default: ''
   working_directory:
     description: 'Working directory where the action will run.'
     required: false
@@ -39,6 +43,8 @@ runs:
   steps:
     - name: Dispatch via-lv-docker
       shell: pwsh
+      env:
+        VIA_DEPENDENCY_FILE: ${{ inputs.dependency_file }}
       run: |
         $ErrorActionPreference = 'Stop'
         $args = @{
@@ -47,6 +53,7 @@ runs:
           BaseBranch     = '${{ inputs.base_branch }}'
           LabviewVersion = '${{ inputs.labview_version }}'
           DockerImage    = '${{ inputs.docker_image }}'
+          DependencyFile = $env:VIA_DEPENDENCY_FILE
         }
         $params = @{
           ActionName = 'via-lv-docker'
